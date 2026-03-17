@@ -24,7 +24,6 @@ const listingPreview = document.getElementById("listingPreview");
 const chatMessages = document.getElementById("chatMessages");
 const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
-const chatInputWrapper = document.getElementById("chatInputWrapper");
 const clearChatBtn = document.getElementById("clearChatBtn");
 const modeStatus = document.getElementById("modeStatus");
 const listingModeBtn = document.getElementById("listingModeBtn");
@@ -38,6 +37,18 @@ function currentHistory() {
   return chatState.currentMode === "listing"
     ? chatState.listingHistory
     : chatState.translatorHistory;
+}
+
+function formatDisplayRef(ref) {
+  const value = String(ref ?? "").trim();
+  if (!value) return "";
+  return value.startsWith("L-") ? value : `L-${value}`;
+}
+
+function normalizeRefKey(ref) {
+  const value = String(ref ?? "").trim();
+  if (!value) return "";
+  return value.replace(/^L-/i, "");
 }
 
 function setPending(isPending) {
@@ -55,11 +66,11 @@ function initSampleRefs() {
 
   sampleRefs.innerHTML = "";
 
-  Object.keys(chatState.listings).forEach((ref) => {
+  Object.keys(chatState.listings).forEach((refKey) => {
     const chip = document.createElement("button");
     chip.className = "sample-chip";
     chip.type = "button";
-    chip.textContent = ref;
+    chip.textContent = formatDisplayRef(refKey);
 
     chip.addEventListener("click", () => {
       if (chatState.currentMode !== "listing") {
@@ -67,10 +78,10 @@ function initSampleRefs() {
       }
 
       if (listingSelect) {
-        listingSelect.value = ref;
+        listingSelect.value = normalizeRefKey(refKey);
       }
 
-      updateListingPreview(ref);
+      updateListingPreview(refKey);
 
       if (chatInput) {
         chatInput.focus();
@@ -86,11 +97,13 @@ function initListingDropdown() {
 
   listingSelect.innerHTML = `<option value="">Sélectionnez un appartement</option>`;
 
-  Object.keys(chatState.listings).forEach((ref) => {
-    const listing = chatState.listings[ref];
+  Object.keys(chatState.listings).forEach((refKey) => {
+    const listing = chatState.listings[refKey];
+    const normalizedRef = normalizeRefKey(refKey);
+
     const option = document.createElement("option");
-    option.value = ref;
-    option.textContent = `${ref}${listing?.adresse ? " — " + listing.adresse : ""}`;
+    option.value = normalizedRef;
+    option.textContent = `${formatDisplayRef(normalizedRef)}${listing?.adresse ? " — " + listing.adresse : ""}`;
     listingSelect.appendChild(option);
   });
 }
@@ -181,7 +194,7 @@ function switchMode(mode) {
   if (mode === "listing") {
     if (modeStatus) {
       modeStatus.textContent =
-        "Le mode Assistant des immeubles est actif. Incluez un numéro de référence valide.";
+        "Le mode Assistant des immeubles est actif. Sélectionnez un appartement puis posez votre question.";
     }
 
     if (chatInput) {
@@ -220,7 +233,8 @@ function switchMode(mode) {
 function updateListingPreview(ref) {
   if (!listingPreview) return;
 
-  const listing = chatState.listings[ref];
+  const normalizedRef = normalizeRefKey(ref);
+  const listing = chatState.listings[normalizedRef];
 
   if (!listing) {
     listingPreview.textContent = "Numéro de référence introuvable.";
@@ -239,7 +253,7 @@ function updateListingPreview(ref) {
   const notes = listing.notes ?? "Aucune note";
 
   listingPreview.innerHTML = `
-    <strong>${listing.ref ?? ref}</strong><br>
+    <strong>${formatDisplayRef(normalizedRef)}</strong><br>
     ${adresse}<br>
     ${ville}<br><br>
     Type : ${typeLogement}<br>
@@ -255,7 +269,7 @@ function updateListingPreview(ref) {
 }
 
 function prevalidateListing() {
-  const ref = listingSelect ? listingSelect.value : "";
+  const ref = listingSelect ? normalizeRefKey(listingSelect.value) : "";
 
   if (!ref) {
     return {
@@ -318,16 +332,30 @@ async function checkServer() {
 
 async function loadListings() {
   const data = await fetchJSON("/api/listings");
-  chatState.listings = data.listings || {};
+  const rawListings = data.listings || {};
+  const normalizedListings = {};
+
+  Object.entries(rawListings).forEach(([key, value]) => {
+    const normalizedKey = normalizeRefKey(key || value?.ref);
+    if (!normalizedKey) return;
+
+    normalizedListings[normalizedKey] = {
+      ...value,
+      ref: normalizedKey
+    };
+  });
+
+  chatState.listings = normalizedListings;
   initSampleRefs();
   initListingDropdown();
 }
 
 async function sendToAI(input, ref = "") {
-  const message =
-    chatState.currentMode === "listing" && ref
-      ? `${ref} - ${input}`
-      : input;
+  let message = input;
+
+  if (chatState.currentMode === "listing" && ref) {
+    message = `${formatDisplayRef(ref)} - ${input}`;
+  }
 
   return fetchJSON("/api/chat", {
     method: "POST",
@@ -340,8 +368,9 @@ async function sendToAI(input, ref = "") {
 
 if (listingSelect) {
   listingSelect.addEventListener("change", () => {
-    if (listingSelect.value) {
-      updateListingPreview(listingSelect.value);
+    const selectedRef = normalizeRefKey(listingSelect.value);
+    if (selectedRef) {
+      updateListingPreview(selectedRef);
     }
   });
 }
@@ -377,7 +406,12 @@ if (chatForm) {
       updateListingPreview(selectedRef);
     }
 
-    pushMessage("user", "Employé", input);
+    const userText =
+      chatState.currentMode === "listing" && selectedRef
+        ? `${formatDisplayRef(selectedRef)} - ${input}`
+        : input;
+
+    pushMessage("user", "Employé", userText);
     chatInput.value = "";
 
     setPending(true);
@@ -386,15 +420,15 @@ if (chatForm) {
     try {
       const result = await sendToAI(input, selectedRef);
 
-      if (
-        chatState.currentMode === "listing" &&
-        result.reference &&
-        chatState.listings[result.reference]
-      ) {
-        updateListingPreview(result.reference);
+      if (chatState.currentMode === "listing") {
+        const resultRef = normalizeRefKey(result.reference || selectedRef);
 
-        if (listingSelect) {
-          listingSelect.value = result.reference;
+        if (resultRef && chatState.listings[resultRef]) {
+          updateListingPreview(resultRef);
+
+          if (listingSelect) {
+            listingSelect.value = resultRef;
+          }
         }
       }
 
