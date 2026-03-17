@@ -24,8 +24,8 @@ form.addEventListener("submit", async (event) => {
       throw new Error(data.error || "Erreur de connexion.");
     }
 
-    localStorage.setItem("fluxlocatif_auth", data.token);
-    window.location.href = "/app";
+    localStorage.setItem("fluxlocatif_logged_in", "true");
+    window.location.href = "/index.html";
   } catch (error) {
     errorText.textContent = error.message || "Connexion impossible.";
   }
