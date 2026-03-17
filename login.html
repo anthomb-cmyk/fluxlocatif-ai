@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connexion | FluxLocatif</title>
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-icon">F</div>
+        <div>
+          <h1>FluxLocatif</h1>
+          <p>Connexion employé</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <label>
+          Nom d’utilisateur
+          <input type="text" id="username" required />
+        </label>
+
+        <label>
+          Mot de passe
+          <input type="password" id="password" required />
+        </label>
+
+        <button type="submit">Se connecter</button>
+        <p id="loginError" class="login-error"></p>
+      </form>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+</html>
