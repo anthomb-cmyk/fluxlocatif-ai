@@ -6,34 +6,58 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Chemins
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Charger le fichier .env
 dotenv.config({ path: path.join(__dirname, ".env") });
 console.log("API key loaded:", !!process.env.OPENAI_API_KEY);
 
-// App
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-// Listings
-const listingsPath = path.join(__dirname, "listings.json");
-const listings = JSON.parse(fs.readFileSync(listingsPath, "utf8"));
+const APP_USERNAME = process.env.APP_USERNAME || "admin";
+const APP_PASSWORD = process.env.APP_PASSWORD || "1234";
 
-// Middleware
+const listingsPath = path.join(__dirname, "listings.json");
+let listingsRaw = JSON.parse(fs.readFileSync(listingsPath, "utf8"));
+
+const listings = Array.isArray(listingsRaw)
+  ? listingsRaw
+  : Array.isArray(listingsRaw.listings)
+    ? listingsRaw.listings
+    : [];
+
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+const publicRoutes = ["/login.html", "/login.js", "/login.css", "/api/login"];
+
+app.use((req, res, next) => {
+  if (
+    publicRoutes.includes(req.path) ||
+    req.path.startsWith("/api/login") ||
+    req.path.startsWith("/favicon")
+  ) {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization || "";
+  const expected = "Basic " + Buffer.from(`${APP_USERNAME}:${APP_PASSWORD}`).toString("base64");
+
+  if (authHeader === expected) {
+    return next();
+  }
+
+  return res.status(401).json({ error: "Unauthorized" });
+});
+
 app.use(express.static(__dirname));
 
-// Client OpenAI
 const client = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
-// Helpers
 function extractListingRef(text = "") {
   const match = text.match(/\bL-\d{4}\b/i);
   return match ? match[0].toUpperCase() : null;
@@ -64,7 +88,32 @@ Description : ${listing.description}
 Notes : ${listing.notes}`;
 }
 
-// Routes utilitaires
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "login.html"));
+});
+
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (username === APP_USERNAME && password === APP_PASSWORD) {
+    const token = Buffer.from(`${username}:${password}`).toString("base64");
+    return res.json({ ok: true, token });
+  }
+
+  return res.status(401).json({ ok: false, error: "Identifiants invalides." });
+});
+
+app.get("/app", (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const expected = "Basic " + Buffer.from(`${APP_USERNAME}:${APP_PASSWORD}`).toString("base64");
+
+  if (authHeader !== expected) {
+    return res.redirect("/");
+  }
+
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
@@ -81,52 +130,35 @@ app.get("/api/listings", (req, res) => {
   res.json({ listings: listingsMap });
 });
 
-// Route principale
 app.post("/api/chat", async (req, res) => {
   try {
     if (!client) {
-      return res.status(500).json({
-        error: "API key missing"
-      });
+      return res.status(500).json({ error: "API key missing" });
     }
 
     const { message, mode } = req.body;
 
     if (!message || !String(message).trim()) {
-      return res.status(400).json({
-        error: "Message vide."
-      });
+      return res.status(400).json({ error: "Message vide." });
     }
 
-    // MODE TRADUCTEUR
     if (mode === "translator") {
       const response = await client.responses.create({
         model: MODEL,
+        max_output_tokens: 150,
         input: [
           {
             role: "system",
             content: `Tu es le Traducteur de FluxLocatif.
 
 Ton rôle principal :
-Traduire du français québécois, souvent familier, abrégé ou rempli de fautes, en français clair, professionnel et adapté au pays ou à la région du locataire.
-
-Important :
-- Si l'utilisateur ne précise pas le pays ou la région du locataire, tu dois répondre exactement :
-"Pour quel pays ou quelle région dois-je adapter le français ?"
-- Dans ce cas, ne traduis pas encore.
-
-Si le pays ou la région est précisé :
-- Traduis en français adapté à ce pays ou cette région.
-- Corrige les fautes.
-- Reformule de manière claire et professionnelle.
-- Garde le sens exact du message.
-
-Tu peux aussi :
-- traduire vers d'autres langues si l'utilisateur le demande clairement
-- expliquer le sens d'un texte
-- clarifier une expression seulement si cela est basé sur le texte fourni
+- Traduire du français québécois, familier, abrégé ou rempli de fautes en français international clair, professionnel et naturel.
+- Tu peux aussi expliquer brièvement le sens d'un texte si l'utilisateur le demande clairement.
+- Tu peux traduire vers une autre langue seulement si l'utilisateur le demande clairement.
 
 Règles strictes :
+- Par défaut, transforme le texte en français international.
+- Ne demande jamais le pays ou la région.
 - Ne réponds jamais aux questions sur les immeubles, loyers, disponibilités, références ou annonces.
 - Si l'utilisateur pose une question liée à un immeuble ou à un logement, réponds exactement :
 "Pour toute question liée aux immeubles ou aux logements, veuillez utiliser le mode Assistant des immeubles."
@@ -135,18 +167,7 @@ Style :
 - court
 - clair
 - professionnel
-- naturel
-
-Exemples :
-
-Utilisateur : yer tu dispo le logi
-Réponse : Pour quel pays ou quelle région dois-je adapter le français ?
-
-Utilisateur : France - yer tu dispo le logi
-Réponse : Le logement est-il disponible ?
-
-Utilisateur : Belgique - c quand jpeu visiter
-Réponse : Quand puis-je effectuer une visite du logement ?`
+- naturel`
           },
           {
             role: "user",
@@ -162,7 +183,6 @@ Réponse : Quand puis-je effectuer une visite du logement ?`
       });
     }
 
-    // MODE ASSISTANT DES IMMEUBLES
     const ref = extractListingRef(message);
 
     if (!ref) {
@@ -187,15 +207,10 @@ Réponse : Quand puis-je effectuer une visite du logement ?`
 
     const response = await client.responses.create({
       model: MODEL,
+      max_output_tokens: 150,
       input: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: message
-        }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
       ]
     });
 
@@ -207,13 +222,10 @@ Réponse : Quand puis-je effectuer une visite du logement ?`
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({
-      error: "Server error"
-    });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// Start serveur
 app.listen(PORT, () => {
   console.log(`FluxLocatif AI lancé sur http://localhost:${PORT}`);
 });
