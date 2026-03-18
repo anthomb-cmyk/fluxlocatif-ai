@@ -1,5 +1,7 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dXprdmd5b2x4YmF3dnF5dWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Njc1NzYsImV4cCI6MjA4OTM0MzU3Nn0.zjltrYd38fypIAm1DIr0wj69eS9T7xpi_4p2aWsNYyw";
+const SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dXprdmd5b2x4YmF3dnF5dWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Njc1NzYsImV4cCI6MjA4OTM0MzU3Nn0.zjltrYd38fypIAm1DIr0wj69eS9T7xpi_4p2aWsNYyw";
+
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const chatState = {
@@ -20,8 +22,14 @@ const chatState = {
   ],
   listings: {},
   serverReady: false,
-  pending: false
+  pending: false,
+  authUserId: null,
+  authUserEmail: null,
+  chatSessionId: null,
+  heartbeatTimer: null
 };
+
+const HEARTBEAT_MS = 60000;
 
 const sampleRefs = document.getElementById("sampleRefs");
 const listingPreview = document.getElementById("listingPreview");
@@ -56,18 +64,193 @@ function normalizeRefKey(ref) {
 }
 
 async function requireLogin() {
-  const { data, error } = await supabaseClient.auth.getSession();
+  const { data, error } = await supabaseClient.auth.getUser();
 
-  if (error) {
-    window.location.href = "/login.html";
-    throw new Error("Session error");
-  }
-
-  if (!data.session) {
+  if (error || !data?.user) {
     window.location.href = "/login.html";
     throw new Error("Not logged in");
   }
+
+  chatState.authUserId = data.user.id;
+  chatState.authUserEmail = data.user.email || "";
 }
+
+async function fetchJSON(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Une erreur est survenue.");
+  }
+
+  return data;
+}
+
+/* =========================
+   TRACKING / HISTORY
+========================= */
+
+async function startTrackedSession() {
+  if (!chatState.authUserId) return;
+
+  try {
+    const data = await fetchJSON("/api/chat-sessions", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: chatState.authUserId,
+        page_path: window.location.pathname
+      })
+    });
+
+    if (data?.session?.id) {
+      chatState.chatSessionId = data.session.id;
+    }
+
+    await logActivity("login");
+    startHeartbeat();
+  } catch (error) {
+    console.error("Erreur startTrackedSession:", error);
+  }
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+
+  chatState.heartbeatTimer = window.setInterval(async () => {
+    await heartbeat();
+  }, HEARTBEAT_MS);
+}
+
+function stopHeartbeat() {
+  if (chatState.heartbeatTimer) {
+    clearInterval(chatState.heartbeatTimer);
+    chatState.heartbeatTimer = null;
+  }
+}
+
+async function heartbeat() {
+  if (!chatState.authUserId || !chatState.chatSessionId) return;
+
+  try {
+    await fetchJSON(`/api/chat-sessions/${chatState.chatSessionId}/heartbeat`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        user_id: chatState.authUserId
+      })
+    });
+
+    await logActivity("heartbeat");
+  } catch (error) {
+    console.error("Erreur heartbeat:", error);
+  }
+}
+
+async function endTrackedSession() {
+  if (!chatState.authUserId || !chatState.chatSessionId) return;
+
+  try {
+    await fetchJSON(`/api/chat-sessions/${chatState.chatSessionId}/end`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        user_id: chatState.authUserId
+      })
+    });
+
+    await logActivity("logout");
+  } catch (error) {
+    console.error("Erreur endTrackedSession:", error);
+  } finally {
+    stopHeartbeat();
+  }
+}
+
+async function logActivity(eventType) {
+  if (!chatState.authUserId) return;
+
+  try {
+    await fetchJSON("/api/activity-log", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: chatState.authUserId,
+        session_id: chatState.chatSessionId,
+        event_type: eventType,
+        page_path: window.location.pathname
+      })
+    });
+  } catch (error) {
+    console.error("Erreur logActivity:", error);
+  }
+}
+
+async function saveChatMessage(sender, label, text, mode) {
+  if (!chatState.authUserId || !chatState.chatSessionId || !text) return;
+
+  try {
+    await fetchJSON("/api/chat-messages", {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: chatState.chatSessionId,
+        user_id: chatState.authUserId,
+        mode,
+        sender,
+        label,
+        text
+      })
+    });
+  } catch (error) {
+    console.error("Erreur saveChatMessage:", error);
+  }
+}
+
+async function loadChatHistory() {
+  if (!chatState.authUserId) return;
+
+  try {
+    const data = await fetchJSON(
+      `/api/chat-messages?user_id=${encodeURIComponent(chatState.authUserId)}`
+    );
+
+    const messages = data.messages || [];
+    const listingHistory = [];
+    const translatorHistory = [];
+
+    for (const msg of messages) {
+      const item = {
+        sender: msg.sender === "user" ? "user" : "bot",
+        label: msg.label || (msg.sender === "user" ? "Employé" : "Assistant"),
+        text: msg.text,
+        variant: ""
+      };
+
+      if (msg.mode === "translator") {
+        translatorHistory.push(item);
+      } else {
+        listingHistory.push(item);
+      }
+    }
+
+    if (listingHistory.length) {
+      chatState.listingHistory = listingHistory;
+    }
+
+    if (translatorHistory.length) {
+      chatState.translatorHistory = translatorHistory;
+    }
+  } catch (error) {
+    console.error("Erreur loadChatHistory:", error);
+  }
+}
+
+/* =========================
+   UI
+========================= */
 
 function setPending(isPending) {
   chatState.pending = isPending;
@@ -171,7 +354,7 @@ function renderMessages() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function pushMessage(sender, label, text, variant = "") {
+async function pushMessage(sender, label, text, variant = "") {
   const message = { sender, label, text, variant };
   currentHistory().push(message);
   addMessageToDOM(message);
@@ -180,15 +363,17 @@ function pushMessage(sender, label, text, variant = "") {
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
+  await saveChatMessage(sender === "user" ? "user" : "bot", label, text, chatState.currentMode);
+
   return message;
 }
 
-function replaceLastLoading(text, variant = "success", label = "Assistant") {
+async function replaceLastLoading(text, variant = "success", label = "Assistant") {
   const history = currentHistory();
   const last = history[history.length - 1];
 
   if (!last || last.variant !== "loading") {
-    pushMessage("bot", label, text, variant);
+    await pushMessage("bot", label, text, variant);
     return;
   }
 
@@ -196,6 +381,8 @@ function replaceLastLoading(text, variant = "success", label = "Assistant") {
   last.variant = variant;
   last.label = label;
   renderMessages();
+
+  await saveChatMessage("bot", label, text, chatState.currentMode);
 }
 
 function switchMode(mode) {
@@ -306,23 +493,9 @@ function prevalidateListing() {
   return { ok: true, ref };
 }
 
-async function fetchJSON(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || "Une erreur est survenue.");
-  }
-
-  return data;
-}
+/* =========================
+   API APP
+========================= */
 
 async function checkServer() {
   try {
@@ -384,6 +557,10 @@ async function sendToAI(input, ref = "") {
   });
 }
 
+/* =========================
+   EVENTS
+========================= */
+
 if (listingSelect) {
   listingSelect.addEventListener("change", () => {
     const selectedRef = normalizeRefKey(listingSelect.value);
@@ -401,7 +578,7 @@ if (chatForm) {
     if (!input || chatState.pending) return;
 
     if (!chatState.serverReady) {
-      pushMessage(
+      await pushMessage(
         "bot",
         "Système",
         "Le serveur n'est pas connecté. Lancez le backend puis réessayez.",
@@ -416,7 +593,7 @@ if (chatForm) {
       const validation = prevalidateListing();
 
       if (!validation.ok) {
-        pushMessage("bot", "Système", validation.error, "error");
+        await pushMessage("bot", "Système", validation.error, "error");
         return;
       }
 
@@ -429,11 +606,18 @@ if (chatForm) {
         ? `${formatDisplayRef(selectedRef)} - ${input}`
         : input;
 
-    pushMessage("user", "Employé", userText);
+    await pushMessage("user", "Employé", userText);
     chatInput.value = "";
 
     setPending(true);
-    pushMessage("bot", "Système", "Traitement en cours…", "loading");
+
+    currentHistory().push({
+      sender: "bot",
+      label: "Système",
+      text: "Traitement en cours…",
+      variant: "loading"
+    });
+    renderMessages();
 
     try {
       const result = await sendToAI(input, selectedRef);
@@ -450,7 +634,7 @@ if (chatForm) {
         }
       }
 
-      replaceLastLoading(
+      await replaceLastLoading(
         result.reply || "Aucune réponse reçue.",
         result.variant || "success",
         result.label ||
@@ -459,7 +643,7 @@ if (chatForm) {
             : "Traducteur")
       );
     } catch (error) {
-      replaceLastLoading(
+      await replaceLastLoading(
         error.message || "Une erreur est survenue.",
         "error",
         "Système"
@@ -484,9 +668,21 @@ if (chatInput) {
 if (clearChatBtn) {
   clearChatBtn.addEventListener("click", () => {
     if (chatState.currentMode === "listing") {
-      chatState.listingHistory = [];
+      chatState.listingHistory = [
+        {
+          sender: "bot",
+          label: "Système",
+          text: "Le mode Assistant des immeubles est actif. Sélectionnez un appartement puis posez votre question."
+        }
+      ];
     } else {
-      chatState.translatorHistory = [];
+      chatState.translatorHistory = [
+        {
+          sender: "bot",
+          label: "Système",
+          text: "Le mode Traducteur est actif. Collez un texte à traduire ou à expliquer."
+        }
+      ];
     }
 
     renderMessages();
@@ -501,11 +697,40 @@ if (translatorModeBtn) {
   translatorModeBtn.addEventListener("click", () => switchMode("translator"));
 }
 
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible") {
+    await heartbeat();
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  stopHeartbeat();
+});
+
+window.addEventListener("pagehide", () => {
+  stopHeartbeat();
+});
+
+supabaseClient.auth.onAuthStateChange(async (event) => {
+  if (event === "SIGNED_OUT") {
+    stopHeartbeat();
+    window.location.href = "/login.html";
+  }
+});
+
+/* =========================
+   INIT
+========================= */
+
 (async function init() {
   try {
     await requireLogin();
+    await loadChatHistory();
     await Promise.all([checkServer(), loadListings()]);
+    await startTrackedSession();
   } catch (error) {
+    console.error("Erreur init:", error);
+
     if (serverStatus) {
       serverStatus.textContent = "Serveur non connecté";
       serverStatus.className = "server-pill error";
