@@ -8,7 +8,8 @@ const tabs = {
   users: document.getElementById("usersTab"),
   sessions: document.getElementById("sessionsTab"),
   messages: document.getElementById("messagesTab"),
-  apartments: document.getElementById("apartmentsTab")
+  apartments: document.getElementById("apartmentsTab"),
+  candidates: document.getElementById("candidatesTab")
 };
 
 const pageTitle = document.getElementById("pageTitle");
@@ -17,6 +18,8 @@ const usersBody = document.getElementById("usersBody");
 const sessionsBody = document.getElementById("sessionsBody");
 const messagesBody = document.getElementById("messagesBody");
 const apartmentsBody = document.getElementById("apartmentsBody");
+const candidatesBody = document.getElementById("candidatesBody");
+
 const messageUserId = document.getElementById("messageUserId");
 const loadMessagesBtn = document.getElementById("loadMessagesBtn");
 
@@ -33,8 +36,14 @@ const apartmentCityFilter = document.getElementById("apartmentCityFilter");
 const apartmentDisponibiliteFilter = document.getElementById("apartmentDisponibiliteFilter");
 const clearApartmentFiltersBtn = document.getElementById("clearApartmentFiltersBtn");
 
+const candidateStatusFilter = document.getElementById("candidateStatusFilter");
+const candidateSearch = document.getElementById("candidateSearch");
+const clearCandidateFiltersBtn = document.getElementById("clearCandidateFiltersBtn");
+
 let currentTab = "users";
 let allApartments = [];
+let allCandidates = [];
+let lastPendingCandidatesCount = 0;
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -105,6 +114,7 @@ function switchTab(tabName) {
   currentTab = tabName;
 
   Object.entries(tabs).forEach(([key, el]) => {
+    if (!el) return;
     el.classList.toggle("hidden", key !== tabName);
   });
 
@@ -116,7 +126,8 @@ function switchTab(tabName) {
     users: "Utilisateurs",
     sessions: "Sessions",
     messages: "Conversations",
-    apartments: "Appartements"
+    apartments: "Appartements",
+    candidates: "Candidats"
   };
 
   pageTitle.textContent = titles[tabName] || "Admin";
@@ -147,11 +158,7 @@ async function loadUsers() {
   const rows = data.summary || [];
 
   if (!rows.length) {
-    usersBody.innerHTML = `
-      <tr>
-        <td colspan="5">Aucune donnée aujourd’hui.</td>
-      </tr>
-    `;
+    usersBody.innerHTML = `<tr><td colspan="5">Aucune donnée aujourd’hui.</td></tr>`;
     return;
   }
 
@@ -213,6 +220,8 @@ async function loadMessages() {
 }
 
 function resetApartmentForm() {
+  if (!editingApartmentRefInput) return;
+
   editingApartmentRefInput.value = "";
   apartmentForm.reset();
   apartmentFormTitle.textContent = "Ajouter un appartement";
@@ -313,11 +322,7 @@ function renderApartmentsTable(rows) {
   apartmentsBody.innerHTML = "";
 
   if (!rows.length) {
-    apartmentsBody.innerHTML = `
-      <tr>
-        <td colspan="16">Aucun appartement trouvé.</td>
-      </tr>
-    `;
+    apartmentsBody.innerHTML = `<tr><td colspan="16">Aucun appartement trouvé.</td></tr>`;
     return;
   }
 
@@ -341,20 +346,10 @@ function renderApartmentsTable(rows) {
       <td>${row.statut || "-"}</td>
       <td>${row.notes || "-"}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button
-          type="button"
-          class="secondary-btn edit-apartment-btn"
-          data-ref="${row.ref}"
-          style="padding:8px 12px;border-radius:10px;"
-        >
+        <button type="button" class="secondary-btn edit-apartment-btn" data-ref="${row.ref}" style="padding:8px 12px;border-radius:10px;">
           Modifier
         </button>
-        <button
-          type="button"
-          class="secondary-btn delete-apartment-btn"
-          data-ref="${row.ref}"
-          style="padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;"
-        >
+        <button type="button" class="secondary-btn delete-apartment-btn" data-ref="${row.ref}" style="padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;">
           Supprimer
         </button>
       </td>
@@ -463,11 +458,136 @@ async function createOrUpdateApartment(event) {
   }
 }
 
+function getFilteredCandidates() {
+  const status = candidateStatusFilter?.value || "";
+  const search = (candidateSearch?.value || "").trim().toLowerCase();
+
+  return allCandidates.filter((candidate) => {
+    const matchesStatus = !status || candidate.status === status;
+
+    const blob = [
+      candidate.apartment_ref,
+      candidate.candidate_name,
+      candidate.phone,
+      candidate.email,
+      candidate.job_title,
+      candidate.employer_name,
+      candidate.employment_length,
+      candidate.employment_status,
+      candidate.monthly_income,
+      candidate.credit_level,
+      candidate.tal_record,
+      candidate.occupants_total,
+      candidate.pets,
+      candidate.employee_notes,
+      candidate.admin_notes,
+      candidate.status
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matchesSearch = !search || blob.includes(search);
+
+    return matchesStatus && matchesSearch;
+  });
+}
+
+async function updateCandidateStatus(id, status) {
+  await fetchJSON(`/api/admin/candidates/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+
+  await loadCandidates();
+}
+
+function renderCandidatesTable(rows) {
+  if (!candidatesBody) return;
+
+  candidatesBody.innerHTML = "";
+
+  if (!rows.length) {
+    candidatesBody.innerHTML = `<tr><td colspan="17">Aucun candidat trouvé.</td></tr>`;
+    return;
+  }
+
+  rows.forEach((candidate) => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>L-${candidate.apartment_ref || "-"}</td>
+      <td>${candidate.candidate_name || "-"}</td>
+      <td>${candidate.phone || "-"}</td>
+      <td>${candidate.email || "-"}</td>
+      <td>${candidate.job_title || "-"}</td>
+      <td>${candidate.employer_name || "-"}</td>
+      <td>${candidate.employment_length || "-"}</td>
+      <td>${candidate.employment_status || "-"}</td>
+      <td>${candidate.monthly_income || "-"}</td>
+      <td>${candidate.credit_level || "-"}</td>
+      <td>${candidate.tal_record || "-"}</td>
+      <td>${candidate.occupants_total || "-"}</td>
+      <td>${candidate.pets || "-"}</td>
+      <td>${candidate.employee_notes || "-"}</td>
+      <td>${candidate.admin_notes || "-"}</td>
+      <td>${candidate.status || "-"}</td>
+      <td style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="secondary-btn approve-candidate-btn" data-id="${candidate.id}" style="padding:8px 12px;border-radius:10px;background:#dcfce7;color:#166534;">
+          Approuver
+        </button>
+        <button type="button" class="secondary-btn reject-candidate-btn" data-id="${candidate.id}" style="padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;">
+          Refuser
+        </button>
+      </td>
+    `;
+
+    candidatesBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".approve-candidate-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await updateCandidateStatus(btn.dataset.id, "approuvé");
+    });
+  });
+
+  document.querySelectorAll(".reject-candidate-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await updateCandidateStatus(btn.dataset.id, "refusé");
+    });
+  });
+}
+
+function applyCandidateFilters() {
+  renderCandidatesTable(getFilteredCandidates());
+}
+
+async function loadCandidates() {
+  const data = await fetchJSON("/api/admin/candidates");
+  allCandidates = data.candidates || [];
+  applyCandidateFilters();
+}
+
+async function checkNewCandidates() {
+  try {
+    const data = await fetchJSON("/api/admin/candidates?status=en attente");
+    const pendingCount = (data.candidates || []).length;
+
+    if (lastPendingCandidatesCount !== 0 && pendingCount > lastPendingCandidatesCount) {
+      alert("Nouveau candidat reçu");
+    }
+
+    lastPendingCandidatesCount = pendingCount;
+  } catch (error) {
+    console.error("Erreur notification candidats:", error);
+  }
+}
+
 async function refreshCurrentTab() {
   if (currentTab === "users") await loadUsers();
   if (currentTab === "sessions") await loadSessions();
   if (currentTab === "messages") await loadMessages();
   if (currentTab === "apartments") await loadApartments();
+  if (currentTab === "candidates") await loadCandidates();
 }
 
 document.querySelectorAll(".menu-btn").forEach((btn) => {
@@ -514,6 +634,22 @@ if (clearApartmentFiltersBtn) {
   });
 }
 
+if (candidateStatusFilter) {
+  candidateStatusFilter.addEventListener("change", applyCandidateFilters);
+}
+
+if (candidateSearch) {
+  candidateSearch.addEventListener("input", applyCandidateFilters);
+}
+
+if (clearCandidateFiltersBtn) {
+  clearCandidateFiltersBtn.addEventListener("click", () => {
+    candidateStatusFilter.value = "";
+    candidateSearch.value = "";
+    applyCandidateFilters();
+  });
+}
+
 supabaseClient.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     window.location.href = "/login.html";
@@ -525,68 +661,10 @@ supabaseClient.auth.onAuthStateChange((event) => {
     await requireAdmin();
     switchTab("users");
     await loadUsers();
+    await checkNewCandidates();
+    setInterval(checkNewCandidates, 10000);
   } catch (error) {
     console.error("ADMIN INIT ERROR:", error);
     showFatalError(error.message || "Erreur admin inconnue.");
   }
 })();
-async function loadCandidates() {
-  const res = await fetch("/api/admin/candidates");
-  const data = await res.json();
-
-  const tbody = document.getElementById("candidatesBody");
-  tbody.innerHTML = "";
-
-  data.candidates.forEach(c => {
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-      <td>${c.candidate_name || ""}</td>
-      <td>L-${c.apartment_ref}</td>
-      <td>${c.monthly_income || ""}</td>
-      <td>${c.credit_level || ""}</td>
-      <td>${c.tal_record || ""}</td>
-      <td>${c.status}</td>
-      <td>
-        <button onclick="approve('${c.id}')">✔</button>
-        <button onclick="reject('${c.id}')">✖</button>
-      </td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-}
-
-async function approve(id) {
-  await fetch(`/api/admin/candidates/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "approuvé" })
-  });
-
-  loadCandidates();
-}
-
-async function reject(id) {
-  await fetch(`/api/admin/candidates/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "refusé" })
-  });
-
-  loadCandidates();
-}
-let lastCount = 0;
-
-async function checkNewCandidates() {
-  const res = await fetch("/api/admin/candidates?status=en attente");
-  const data = await res.json();
-
-  if (data.candidates.length > lastCount) {
-    alert("Nouveau candidat reçu");
-  }
-
-  lastCount = data.candidates.length;
-}
-
-setInterval(checkNewCandidates, 5000);
