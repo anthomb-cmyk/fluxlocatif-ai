@@ -19,15 +19,16 @@ const messagesBody = document.getElementById("messagesBody");
 const apartmentsBody = document.getElementById("apartmentsBody");
 const messageUserId = document.getElementById("messageUserId");
 const loadMessagesBtn = document.getElementById("loadMessagesBtn");
+
 const apartmentForm = document.getElementById("apartmentForm");
 const apartmentFormStatus = document.getElementById("apartmentFormStatus");
 const apartmentFormTitle = document.getElementById("apartmentFormTitle");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
 const editingRefBadge = document.getElementById("editingRefBadge");
 const submitApartmentBtn = document.getElementById("submitApartmentBtn");
+const editingApartmentRefInput = document.getElementById("editingApartmentRef");
 
 let currentTab = "users";
-let editingApartmentRef = null;
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -206,18 +207,17 @@ async function loadMessages() {
 }
 
 function resetApartmentForm() {
-  editingApartmentRef = null;
+  editingApartmentRefInput.value = "";
   apartmentForm.reset();
   apartmentFormTitle.textContent = "Ajouter un appartement";
   submitApartmentBtn.textContent = "Ajouter l’appartement";
   cancelEditBtn.style.display = "none";
   editingRefBadge.style.display = "none";
   editingRefBadge.textContent = "";
-  apartmentFormStatus.textContent = "";
 }
 
 function fillApartmentForm(row) {
-  editingApartmentRef = row.ref;
+  editingApartmentRefInput.value = row.ref || "";
 
   document.getElementById("aptAdresse").value = row.adresse || "";
   document.getElementById("aptVille").value = row.ville || "";
@@ -242,6 +242,7 @@ function fillApartmentForm(row) {
   editingRefBadge.style.display = "inline-flex";
   editingRefBadge.textContent = `Modification : L-${row.ref}`;
   apartmentFormStatus.textContent = "";
+  apartmentFormStatus.style.color = "";
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -250,8 +251,20 @@ async function loadApartments() {
   const data = await fetchJSON("/api/listings");
   apartmentsBody.innerHTML = "";
 
-  Object.values(data.listings || {}).forEach((row) => {
+  const rows = Object.values(data.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+
+  if (!rows.length) {
+    apartmentsBody.innerHTML = `
+      <tr>
+        <td colspan="16">Aucun appartement trouvé.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  rows.forEach((row) => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
       <td>L-${row.ref || "-"}</td>
       <td>${row.adresse || "-"}</td>
@@ -279,14 +292,14 @@ async function loadApartments() {
         </button>
       </td>
     `;
+
     apartmentsBody.appendChild(tr);
   });
 
   document.querySelectorAll(".edit-apartment-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const ref = btn.dataset.ref;
-      const data = await fetchJSON("/api/listings");
-      const listing = data.listings?.[String(ref)];
+    btn.addEventListener("click", () => {
+      const ref = String(btn.dataset.ref);
+      const listing = rows.find((r) => String(r.ref) === ref);
       if (listing) {
         fillApartmentForm(listing);
       }
@@ -298,6 +311,9 @@ async function createOrUpdateApartment(event) {
   event.preventDefault();
 
   apartmentFormStatus.textContent = "";
+  apartmentFormStatus.style.color = "";
+
+  const editingRef = editingApartmentRefInput.value.trim();
 
   const payload = {
     adresse: document.getElementById("aptAdresse").value.trim(),
@@ -317,13 +333,13 @@ async function createOrUpdateApartment(event) {
   };
 
   try {
-    if (editingApartmentRef) {
-      await fetchJSON(`/api/admin/apartments/L-${editingApartmentRef}`, {
+    if (editingRef) {
+      await fetchJSON(`/api/admin/apartments/L-${editingRef}`, {
         method: "PUT",
         body: JSON.stringify(payload)
       });
 
-      apartmentFormStatus.textContent = `Appartement L-${editingApartmentRef} modifié avec succès.`;
+      apartmentFormStatus.textContent = `Appartement L-${editingRef} modifié avec succès.`;
       apartmentFormStatus.style.color = "green";
     } else {
       const result = await fetchJSON("/api/admin/apartments", {
@@ -335,8 +351,8 @@ async function createOrUpdateApartment(event) {
       apartmentFormStatus.style.color = "green";
     }
 
-    resetApartmentForm();
     await loadApartments();
+    resetApartmentForm();
   } catch (error) {
     apartmentFormStatus.textContent = error.message || "Erreur lors de l’opération.";
     apartmentFormStatus.style.color = "red";
