@@ -94,7 +94,15 @@
 
       <section class="card hidden" id="apartmentsTab">
         <div class="form-card">
-          <h3>Ajouter un appartement</h3>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <h3 id="apartmentFormTitle">Ajouter un appartement</h3>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <div id="editingRefBadge" style="display:none;font-weight:800;"></div>
+              <button type="button" id="cancelEditBtn" class="secondary-btn" style="display:none;">
+                Annuler la modification
+              </button>
+            </div>
+          </div>
 
           <form id="apartmentForm" class="admin-form">
             <div class="form-grid">
@@ -185,7 +193,7 @@
             <textarea id="aptNotes" placeholder="Notes"></textarea>
 
             <div class="form-actions">
-              <button type="submit" class="primary-btn">Ajouter l’appartement</button>
+              <button type="submit" id="submitApartmentBtn" class="primary-btn">Ajouter l’appartement</button>
             </div>
           </form>
 
@@ -200,9 +208,18 @@
                 <th>Adresse</th>
                 <th>Ville</th>
                 <th>Type</th>
+                <th>Chambres</th>
+                <th>Superficie</th>
                 <th>Loyer</th>
+                <th>Inclusions</th>
+                <th>Stationnement</th>
+                <th>Animaux</th>
+                <th>Meublé</th>
+                <th>Électricité</th>
                 <th>Disponibilité</th>
                 <th>Statut</th>
+                <th>Notes</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody id="apartmentsBody"></tbody>
@@ -213,6 +230,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="admin.js?v=5"></script>
+  <script src="admin.js?v=6"></script>
 </body>
 </html>
