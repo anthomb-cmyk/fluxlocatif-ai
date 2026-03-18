@@ -4,220 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Connexion — FluxLocatif</title>
-  <style>
-    :root {
-      --text: #191d45;
-      --muted: #6b7280;
-      --brand-gradient: linear-gradient(135deg, #1e90ff 0%, #4f46e5 48%, #9333ea 100%);
-      --shadow: 0 20px 60px rgba(79, 70, 229, 0.10);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Inter, Arial, sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(30,144,255,.16), transparent 28%),
-        radial-gradient(circle at top right, rgba(147,51,234,.12), transparent 24%),
-        linear-gradient(180deg, #f7f9ff 0%, #f4f6fb 100%);
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-
-    .card {
-      width: 100%;
-      max-width: 520px;
-      background: rgba(255,255,255,0.92);
-      border: 1px solid rgba(255,255,255,.7);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      border-radius: 28px;
-      padding: 32px;
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 2.2rem;
-    }
-
-    p {
-      margin: 0 0 22px;
-      color: var(--muted);
-      font-size: 1.05rem;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-
-    label {
-      font-weight: 700;
-      font-size: 0.95rem;
-    }
-
-    input {
-      width: 100%;
-      border: 1px solid rgba(79,70,229,.14);
-      border-radius: 16px;
-      padding: 14px 16px;
-      font: inherit;
-      color: var(--text);
-      background: white;
-      outline: none;
-    }
-
-    input:focus {
-      border-color: rgba(79,70,229,.4);
-      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
-    }
-
-    button {
-      width: 100%;
-      border: none;
-      border-radius: 16px;
-      padding: 15px 18px;
-      font: inherit;
-      font-weight: 800;
-      cursor: pointer;
-      background: var(--brand-gradient);
-      color: white;
-      margin-top: 10px;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
-
-    .status {
-      margin-top: 16px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      font-weight: 700;
-      display: none;
-      white-space: pre-wrap;
-    }
-
-    .status.error {
-      display: block;
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    .status.success {
-      display: block;
-      background: #dcfce7;
-      color: #166534;
-    }
-  </style>
+  <link rel="stylesheet" href="login.css?v=1" />
 </head>
 <body>
-  <div class="card">
-    <h1>Connexion</h1>
-    <p>Connectez-vous pour accéder à FluxLocatif.</p>
-
-    <form id="loginForm">
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="vous@exemple.com" required />
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="brand-mark">F</div>
+        <div>
+          <h1>FluxLocatif</h1>
+          <p>Connexion employé / admin</p>
+        </div>
       </div>
 
-      <div class="field">
-        <label for="password">Mot de passe</label>
-        <input id="password" type="password" placeholder="Votre mot de passe" required />
-      </div>
+      <h2>Connexion</h2>
+      <p class="login-subtitle">Entrez vos accès pour ouvrir la plateforme.</p>
 
-      <button id="loginBtn" type="submit">Se connecter</button>
-    </form>
+      <form id="loginForm">
+        <input id="email" type="email" placeholder="Email" required />
+        <input id="password" type="password" placeholder="Mot de passe" required />
 
-    <div id="loginStatus" class="status"></div>
+        <div id="loginStatus" class="login-status"></div>
+
+        <button type="submit" class="login-btn">Se connecter</button>
+      </form>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dXprdmd5b2x4YmF3dnF5dWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Njc1NzYsImV4cCI6MjA4OTM0MzU3Nn0.zjltrYd38fypIAm1DIr0wj69eS9T7xpi_4p2aWsNYyw";
-
-    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    const loginForm = document.getElementById("loginForm");
-    const loginBtn = document.getElementById("loginBtn");
-    const loginStatus = document.getElementById("loginStatus");
-
-    function setStatus(message = "", type = "") {
-      loginStatus.className = "status";
-      loginStatus.textContent = "";
-
-      if (!message) return;
-
-      loginStatus.classList.add(type);
-      loginStatus.textContent = message;
-    }
-
-    async function checkExistingSession() {
-      const { data, error } = await supabaseClient.auth.getSession();
-
-      if (error) {
-        console.error("Session check error:", error);
-        return;
-      }
-
-      if (data?.session) {
-        window.location.href = "/admin.html";
-      }
-    }
-
-    loginForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-
-      if (!email || !password) {
-        setStatus("Veuillez remplir email et mot de passe.", "error");
-        return;
-      }
-
-      loginBtn.disabled = true;
-      setStatus("Connexion en cours...", "success");
-
-      try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-          email,
-          password
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        if (!data?.session) {
-          throw new Error("Aucune session n'a été créée.");
-        }
-
-        setStatus("Connexion réussie. Redirection...", "success");
-
-        setTimeout(() => {
-          window.location.href = "/admin.html";
-        }, 500);
-      } catch (error) {
-        console.error("Login error:", error);
-        setStatus(error.message || "Erreur de connexion.", "error");
-      } finally {
-        loginBtn.disabled = false;
-      }
-    });
-
-    checkExistingSession();
-  </script>
+  <script src="login.js?v=2"></script>
 </body>
 </html>
