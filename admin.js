@@ -39,9 +39,6 @@ function showFatalError(message) {
 async function requireAdmin() {
   const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
 
-  console.log("DEBUG sessionData:", sessionData);
-  console.log("DEBUG sessionError:", sessionError);
-
   if (sessionError) {
     throw new Error("Session error: " + sessionError.message);
   }
@@ -52,16 +49,12 @@ async function requireAdmin() {
   }
 
   const userId = sessionData.session.user.id;
-  console.log("DEBUG userId:", userId);
 
   const { data: adminRow, error: adminError } = await supabaseClient
     .from("admin_users")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
-
-  console.log("DEBUG adminRow:", adminRow);
-  console.log("DEBUG adminError:", adminError);
 
   if (adminError) {
     throw new Error("Erreur lecture admin_users: " + adminError.message);
@@ -79,10 +72,6 @@ async function requireAdmin() {
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString("fr-CA");
-}
-
-function formatMinutes(value) {
-  return `${Number(value || 0).toFixed(2)} min`;
 }
 
 async function fetchJSON(url, options = {}) {
@@ -124,7 +113,24 @@ function switchTab(tabName) {
   pageTitle.textContent = titles[tabName] || "Admin";
 }
 
+function forceUsersHeader() {
+  const thead = document.querySelector("#usersTab thead");
+  if (!thead) return;
+
+  thead.innerHTML = `
+    <tr>
+      <th>Nom</th>
+      <th>Jour</th>
+      <th>Heartbeats</th>
+      <th>Total minutes</th>
+      <th>Total heures</th>
+    </tr>
+  `;
+}
+
 async function loadUsers() {
+  forceUsersHeader();
+
   const today = new Date().toISOString().split("T")[0];
   const data = await fetchJSON(`/api/admin/user-daily-time?day=${today}`);
 
@@ -141,13 +147,16 @@ async function loadUsers() {
   }
 
   for (const row of rows) {
+    const minutes = (row.total_seconds || 0) / 60;
+    const hours = (row.total_seconds || 0) / 3600;
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.full_name || row.user_id || "-"}</td>
       <td>${row.day || "-"}</td>
       <td>${row.heartbeat_count ?? 0}</td>
-      <td>${row.total_seconds ?? 0} s</td>
-      <td>${formatMinutes(row.total_minutes)}</td>
+      <td>${minutes.toFixed(2)} min</td>
+      <td>${hours.toFixed(2)} h</td>
     `;
     usersBody.appendChild(tr);
   }
@@ -230,7 +239,7 @@ async function createApartment(event) {
     stationnement: document.getElementById("aptStationnement").value,
     animaux_acceptes: document.getElementById("aptAnimaux").value,
     meuble: document.getElementById("aptMeuble").value,
-    disponibilite: document.getElementById("aptDisponibilite").value.trim(),
+    disponibilite: document.getElementById("aptDisponibilite").value,
     notes: document.getElementById("aptNotes").value.trim(),
     electricite: document.getElementById("aptElectricite").value
   };
@@ -294,55 +303,3 @@ supabaseClient.auth.onAuthStateChange((event) => {
     showFatalError(error.message || "Erreur admin inconnue.");
   }
 })();
-/* ===== FORCE OVERRIDE loadUsers + headers ===== */
-
-// force les headers aussi
-function forceUsersHeader() {
-  const thead = document.querySelector("#usersTab thead");
-  if (!thead) return;
-
-  thead.innerHTML = `
-    <tr>
-      <th>Nom</th>
-      <th>Jour</th>
-      <th>Heartbeats</th>
-      <th>Total minutes</th>
-      <th>Total heures</th>
-    </tr>
-  `;
-}
-
-// override complet de la fonction
-loadUsers = async function () {
-  forceUsersHeader();
-
-  const today = new Date().toISOString().split("T")[0];
-  const data = await fetchJSON(`/api/admin/user-daily-time?day=${today}`);
-
-  usersBody.innerHTML = "";
-  const rows = data.summary || [];
-
-  if (!rows.length) {
-    usersBody.innerHTML = `
-      <tr>
-        <td colspan="5">Aucune donnée aujourd’hui.</td>
-      </tr>
-    `;
-    return;
-  }
-
-  for (const row of rows) {
-    const minutes = (row.total_seconds || 0) / 60;
-    const hours = (row.total_seconds || 0) / 3600;
-
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.full_name || row.user_id || "-"}</td>
-      <td>${row.day || "-"}</td>
-      <td>${row.heartbeat_count ?? 0}</td>
-      <td>${minutes.toFixed(2)} min</td>
-      <td>${hours.toFixed(2)} h</td>
-    `;
-    usersBody.appendChild(tr);
-  }
-};
