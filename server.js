@@ -5,7 +5,7 @@ import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,12 +13,13 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 const app = express();
+const api = express.Router();
+
 const PORT = process.env.PORT || 3000;
 const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(__dirname));
 
 if (!process.env.OPENAI_API_KEY) {
   console.error("OPENAI_API_KEY manquante.");
@@ -37,24 +38,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-let mailer = null;
-
-try {
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    mailer = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD
-      }
-    });
-    console.log("Mailer prêt");
-  } else {
-    console.log("Mailer non configuré");
-  }
-} catch (error) {
-  console.error("Erreur initialisation mailer :", error);
-}
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 function normalizeText(value = "") {
   return String(value)
@@ -151,7 +137,7 @@ async function getListingByRef(ref) {
 }
 
 async function sendCandidateNotificationEmail(candidate) {
-  if (!mailer || !process.env.EMAIL_NOTIFY_TO) {
+  if (!resend || !process.env.EMAIL_NOTIFY_TO) {
     console.warn("Email notification non configurée.");
     return;
   }
@@ -180,35 +166,18 @@ async function sendCandidateNotificationEmail(candidate) {
     </div>
   `;
 
-  const text = `
-Nouveau locataire potentiel
-
-Appartement : L-${candidate.apartment_ref || "-"}
-Nom : ${candidate.candidate_name || "-"}
-Téléphone : ${candidate.phone || "-"}
-Email : ${candidate.email || "-"}
-Emploi : ${candidate.job_title || "-"}
-Employeur : ${candidate.employer_name || "-"}
-Depuis combien de temps : ${candidate.employment_length || "-"}
-Statut emploi : ${candidate.employment_status || "-"}
-Revenu mensuel : ${candidate.monthly_income || "-"}
-Crédit : ${candidate.credit_level || "-"}
-Dossier TAL : ${candidate.tal_record || "-"}
-Nombre de personnes : ${candidate.occupants_total || "-"}
-Animaux : ${candidate.pets || "-"}
-Notes employé : ${candidate.employee_notes || "-"}
-
-Admin :
-https://fluxlocatif.up.railway.app/admin.html
-  `;
-
-  await mailer.sendMail({
-    from: `"FluxLocatif" <${process.env.GMAIL_USER}>`,
-    to: process.env.EMAIL_NOTIFY_TO,
+  const { data, error } = await resend.emails.send({
+    from: "FluxLocatif <onboarding@resend.dev>",
+    to: [process.env.EMAIL_NOTIFY_TO],
     subject,
-    text,
     html
   });
+
+  if (error) {
+    throw new Error(error.message || "Erreur envoi email");
+  }
+
+  return data;
 }
 
 function quickFieldAnswer(listing, question) {
@@ -238,10 +207,7 @@ function quickFieldAnswer(listing, question) {
     normalizeText(listing.statut || "")
   ].join(" ");
 
-  if (
-    q.includes("meubl") ||
-    q.includes("meuble")
-  ) {
+  if (q.includes("meubl")) {
     if (listing.meuble) {
       const answer = normalizeText(listing.meuble);
       if (answer === "oui") return `Oui, ${refLabel} est meublé.`;
@@ -326,7 +292,7 @@ function quickFieldAnswer(listing, question) {
     return "Cette information n'est pas indiquée dans la fiche.";
   }
 
-  if (q.includes("chambre") || q.includes("combien de chambre")) {
+  if (q.includes("chambre")) {
     if (listing.chambres !== null && listing.chambres !== undefined && listing.chambres !== "") {
       return `${refLabel} a ${listing.chambres} chambre${Number(listing.chambres) > 1 ? "s" : ""}.`;
     }
@@ -340,25 +306,25 @@ function quickFieldAnswer(listing, question) {
    API ROUTES
 ========================= */
 
-app.get("/api/health", async (req, res) => {
+api.get("/health", async (req, res) => {
   try {
     const { error } = await supabase.from("apartments").select("ref").limit(1);
     if (error) throw error;
 
-    res.json({
+    return res.json({
       ok: true,
       message: "Serveur connecté"
     });
   } catch (error) {
     console.error("Erreur /api/health :", error);
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: "Connexion Supabase impossible."
     });
   }
 });
 
-app.get("/api/listings", async (req, res) => {
+api.get("/listings", async (req, res) => {
   try {
     const listings = await getAllListings();
     const map = {};
@@ -372,14 +338,14 @@ app.get("/api/listings", async (req, res) => {
       }
     }
 
-    res.json({ listings: map });
+    return res.json({ listings: map });
   } catch (error) {
     console.error("Erreur /api/listings :", error);
-    res.status(500).json({ error: "Erreur chargement appartements." });
+    return res.status(500).json({ error: "Erreur chargement appartements." });
   }
 });
 
-app.get("/api/admin/user-daily-time", async (req, res) => {
+api.get("/admin/user-daily-time", async (req, res) => {
   try {
     const { day, user_id } = req.query;
 
@@ -388,29 +354,23 @@ app.get("/api/admin/user-daily-time", async (req, res) => {
       .select("*")
       .order("day", { ascending: false });
 
-    if (day) {
-      query = query.eq("day", day);
-    }
-
-    if (user_id) {
-      query = query.eq("user_id", user_id);
-    }
+    if (day) query = query.eq("day", day);
+    if (user_id) query = query.eq("user_id", user_id);
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    res.json({ summary: data || [] });
+    return res.json({ summary: data || [] });
   } catch (error) {
     console.error("Erreur /api/admin/user-daily-time :", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Erreur chargement temps heartbeat.",
       details: error.message || String(error)
     });
   }
 });
 
-app.get("/api/admin/chat-sessions", async (req, res) => {
+api.get("/admin/chat-sessions", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("chat_sessions")
@@ -419,14 +379,14 @@ app.get("/api/admin/chat-sessions", async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ sessions: data || [] });
+    return res.json({ sessions: data || [] });
   } catch (error) {
     console.error("Erreur /api/admin/chat-sessions :", error);
-    res.status(500).json({ error: "Erreur chargement sessions." });
+    return res.status(500).json({ error: "Erreur chargement sessions." });
   }
 });
 
-app.get("/api/admin/chat-messages", async (req, res) => {
+api.get("/admin/chat-messages", async (req, res) => {
   try {
     const { user_id } = req.query;
 
@@ -435,22 +395,19 @@ app.get("/api/admin/chat-messages", async (req, res) => {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (user_id) {
-      query = query.eq("user_id", user_id);
-    }
+    if (user_id) query = query.eq("user_id", user_id);
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    res.json({ messages: data || [] });
+    return res.json({ messages: data || [] });
   } catch (error) {
     console.error("Erreur /api/admin/chat-messages :", error);
-    res.status(500).json({ error: "Erreur chargement messages." });
+    return res.status(500).json({ error: "Erreur chargement messages." });
   }
 });
 
-app.post("/api/admin/apartments", async (req, res) => {
+api.post("/admin/apartments", async (req, res) => {
   try {
     const {
       adresse,
@@ -518,21 +475,21 @@ app.post("/api/admin/apartments", async (req, res) => {
 
     if (error) throw error;
 
-    res.json({
+    return res.json({
       ok: true,
       apartment: data,
       generated_ref: `L-${nextRef}`
     });
   } catch (error) {
     console.error("Erreur /api/admin/apartments POST :", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Erreur création appartement.",
       details: error.message || String(error)
     });
   }
 });
 
-app.put("/api/admin/apartments/:ref", async (req, res) => {
+api.put("/admin/apartments/:ref", async (req, res) => {
   try {
     const { ref } = req.params;
     const numericRef = Number(String(ref).replace(/^L-/i, "").trim());
@@ -568,17 +525,17 @@ app.put("/api/admin/apartments/:ref", async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ ok: true, apartment: data });
+    return res.json({ ok: true, apartment: data });
   } catch (error) {
     console.error("Erreur /api/admin/apartments PUT :", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Erreur modification appartement.",
       details: error.message || String(error)
     });
   }
 });
 
-app.delete("/api/admin/apartments/:ref", async (req, res) => {
+api.delete("/admin/apartments/:ref", async (req, res) => {
   try {
     const { ref } = req.params;
     const numericRef = Number(String(ref).replace(/^L-/i, "").trim());
@@ -594,17 +551,17 @@ app.delete("/api/admin/apartments/:ref", async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (error) {
     console.error("Erreur /api/admin/apartments DELETE :", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Erreur suppression appartement.",
       details: error.message || String(error)
     });
   }
 });
 
-app.post("/api/admin/candidates", async (req, res) => {
+api.post("/admin/candidates", async (req, res) => {
   try {
     const payload = { ...req.body };
 
@@ -632,20 +589,27 @@ app.post("/api/admin/candidates", async (req, res) => {
 
     if (error) throw error;
 
+    let emailWarning = null;
+
     try {
       await sendCandidateNotificationEmail(data);
     } catch (mailError) {
       console.error("Erreur envoi email candidat :", mailError);
+      emailWarning = "Candidat enregistré, mais notification email non envoyée.";
     }
 
-    res.json({ ok: true, candidate: data });
+    return res.json({
+      ok: true,
+      candidate: data,
+      emailWarning
+    });
   } catch (err) {
     console.error("Erreur création candidat :", err);
-    res.status(500).json({ error: "Erreur création candidat" });
+    return res.status(500).json({ error: "Erreur création candidat" });
   }
 });
 
-app.get("/api/admin/candidates", async (req, res) => {
+api.get("/admin/candidates", async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -654,22 +618,19 @@ app.get("/api/admin/candidates", async (req, res) => {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (status) {
-      query = query.eq("status", status);
-    }
+    if (status) query = query.eq("status", status);
 
     const { data, error } = await query;
-
     if (error) throw error;
 
-    res.json({ candidates: data || [] });
+    return res.json({ candidates: data || [] });
   } catch (err) {
     console.error("Erreur candidats :", err);
-    res.status(500).json({ error: "Erreur candidats" });
+    return res.status(500).json({ error: "Erreur candidats" });
   }
 });
 
-app.put("/api/admin/candidates/:id", async (req, res) => {
+api.put("/admin/candidates/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -682,14 +643,14 @@ app.put("/api/admin/candidates/:id", async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ ok: true, candidate: data });
+    return res.json({ ok: true, candidate: data });
   } catch (err) {
     console.error("Erreur update candidat :", err);
-    res.status(500).json({ error: "Erreur update candidat" });
+    return res.status(500).json({ error: "Erreur update candidat" });
   }
 });
 
-app.post("/api/chat", async (req, res) => {
+api.post("/chat", async (req, res) => {
   try {
     const { message, mode } = req.body || {};
 
@@ -788,9 +749,21 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+app.use("/api", api);
+
 /* =========================
-   FRONTEND ROUTES
+   STATIC FILES
 ========================= */
+
+app.use(express.static(__dirname, { extensions: ["html"] }));
+
+/* =========================
+   FRONTEND PAGES
+========================= */
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
 app.get("/admin.html", (req, res) => {
   res.sendFile(path.join(__dirname, "admin.html"));
@@ -800,13 +773,16 @@ app.get("/login.html", (req, res) => {
   res.sendFile(path.join(__dirname, "login.html"));
 });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+/* =========================
+   NON-API FALLBACK
+========================= */
 
-// fallback SEULEMENT pour les routes non-api
-app.get(/^\/(?!api\/).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ error: "API route introuvable." });
+  }
+
+  return res.sendFile(path.join(__dirname, "index.html"));
 });
 
 app.listen(PORT, () => {
