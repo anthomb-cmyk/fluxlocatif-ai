@@ -143,6 +143,7 @@ function quickFieldAnswer(listing, question) {
   const notesText = normalizeText(listing.notes || "");
   const stationnementText = normalizeText(listing.stationnement || "");
   const animauxText = normalizeText(listing.animaux_acceptes || "");
+
   const fullText = [
     inclusionsText,
     electriciteText,
@@ -297,7 +298,7 @@ app.get("/api/listings", async (req, res) => {
 });
 
 /* =========================
-   CHAT HISTORY + ACTIVITY
+   CHAT SESSIONS / ACTIVITY / MESSAGES
 ========================= */
 
 app.post("/api/chat-sessions", async (req, res) => {
@@ -496,9 +497,7 @@ app.get("/api/user-time-summary", async (req, res) => {
   try {
     const { user_id } = req.query;
 
-    let query = supabase
-      .from("user_time_summary")
-      .select("*");
+    let query = supabase.from("user_time_summary").select("*");
 
     if (user_id) {
       query = query.eq("user_id", user_id);
@@ -515,6 +514,50 @@ app.get("/api/user-time-summary", async (req, res) => {
       error: "Erreur lecture résumé temps.",
       details: error.message || String(error)
     });
+  }
+});
+
+/* =========================
+   ADMIN ROUTES
+========================= */
+
+app.get("/api/admin/chat-sessions", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .select("*")
+      .order("started_at", { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ sessions: data || [] });
+  } catch (error) {
+    console.error("Erreur /api/admin/chat-sessions :", error);
+    res.status(500).json({ error: "Erreur chargement sessions." });
+  }
+});
+
+app.get("/api/admin/chat-messages", async (req, res) => {
+  try {
+    const { user_id } = req.query;
+
+    let query = supabase
+      .from("chat_messages")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (user_id) {
+      query = query.eq("user_id", user_id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    res.json({ messages: data || [] });
+  } catch (error) {
+    console.error("Erreur /api/admin/chat-messages :", error);
+    res.status(500).json({ error: "Erreur chargement messages." });
   }
 });
 
