@@ -1,6 +1,5 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
-const SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dXprdmd5b2x4YmF3dnF5dWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Njc1NzYsImV4cCI6MjA4OTM0MzU3Nn0.zjltrYd38fypIAm1DIr0wj69eS9T7xpi_4p2aWsNYyw";
+const SUPABASE_KEY = "METS_TA_SUPABASE_ANON_KEY_ICI";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -22,7 +21,8 @@ const chatState = {
   ],
   listings: {},
   serverReady: false,
-  pending: false
+  pending: false,
+  currentUser: null
 };
 
 const sampleRefs = document.getElementById("sampleRefs");
@@ -42,6 +42,22 @@ const listingSelectorCard = document.getElementById("listingSelectorCard");
 
 const candidateForm = document.getElementById("candidateForm");
 const candidateStatus = document.getElementById("candidateStatus");
+
+async function requireLogin() {
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    console.error("Erreur session :", error);
+  }
+
+  if (!data?.session) {
+    window.location.href = "/login.html";
+    throw new Error("Not logged in");
+  }
+
+  chatState.currentUser = data.session.user;
+  return data.session.user;
+}
 
 function currentHistory() {
   return chatState.currentMode === "listing"
@@ -392,6 +408,12 @@ async function handleCandidateSubmit(event) {
 
   setCandidateStatus("", "");
 
+  const submitBtn = candidateForm.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Envoi en cours...";
+  }
+
   const apartmentRef = normalizeRefKey(document.getElementById("aptRef").value.trim());
 
   const payload = {
@@ -410,24 +432,44 @@ async function handleCandidateSubmit(event) {
     pets: document.getElementById("pets").value,
     employee_notes: document.getElementById("notes").value.trim(),
     status: "en attente",
-    employee_user_id: "employee-manuel"
+    employee_user_id: chatState.currentUser?.id || "employee-manuel"
   };
 
   if (!payload.apartment_ref) {
     setCandidateStatus("Veuillez entrer un appartement visé valide.", "error");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Envoyer la fiche";
+    }
     return;
   }
 
   try {
-    await fetchJSON("/api/admin/candidates", {
+    const result = await fetchJSON("/api/admin/candidates", {
       method: "POST",
       body: JSON.stringify(payload)
     });
 
-    setCandidateStatus("Fiche locataire envoyée avec succès.", "success");
+    const warning = result.emailWarning
+      ? ` ${result.emailWarning}`
+      : "";
+
+    setCandidateStatus(
+      `Fiche envoyée avec succès pour L-${result.candidate?.apartment_ref || apartmentRef}.${warning}`,
+      "success"
+    );
+
     candidateForm.reset();
   } catch (error) {
-    setCandidateStatus(error.message || "Erreur envoi fiche locataire.", "error");
+    setCandidateStatus(
+      error.message || "Erreur envoi fiche locataire.",
+      "error"
+    );
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Envoyer la fiche";
+    }
   }
 }
 
@@ -552,10 +594,19 @@ if (candidateForm) {
   candidateForm.addEventListener("submit", handleCandidateSubmit);
 }
 
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === "SIGNED_OUT") {
+    window.location.href = "/login.html";
+  }
+});
+
 (async function init() {
   try {
+    await requireLogin();
     await Promise.all([checkServer(), loadListings()]);
   } catch (error) {
+    console.error(error);
+
     if (serverStatus) {
       serverStatus.textContent = "Serveur non connecté";
       serverStatus.className = "server-pill error";
