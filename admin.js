@@ -530,3 +530,49 @@ supabaseClient.auth.onAuthStateChange((event) => {
     showFatalError(error.message || "Erreur admin inconnue.");
   }
 })();
+async function loadCandidates() {
+  const res = await fetch("/api/admin/candidates");
+  const data = await res.json();
+
+  const tbody = document.getElementById("candidatesBody");
+  tbody.innerHTML = "";
+
+  data.candidates.forEach(c => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${c.candidate_name || ""}</td>
+      <td>L-${c.apartment_ref}</td>
+      <td>${c.monthly_income || ""}</td>
+      <td>${c.credit_level || ""}</td>
+      <td>${c.tal_record || ""}</td>
+      <td>${c.status}</td>
+      <td>
+        <button onclick="approve('${c.id}')">✔</button>
+        <button onclick="reject('${c.id}')">✖</button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function approve(id) {
+  await fetch(`/api/admin/candidates/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "approuvé" })
+  });
+
+  loadCandidates();
+}
+
+async function reject(id) {
+  await fetch(`/api/admin/candidates/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "refusé" })
+  });
+
+  loadCandidates();
+}
