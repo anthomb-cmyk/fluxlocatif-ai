@@ -294,3 +294,35 @@ supabaseClient.auth.onAuthStateChange((event) => {
     showFatalError(error.message || "Erreur admin inconnue.");
   }
 })();
+/* ===== FORCE OVERRIDE loadUsers ===== */
+loadUsers = async function () {
+  const today = new Date().toISOString().split("T")[0];
+  const data = await fetchJSON(`/api/admin/user-daily-time?day=${today}`);
+
+  usersBody.innerHTML = "";
+  const rows = data.summary || [];
+
+  if (!rows.length) {
+    usersBody.innerHTML = `
+      <tr>
+        <td colspan="5">Aucune donnée aujourd’hui.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  for (const row of rows) {
+    const minutes = (row.total_seconds || 0) / 60;
+    const hours = (row.total_seconds || 0) / 3600;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.full_name || row.user_id || "-"}</td>
+      <td>${row.day || "-"}</td>
+      <td>${row.heartbeat_count ?? 0}</td>
+      <td>${minutes.toFixed(2)} min</td>
+      <td>${hours.toFixed(2)} h</td>
+    `;
+    usersBody.appendChild(tr);
+  }
+};
