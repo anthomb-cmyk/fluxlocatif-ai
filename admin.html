@@ -137,10 +137,12 @@
               </select>
 
               <select id="aptStatut">
-                <option value="">Statut</option>
-                <option value="disponible">Disponible</option>
-                <option value="loué">Loué</option>
-                <option value="réservé">Réservé</option>
+                <option value="">Statut global</option>
+                <option value="actif">Actif</option>
+                <option value="loué">Loué (long terme)</option>
+                <option value="en rénovation">En rénovation</option>
+                <option value="hors marché">Hors marché</option>
+                <option value="à vendre">À vendre</option>
               </select>
 
               <select id="aptStationnement">
@@ -166,7 +168,11 @@
                 <option value="non">Non</option>
               </select>
 
-              <input id="aptDisponibilite" type="text" placeholder="Disponibilité" />
+              <select id="aptDisponibilite">
+                <option value="">Disponibilité maintenant</option>
+                <option value="disponible">Disponible</option>
+                <option value="loué">Loué</option>
+              </select>
 
               <select id="aptElectricite">
                 <option value="">Électricité</option>
@@ -207,6 +213,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="admin.js?v=4"></script>
+  <script src="admin.js?v=5"></script>
 </body>
 </html>
