@@ -21,8 +21,13 @@ const messageUserId = document.getElementById("messageUserId");
 const loadMessagesBtn = document.getElementById("loadMessagesBtn");
 const apartmentForm = document.getElementById("apartmentForm");
 const apartmentFormStatus = document.getElementById("apartmentFormStatus");
+const apartmentFormTitle = document.getElementById("apartmentFormTitle");
+const cancelEditBtn = document.getElementById("cancelEditBtn");
+const editingRefBadge = document.getElementById("editingRefBadge");
+const submitApartmentBtn = document.getElementById("submitApartmentBtn");
 
 let currentTab = "users";
+let editingApartmentRef = null;
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -31,7 +36,6 @@ function showFatalError(message) {
       <div style="padding:16px 18px;border-radius:14px;background:#fee2e2;color:#991b1b;font-weight:700;">
         ${message}
       </div>
-      <p style="margin-top:16px;color:#374151;">Retournez sur <strong>login.html</strong> pour vous reconnecter si nécessaire.</p>
     </div>
   `;
 }
@@ -61,9 +65,7 @@ async function requireAdmin() {
   }
 
   if (!adminRow) {
-    throw new Error(
-      `Votre compte est connecté, mais n'existe pas dans admin_users. UUID actuel: ${userId}`
-    );
+    throw new Error(`Votre compte est connecté, mais n'existe pas dans admin_users. UUID actuel: ${userId}`);
   }
 
   return sessionData.session.user;
@@ -203,6 +205,47 @@ async function loadMessages() {
   }
 }
 
+function resetApartmentForm() {
+  editingApartmentRef = null;
+  apartmentForm.reset();
+  apartmentFormTitle.textContent = "Ajouter un appartement";
+  submitApartmentBtn.textContent = "Ajouter l’appartement";
+  cancelEditBtn.style.display = "none";
+  editingRefBadge.style.display = "none";
+  editingRefBadge.textContent = "";
+  apartmentFormStatus.textContent = "";
+}
+
+function fillApartmentForm(row) {
+  editingApartmentRef = row.ref;
+
+  document.getElementById("aptAdresse").value = row.adresse || "";
+  document.getElementById("aptVille").value = row.ville || "";
+  document.getElementById("aptType").value = row.type_logement || "";
+  document.getElementById("aptChambres").value =
+    row.chambres === null || row.chambres === undefined ? "" : String(row.chambres);
+  document.getElementById("aptSuperficie").value = row.superficie || "";
+  document.getElementById("aptLoyer").value =
+    row.loyer === null || row.loyer === undefined ? "" : String(row.loyer);
+  document.getElementById("aptInclusions").value = row.inclusions || "";
+  document.getElementById("aptStatut").value = row.statut || "";
+  document.getElementById("aptStationnement").value = row.stationnement || "";
+  document.getElementById("aptAnimaux").value = row.animaux_acceptes || "";
+  document.getElementById("aptMeuble").value = row.meuble || "";
+  document.getElementById("aptDisponibilite").value = row.disponibilite || "";
+  document.getElementById("aptElectricite").value = row.electricite || "";
+  document.getElementById("aptNotes").value = row.notes || "";
+
+  apartmentFormTitle.textContent = "Modifier un appartement";
+  submitApartmentBtn.textContent = "Sauvegarder les modifications";
+  cancelEditBtn.style.display = "inline-flex";
+  editingRefBadge.style.display = "inline-flex";
+  editingRefBadge.textContent = `Modification : L-${row.ref}`;
+  apartmentFormStatus.textContent = "";
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 async function loadApartments() {
   const data = await fetchJSON("/api/listings");
   apartmentsBody.innerHTML = "";
@@ -214,15 +257,44 @@ async function loadApartments() {
       <td>${row.adresse || "-"}</td>
       <td>${row.ville || "-"}</td>
       <td>${row.type_logement || "-"}</td>
+      <td>${row.chambres ?? "-"}</td>
+      <td>${row.superficie || "-"}</td>
       <td>${row.loyer ?? "-"}</td>
+      <td>${row.inclusions || "-"}</td>
+      <td>${row.stationnement || "-"}</td>
+      <td>${row.animaux_acceptes || "-"}</td>
+      <td>${row.meuble || "-"}</td>
+      <td>${row.electricite || "-"}</td>
       <td>${row.disponibilite || "-"}</td>
       <td>${row.statut || "-"}</td>
+      <td>${row.notes || "-"}</td>
+      <td>
+        <button
+          type="button"
+          class="secondary-btn edit-apartment-btn"
+          data-ref="${row.ref}"
+          style="padding:8px 12px;border-radius:10px;"
+        >
+          Modifier
+        </button>
+      </td>
     `;
     apartmentsBody.appendChild(tr);
   });
+
+  document.querySelectorAll(".edit-apartment-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const ref = btn.dataset.ref;
+      const data = await fetchJSON("/api/listings");
+      const listing = data.listings?.[String(ref)];
+      if (listing) {
+        fillApartmentForm(listing);
+      }
+    });
+  });
 }
 
-async function createApartment(event) {
+async function createOrUpdateApartment(event) {
   event.preventDefault();
 
   apartmentFormStatus.textContent = "";
@@ -245,18 +317,28 @@ async function createApartment(event) {
   };
 
   try {
-    const result = await fetchJSON("/api/admin/apartments", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    if (editingApartmentRef) {
+      await fetchJSON(`/api/admin/apartments/L-${editingApartmentRef}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
 
-    apartmentFormStatus.textContent = `Appartement ajouté avec succès. Référence générée : ${result.generated_ref}`;
-    apartmentFormStatus.style.color = "green";
+      apartmentFormStatus.textContent = `Appartement L-${editingApartmentRef} modifié avec succès.`;
+      apartmentFormStatus.style.color = "green";
+    } else {
+      const result = await fetchJSON("/api/admin/apartments", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
 
-    apartmentForm.reset();
+      apartmentFormStatus.textContent = `Appartement ajouté avec succès. Référence générée : ${result.generated_ref}`;
+      apartmentFormStatus.style.color = "green";
+    }
+
+    resetApartmentForm();
     await loadApartments();
   } catch (error) {
-    apartmentFormStatus.textContent = error.message || "Erreur lors de l’ajout.";
+    apartmentFormStatus.textContent = error.message || "Erreur lors de l’opération.";
     apartmentFormStatus.style.color = "red";
   }
 }
@@ -284,7 +366,11 @@ if (loadMessagesBtn) {
 }
 
 if (apartmentForm) {
-  apartmentForm.addEventListener("submit", createApartment);
+  apartmentForm.addEventListener("submit", createOrUpdateApartment);
+}
+
+if (cancelEditBtn) {
+  cancelEditBtn.addEventListener("click", resetApartmentForm);
 }
 
 supabaseClient.auth.onAuthStateChange((event) => {
