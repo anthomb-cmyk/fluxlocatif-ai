@@ -191,11 +191,6 @@ td.long {
   word-break: break-word;
 }
 
-@media (max-width: 980px) {
-  .admin-shell {
-    grid-template-columns: 1fr;
-  }
-}
 .form-card h3 {
   margin-top: 0;
   margin-bottom: 16px;
@@ -214,7 +209,8 @@ td.long {
 }
 
 .admin-form input,
-.admin-form textarea {
+.admin-form textarea,
+.admin-form select {
   width: 100%;
   border: 1px solid rgba(79,70,229,.14);
   border-radius: 14px;
@@ -237,6 +233,12 @@ td.long {
 #apartmentFormStatus {
   margin-top: 12px;
   font-weight: 700;
+}
+
+@media (max-width: 980px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
