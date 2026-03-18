@@ -14,3 +14,4 @@
     "openai": "^4.104.0"
   }
 }
+npm install nodemailer
