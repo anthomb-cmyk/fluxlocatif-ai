@@ -1,5 +1,5 @@
-const SUPABASE_URL = "METS_TON_SUPABASE_URL_ICI";
-const SUPABASE_KEY = "METS_TON_SUPABASE_ANON_KEY_ICI";
+const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dXprdmd5b2x4YmF3dnF5dWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Njc1NzYsImV4cCI6MjA4OTM0MzU3Nn0.zjltrYd38fypIAm1DIr0wj69eS9T7xpi_4p2aWsNYyw";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const chatState = {
@@ -56,7 +56,12 @@ function normalizeRefKey(ref) {
 }
 
 async function requireLogin() {
-  const { data } = await supabaseClient.auth.getSession();
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    window.location.href = "/login.html";
+    throw new Error("Session error");
+  }
 
   if (!data.session) {
     window.location.href = "/login.html";
