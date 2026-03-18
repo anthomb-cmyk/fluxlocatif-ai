@@ -28,7 +28,13 @@ const editingRefBadge = document.getElementById("editingRefBadge");
 const submitApartmentBtn = document.getElementById("submitApartmentBtn");
 const editingApartmentRefInput = document.getElementById("editingApartmentRef");
 
+const apartmentSearch = document.getElementById("apartmentSearch");
+const apartmentCityFilter = document.getElementById("apartmentCityFilter");
+const apartmentDisponibiliteFilter = document.getElementById("apartmentDisponibiliteFilter");
+const clearApartmentFiltersBtn = document.getElementById("clearApartmentFiltersBtn");
+
 let currentTab = "users";
+let allApartments = [];
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -247,11 +253,64 @@ function fillApartmentForm(row) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function loadApartments() {
-  const data = await fetchJSON("/api/listings");
-  apartmentsBody.innerHTML = "";
+function populateCityFilter(rows) {
+  if (!apartmentCityFilter) return;
 
-  const rows = Object.values(data.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+  const currentValue = apartmentCityFilter.value;
+  const cities = [...new Set(rows.map((r) => (r.ville || "").trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "fr")
+  );
+
+  apartmentCityFilter.innerHTML = `<option value="">Toutes les villes</option>`;
+  cities.forEach((city) => {
+    const option = document.createElement("option");
+    option.value = city;
+    option.textContent = city;
+    apartmentCityFilter.appendChild(option);
+  });
+
+  if (cities.includes(currentValue)) {
+    apartmentCityFilter.value = currentValue;
+  }
+}
+
+function getFilteredApartments() {
+  const search = (apartmentSearch?.value || "").trim().toLowerCase();
+  const city = apartmentCityFilter?.value || "";
+  const dispo = apartmentDisponibiliteFilter?.value || "";
+
+  return allApartments.filter((row) => {
+    const matchesCity = !city || (row.ville || "") === city;
+    const matchesDispo = !dispo || (row.disponibilite || "") === dispo;
+
+    const blob = [
+      row.ref,
+      row.adresse,
+      row.ville,
+      row.type_logement,
+      row.chambres,
+      row.superficie,
+      row.loyer,
+      row.inclusions,
+      row.stationnement,
+      row.animaux_acceptes,
+      row.meuble,
+      row.electricite,
+      row.disponibilite,
+      row.statut,
+      row.notes
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matchesSearch = !search || blob.includes(search);
+
+    return matchesCity && matchesDispo && matchesSearch;
+  });
+}
+
+function renderApartmentsTable(rows) {
+  apartmentsBody.innerHTML = "";
 
   if (!rows.length) {
     apartmentsBody.innerHTML = `
@@ -281,7 +340,7 @@ async function loadApartments() {
       <td>${row.disponibilite || "-"}</td>
       <td>${row.statut || "-"}</td>
       <td>${row.notes || "-"}</td>
-      <td>
+      <td style="display:flex;gap:8px;flex-wrap:wrap;">
         <button
           type="button"
           class="secondary-btn edit-apartment-btn"
@@ -289,6 +348,14 @@ async function loadApartments() {
           style="padding:8px 12px;border-radius:10px;"
         >
           Modifier
+        </button>
+        <button
+          type="button"
+          class="secondary-btn delete-apartment-btn"
+          data-ref="${row.ref}"
+          style="padding:8px 12px;border-radius:10px;background:#fee2e2;color:#991b1b;"
+        >
+          Supprimer
         </button>
       </td>
     `;
@@ -299,12 +366,49 @@ async function loadApartments() {
   document.querySelectorAll(".edit-apartment-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const ref = String(btn.dataset.ref);
-      const listing = rows.find((r) => String(r.ref) === ref);
+      const listing = allApartments.find((r) => String(r.ref) === ref);
       if (listing) {
         fillApartmentForm(listing);
       }
     });
   });
+
+  document.querySelectorAll(".delete-apartment-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const ref = String(btn.dataset.ref);
+      const confirmDelete = window.confirm(`Supprimer définitivement L-${ref} ?`);
+      if (!confirmDelete) return;
+
+      try {
+        await fetchJSON(`/api/admin/apartments/L-${ref}`, {
+          method: "DELETE"
+        });
+
+        if (editingApartmentRefInput.value === ref) {
+          resetApartmentForm();
+        }
+
+        apartmentFormStatus.textContent = `Appartement L-${ref} supprimé avec succès.`;
+        apartmentFormStatus.style.color = "green";
+
+        await loadApartments();
+      } catch (error) {
+        apartmentFormStatus.textContent = error.message || "Erreur suppression appartement.";
+        apartmentFormStatus.style.color = "red";
+      }
+    });
+  });
+}
+
+function applyApartmentFilters() {
+  renderApartmentsTable(getFilteredApartments());
+}
+
+async function loadApartments() {
+  const data = await fetchJSON("/api/listings");
+  allApartments = Object.values(data.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+  populateCityFilter(allApartments);
+  applyApartmentFilters();
 }
 
 async function createOrUpdateApartment(event) {
@@ -351,8 +455,8 @@ async function createOrUpdateApartment(event) {
       apartmentFormStatus.style.color = "green";
     }
 
-    await loadApartments();
     resetApartmentForm();
+    await loadApartments();
   } catch (error) {
     apartmentFormStatus.textContent = error.message || "Erreur lors de l’opération.";
     apartmentFormStatus.style.color = "red";
@@ -387,6 +491,27 @@ if (apartmentForm) {
 
 if (cancelEditBtn) {
   cancelEditBtn.addEventListener("click", resetApartmentForm);
+}
+
+if (apartmentSearch) {
+  apartmentSearch.addEventListener("input", applyApartmentFilters);
+}
+
+if (apartmentCityFilter) {
+  apartmentCityFilter.addEventListener("change", applyApartmentFilters);
+}
+
+if (apartmentDisponibiliteFilter) {
+  apartmentDisponibiliteFilter.addEventListener("change", applyApartmentFilters);
+}
+
+if (clearApartmentFiltersBtn) {
+  clearApartmentFiltersBtn.addEventListener("click", () => {
+    apartmentSearch.value = "";
+    apartmentCityFilter.value = "";
+    apartmentDisponibiliteFilter.value = "";
+    applyApartmentFilters();
+  });
 }
 
 supabaseClient.auth.onAuthStateChange((event) => {
