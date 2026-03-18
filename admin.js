@@ -14,6 +14,9 @@ const apartmentsBody = document.getElementById("apartmentsBody");
 const messageUserId = document.getElementById("messageUserId");
 const loadMessagesBtn = document.getElementById("loadMessagesBtn");
 
+const apartmentForm = document.getElementById("apartmentForm");
+const apartmentFormStatus = document.getElementById("apartmentFormStatus");
+
 let currentTab = "users";
 
 function formatDate(value) {
@@ -25,8 +28,15 @@ function formatMinutes(value) {
   return `${Number(value || 0).toFixed(2)} min`;
 }
 
-async function fetchJSON(url) {
-  const res = await fetch(url);
+async function fetchJSON(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
@@ -62,7 +72,6 @@ async function loadUsers() {
   const data = await fetchJSON(`/api/admin/user-daily-time?day=${today}`);
 
   usersBody.innerHTML = "";
-
   const rows = data.summary || [];
 
   if (!rows.length) {
@@ -135,7 +144,7 @@ async function loadApartments() {
   Object.values(data.listings || {}).forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.ref || "-"}</td>
+      <td>L-${row.ref || "-"}</td>
       <td>${row.adresse || "-"}</td>
       <td>${row.ville || "-"}</td>
       <td>${row.type_logement || "-"}</td>
@@ -145,6 +154,45 @@ async function loadApartments() {
     `;
     apartmentsBody.appendChild(tr);
   });
+}
+
+async function createApartment(event) {
+  event.preventDefault();
+
+  apartmentFormStatus.textContent = "";
+
+  const payload = {
+    adresse: document.getElementById("aptAdresse").value.trim(),
+    ville: document.getElementById("aptVille").value.trim(),
+    type_logement: document.getElementById("aptType").value,
+    chambres: document.getElementById("aptChambres").value,
+    superficie: document.getElementById("aptSuperficie").value.trim(),
+    loyer: document.getElementById("aptLoyer").value,
+    inclusions: document.getElementById("aptInclusions").value,
+    statut: document.getElementById("aptStatut").value,
+    stationnement: document.getElementById("aptStationnement").value,
+    animaux_acceptes: document.getElementById("aptAnimaux").value,
+    meuble: document.getElementById("aptMeuble").value,
+    disponibilite: document.getElementById("aptDisponibilite").value.trim(),
+    notes: document.getElementById("aptNotes").value.trim(),
+    electricite: document.getElementById("aptElectricite").value
+  };
+
+  try {
+    const result = await fetchJSON("/api/admin/apartments", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    apartmentFormStatus.textContent = `Appartement ajouté avec succès. Référence générée : ${result.generated_ref}`;
+    apartmentFormStatus.style.color = "green";
+
+    apartmentForm.reset();
+    await loadApartments();
+  } catch (error) {
+    apartmentFormStatus.textContent = error.message || "Erreur lors de l’ajout.";
+    apartmentFormStatus.style.color = "red";
+  }
 }
 
 async function refreshCurrentTab() {
@@ -162,7 +210,14 @@ document.querySelectorAll(".menu-btn").forEach((btn) => {
 });
 
 refreshBtn.addEventListener("click", refreshCurrentTab);
-loadMessagesBtn.addEventListener("click", loadMessages);
+
+if (loadMessagesBtn) {
+  loadMessagesBtn.addEventListener("click", loadMessages);
+}
+
+if (apartmentForm) {
+  apartmentForm.addEventListener("submit", createApartment);
+}
 
 (async function init() {
   switchTab("users");
