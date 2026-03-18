@@ -576,3 +576,17 @@ async function reject(id) {
 
   loadCandidates();
 }
+let lastCount = 0;
+
+async function checkNewCandidates() {
+  const res = await fetch("/api/admin/candidates?status=en attente");
+  const data = await res.json();
+
+  if (data.candidates.length > lastCount) {
+    alert("Nouveau candidat reçu");
+  }
+
+  lastCount = data.candidates.length;
+}
+
+setInterval(checkNewCandidates, 5000);
