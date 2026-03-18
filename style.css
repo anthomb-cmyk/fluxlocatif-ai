@@ -549,3 +549,53 @@ code {
     align-self: flex-start;
   }
 }
+/* ===== FORCE BLUE SELECT BOX ===== */
+
+.listing-select-box {
+  width: 100%;
+  background: var(--brand-gradient) !important;
+  border: none !important;
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.25);
+}
+
+.listing-select-label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff !important;
+  margin-bottom: 6px;
+}
+
+.listing-select-help {
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.listing-select {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.6) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  font: inherit;
+  font-weight: 800;
+  outline: none;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.listing-select:focus {
+  border-color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.listing-select option {
+  color: var(--text-strong);
+  background: #ffffff;
+}
