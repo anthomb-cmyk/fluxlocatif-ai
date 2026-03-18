@@ -837,3 +837,58 @@ app.post("/api/chat", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+app.post("/api/admin/candidates", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("rental_applications")
+      .insert(req.body)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    res.json({ ok: true, candidate: data });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur création candidat" });
+  }
+});
+app.get("/api/admin/candidates", async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    let query = supabase
+      .from("rental_applications")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (status) {
+      query = query.eq("status", status);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    res.json({ candidates: data });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur candidats" });
+  }
+});
+app.put("/api/admin/candidates/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from("rental_applications")
+      .update(req.body)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    res.json({ ok: true, candidate: data });
+  } catch (err) {
+    res.status(500).json({ error: "Erreur update candidat" });
+  }
+});
