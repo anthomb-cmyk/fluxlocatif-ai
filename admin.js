@@ -294,8 +294,28 @@ supabaseClient.auth.onAuthStateChange((event) => {
     showFatalError(error.message || "Erreur admin inconnue.");
   }
 })();
-/* ===== FORCE OVERRIDE loadUsers ===== */
+/* ===== FORCE OVERRIDE loadUsers + headers ===== */
+
+// force les headers aussi
+function forceUsersHeader() {
+  const thead = document.querySelector("#usersTab thead");
+  if (!thead) return;
+
+  thead.innerHTML = `
+    <tr>
+      <th>Nom</th>
+      <th>Jour</th>
+      <th>Heartbeats</th>
+      <th>Total minutes</th>
+      <th>Total heures</th>
+    </tr>
+  `;
+}
+
+// override complet de la fonction
 loadUsers = async function () {
+  forceUsersHeader();
+
   const today = new Date().toISOString().split("T")[0];
   const data = await fetchJSON(`/api/admin/user-daily-time?day=${today}`);
 
