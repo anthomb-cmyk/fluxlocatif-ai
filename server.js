@@ -6,6 +6,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import OpenAI from "openai";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -15,6 +16,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://nuuzkvgyolxbawvqyugu.supabase.co";
+const SUPABASE_SERVER_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
@@ -26,6 +33,16 @@ const USER_DAILY_TIME_PATH = path.join(DATA_DIR, "user-daily-time.json");
 
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+// Prefer the service-role key for backend token verification. Fallback keys keep the route fail-closed,
+// but they are not the ideal long-term backend credential.
+const supabaseServerClient = SUPABASE_URL && SUPABASE_SERVER_KEY
+  ? createSupabaseClient(SUPABASE_URL, SUPABASE_SERVER_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
   : null;
 
 app.use(cors());
@@ -55,6 +72,16 @@ async function writeJsonFile(filePath, value) {
 
 function normalizeRef(ref) {
   return String(ref || "").trim().replace(/^L-/i, "");
+}
+
+function resolveClientIdFromUser(user) {
+  return String(
+    user?.user_metadata?.client_id ||
+    user?.user_metadata?.clientId ||
+    user?.app_metadata?.client_id ||
+    user?.app_metadata?.clientId ||
+    ""
+  ).trim();
 }
 
 function toListingRecord(key, value) {
@@ -578,6 +605,62 @@ function buildTranslatorFallbackPayload(message) {
   };
 }
 
+function createHttpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function getBearerToken(req) {
+  const authorization = String(req.headers.authorization || "").trim();
+
+  if (!authorization.toLowerCase().startsWith("bearer ")) {
+    return "";
+  }
+
+  return authorization.slice(7).trim();
+}
+
+async function resolveClientContext(req) {
+  if (!supabaseServerClient) {
+    throw createHttpError(503, "Authentification client backend non configurée.");
+  }
+
+  const accessToken = getBearerToken(req);
+  if (!accessToken) {
+    throw createHttpError(401, "Jeton d’authentification manquant.");
+  }
+
+  // Assumption: the backend can validate the Supabase access token by calling Supabase Auth.
+  // If that verification is unavailable, these routes fail closed rather than exposing admin data.
+  const { data, error } = await supabaseServerClient.auth.getUser(accessToken);
+
+  if (error || !data?.user) {
+    throw createHttpError(401, "Session client invalide.");
+  }
+
+  const user = data.user;
+  const clientId = resolveClientIdFromUser(user);
+
+  if (!clientId) {
+    throw createHttpError(403, "Accès client refusé.");
+  }
+
+  return { user, clientId };
+}
+
+async function handleClientRoute(req, res, handler) {
+  try {
+    const context = await resolveClientContext(req);
+    return await handler(context);
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Erreur client."
+    });
+  }
+}
+
 async function generateTranslatorPayload(message) {
   if (!openai) {
     return buildTranslatorFallbackPayload(message);
@@ -795,6 +878,86 @@ app.post("/api/match", async (req, res) => {
 
   return res.json(evaluateMatch(listing, candidate, criteria));
 });
+
+app.get("/api/client/me", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const clientsMap = await loadClientsMap();
+    const client = clientsMap[String(clientId)] || null;
+
+    if (!client) {
+      throw createHttpError(404, "Client introuvable.");
+    }
+
+    return res.json({
+      ok: true,
+      client_id: clientId,
+      client: normalizeClientRecord(clientId, client)
+    });
+  })
+);
+
+app.get("/api/client/apartments", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const listings = await loadListingsMap();
+    const apartments = Object.values(listings).filter((listing) => String(listing.client_id) === String(clientId));
+
+    return res.json({
+      ok: true,
+      apartments
+    });
+  })
+);
+
+app.get("/api/client/candidates", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const listings = await loadListingsMap();
+    const apartmentRefs = new Set(
+      Object.values(listings)
+        .filter((listing) => String(listing.client_id) === String(clientId))
+        .map((listing) => normalizeRef(listing.ref))
+    );
+
+    const storedCandidates = await readJsonFile(CANDIDATES_PATH, []);
+    const { candidates, changed } = await ensureCandidatesMatchFields(storedCandidates, false);
+    const filtered = candidates.filter((candidate) => apartmentRefs.has(normalizeRef(candidate.apartment_ref)));
+
+    if (changed) {
+      await writeJsonFile(CANDIDATES_PATH, candidates);
+    }
+
+    return res.json({
+      ok: true,
+      candidates: filtered
+    });
+  })
+);
+
+app.put("/api/client/criteria", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const clientsMap = await loadClientsMap();
+    const existingClient = clientsMap[String(clientId)] || null;
+
+    if (!existingClient) {
+      throw createHttpError(404, "Client introuvable.");
+    }
+
+    const client = normalizeClientRecord(clientId, {
+      ...existingClient,
+      criteres: {
+        ...(existingClient?.criteres || {}),
+        ...(req.body?.criteres || {})
+      }
+    });
+
+    clientsMap[String(clientId)] = client;
+    await saveClientsMap(clientsMap);
+
+    return res.json({
+      ok: true,
+      client
+    });
+  })
+);
 
 app.get("/api/admin/user-daily-time", async (req, res) => {
   try {

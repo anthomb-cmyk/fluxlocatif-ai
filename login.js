@@ -14,6 +14,56 @@ function getPostLoginDestination() {
   return next.startsWith("/") ? next : "/";
 }
 
+function resolveClientId(user) {
+  return String(
+    user?.user_metadata?.client_id ||
+    user?.user_metadata?.clientId ||
+    user?.app_metadata?.client_id ||
+    user?.app_metadata?.clientId ||
+    ""
+  ).trim();
+}
+
+async function resolveDefaultDestination(session) {
+  const user = session?.user || null;
+  const userId = user?.id;
+
+  if (!userId) {
+    return "/";
+  }
+
+  const { data: adminRow, error } = await supabaseClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (adminRow) {
+    return "/admin.html";
+  }
+
+  if (resolveClientId(user)) {
+    return "/client.html";
+  }
+
+  return "/";
+}
+
+async function resolvePostLoginDestination(session) {
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next");
+
+  if (next && next.startsWith("/")) {
+    return next;
+  }
+
+  return resolveDefaultDestination(session);
+}
+
 async function waitForSession(maxAttempts = 10, delayMs = 150) {
   for (let index = 0; index < maxAttempts; index += 1) {
     const { data, error } = await supabaseClient.auth.getSession();
@@ -43,7 +93,7 @@ async function redirectIfLoggedIn() {
   const session = await waitForSession(1, 0);
 
   if (session) {
-    const destination = getPostLoginDestination();
+    const destination = await resolvePostLoginDestination(session);
     window.location.replace(destination);
   }
 }
@@ -74,7 +124,7 @@ if (loginForm) {
         return;
       }
 
-      const destination = getPostLoginDestination();
+      const destination = await resolvePostLoginDestination(session);
       window.location.replace(destination);
     } catch (error) {
       setLoginStatus(error.message || "Erreur de connexion.", "error");

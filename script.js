@@ -43,6 +43,32 @@ const listingSelectorCard = document.getElementById("listingSelectorCard");
 const candidateForm = document.getElementById("candidateForm");
 const candidateStatus = document.getElementById("candidateStatus");
 
+function resolveClientId(user) {
+  return String(
+    user?.user_metadata?.client_id ||
+    user?.user_metadata?.clientId ||
+    user?.app_metadata?.client_id ||
+    user?.app_metadata?.clientId ||
+    ""
+  ).trim();
+}
+
+async function isAdminUser(userId) {
+  if (!userId) return false;
+
+  const { data, error } = await supabaseClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
 async function waitForActiveSession(maxAttempts = 10, delayMs = 150) {
   for (let index = 0; index < maxAttempts; index += 1) {
     const { data, error } = await supabaseClient.auth.getSession();
@@ -69,7 +95,20 @@ async function requireLogin() {
     throw new Error("Not logged in");
   }
 
-  chatState.currentUser = session.user;
+  const user = session.user;
+  const userId = user?.id;
+
+  if (await isAdminUser(userId)) {
+    window.location.href = "/admin.html";
+    throw new Error("Admin users must use admin platform");
+  }
+
+  if (resolveClientId(user)) {
+    window.location.href = "/client.html";
+    throw new Error("Client users must use client platform");
+  }
+
+  chatState.currentUser = user;
   return session.user;
 }
 
