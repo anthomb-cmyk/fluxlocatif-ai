@@ -209,6 +209,23 @@ function extractListingReference(message) {
 function buildTranslatorFallbackReply(message) {
   const text = String(message || "").trim().toLowerCase();
 
+  if (
+    text.includes("dispo") ||
+    text.includes("disponible") ||
+    text.includes("available") ||
+    text.includes("vacant")
+  ) {
+    return [
+      "Bonjour,",
+      "",
+      "Oui, le logement est toujours disponible.",
+      "",
+      "Souhaitez-vous planifier une visite ou obtenir plus d'informations ?",
+      "",
+      "Cordialement,"
+    ].join("\n");
+  }
+
   if (text.includes("lease") && text.includes("tomorrow")) {
     return [
       "Bonjour,",
@@ -236,19 +253,68 @@ function buildTranslatorFallbackReply(message) {
   ].join("\n");
 }
 
-async function generateTranslatorReply(message) {
+function buildTranslatorFallbackTranslation(message) {
+  const text = String(message || "").trim().toLowerCase();
+
+  if (!text) {
+    return "Le locataire souhaite obtenir des informations sur le logement.";
+  }
+
+  if (
+    text.includes("dispo") ||
+    text.includes("disponible") ||
+    text.includes("available") ||
+    text.includes("vacant")
+  ) {
+    return "Est-ce que le logement est disponible ?";
+  }
+
+  if (text.includes("prix") || text.includes("loyer") || text.includes("rent")) {
+    return "Quel est le loyer demandé pour ce logement ?";
+  }
+
+  if (
+    text.includes("visit") ||
+    text.includes("visite") ||
+    text.includes("see it") ||
+    text.includes("tour")
+  ) {
+    return "Est-ce qu'il serait possible de planifier une visite du logement ?";
+  }
+
+  if (
+    text.includes("when") ||
+    text.includes("quand") ||
+    text.includes("move") ||
+    text.includes("availability")
+  ) {
+    return "À partir de quelle date le logement est-il disponible ?";
+  }
+
+  return "Le locataire souhaite obtenir plus d'informations au sujet du logement.";
+}
+
+function buildTranslatorFallbackPayload(message) {
+  return {
+    translation: buildTranslatorFallbackTranslation(message),
+    reply: buildTranslatorFallbackReply(message)
+  };
+}
+
+async function generateTranslatorPayload(message) {
   if (!openai) {
-    return buildTranslatorFallbackReply(message);
+    return buildTranslatorFallbackPayload(message);
   }
 
   const response = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
     temperature: 0.7,
+    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
         content:
-          "Tu rediges une reponse complete en francais canadien. La reponse doit etre claire, professionnelle, naturelle et prete a envoyer a un client. Ne traduis pas mot a mot. Ne donne aucune explication. Retourne uniquement le message final."
+          "Tu es un assistant locatif. Tu dois toujours supposer que le message vient d'un locataire qui parle d'un appartement. Interprete l'intention dans un contexte immobilier. Ne traduis jamais mot a mot. Retourne uniquement un objet JSON avec deux champs string: translation et reply. translation: reformulation en francais international, claire, neutre et bien ecrite. reply: reponse suggeree en francais canadien, professionnelle, naturelle et prete a envoyer par un proprietaire ou un employe de location. Ne pose pas de question de clarification sauf si le message est vraiment incomprehensible."
       },
       {
         role: "user",
@@ -257,7 +323,31 @@ async function generateTranslatorReply(message) {
     ]
   });
 
-  return response.choices?.[0]?.message?.content?.trim() || buildTranslatorFallbackReply(message);
+  const content = response.choices?.[0]?.message?.content?.trim();
+
+  if (!content) {
+    return buildTranslatorFallbackPayload(message);
+  }
+
+  try {
+    const parsed = JSON.parse(content);
+
+    if (
+      typeof parsed?.translation === "string" &&
+      parsed.translation.trim() &&
+      typeof parsed?.reply === "string" &&
+      parsed.reply.trim()
+    ) {
+      return {
+        translation: parsed.translation.trim(),
+        reply: parsed.reply.trim()
+      };
+    }
+  } catch {
+    return buildTranslatorFallbackPayload(message);
+  }
+
+  return buildTranslatorFallbackPayload(message);
 }
 
 async function generateListingReply(message, listing) {
@@ -339,14 +429,18 @@ app.post("/api/chat", async (req, res) => {
     });
 
     if (mode === "translator") {
-      const reply = await generateTranslatorReply(message);
+      const translatorPayload = await generateTranslatorPayload(message);
+      const assistantText = [
+        `Français international : ${translatorPayload.translation}`,
+        `Réponse suggérée : ${translatorPayload.reply}`
+      ].join("\n\n");
 
       await appendChatMessage({
         id: createId("msg"),
         user_id: userId,
         mode,
         sender: "assistant",
-        text: reply,
+        text: assistantText,
         created_at: new Date().toISOString()
       });
 
@@ -354,7 +448,8 @@ app.post("/api/chat", async (req, res) => {
         ok: true,
         label: "Traducteur",
         variant: "success",
-        reply
+        translation: translatorPayload.translation,
+        reply: translatorPayload.reply
       });
     }
 

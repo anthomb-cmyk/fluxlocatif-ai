@@ -16,7 +16,7 @@ const chatState = {
     {
       sender: "bot",
       label: "Traducteur",
-      text: "Collez un message et je vais proposer une réponse en français canadien clair, professionnel et naturel."
+      text: "Collez un message et je vais proposer une reformulation en français international ainsi qu’une réponse suggérée en français canadien."
     }
   ],
   listings: {},
@@ -160,7 +160,26 @@ function addMessageToDOM(message) {
     bubble.classList.add(message.variant);
   }
 
-  bubble.textContent = message.text;
+  if (Array.isArray(message.sections) && message.sections.length) {
+    message.sections.forEach((section) => {
+      const sectionEl = document.createElement("div");
+      sectionEl.className = "message-section";
+
+      const titleEl = document.createElement("div");
+      titleEl.className = "message-section-title";
+      titleEl.textContent = section.title;
+
+      const bodyEl = document.createElement("div");
+      bodyEl.className = "message-section-body";
+      bodyEl.textContent = section.text;
+
+      sectionEl.appendChild(titleEl);
+      sectionEl.appendChild(bodyEl);
+      bubble.appendChild(sectionEl);
+    });
+  } else {
+    bubble.textContent = message.text;
+  }
 
   wrapper.appendChild(label);
   wrapper.appendChild(bubble);
@@ -177,8 +196,8 @@ function renderMessages() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function pushMessage(sender, label, text, variant = "") {
-  const message = { sender, label, text, variant };
+function pushMessage(sender, label, text, variant = "", sections = []) {
+  const message = { sender, label, text, variant, sections };
   currentHistory().push(message);
   addMessageToDOM(message);
 
@@ -189,18 +208,19 @@ function pushMessage(sender, label, text, variant = "") {
   return message;
 }
 
-function replaceLastLoading(text, variant = "success", label = "Assistant") {
+function replaceLastLoading(text, variant = "success", label = "Assistant", sections = []) {
   const history = currentHistory();
   const last = history[history.length - 1];
 
   if (!last || last.variant !== "loading") {
-    pushMessage("bot", label, text, variant);
+    pushMessage("bot", label, text, variant, sections);
     return;
   }
 
   last.text = text;
   last.variant = variant;
   last.label = label;
+  last.sections = sections;
   renderMessages();
 }
 
@@ -235,7 +255,7 @@ function switchMode(mode) {
   } else {
     if (modeStatus) {
       modeStatus.textContent =
-        "Le mode Traducteur est actif. Collez un message et obtenez une suggestion de réponse en français canadien bien écrit.";
+        "Le mode Traducteur est actif. Collez un message et obtenez une reformulation en français international ainsi qu’une réponse suggérée en français canadien.";
     }
 
     if (chatInput) {
@@ -562,12 +582,26 @@ if (chatForm) {
       }
 
       replaceLastLoading(
-        result.reply || "Aucune réponse reçue.",
+        chatState.currentMode === "translator" && result.translation && result.reply
+          ? ""
+          : result.reply || "Aucune réponse reçue.",
         result.variant || "success",
         result.label ||
           (chatState.currentMode === "listing"
             ? "Assistant des immeubles"
-            : "Traducteur")
+            : "Traducteur"),
+        chatState.currentMode === "translator" && result.translation && result.reply
+          ? [
+              {
+                title: "Français international",
+                text: result.translation
+              },
+              {
+                title: "Réponse suggérée",
+                text: result.reply
+              }
+            ]
+          : []
       );
     } catch (error) {
       console.error("Chat error:", error);
@@ -606,7 +640,7 @@ if (clearChatBtn) {
         {
           sender: "bot",
           label: "Traducteur",
-          text: "Collez un message et je vais proposer une réponse en français canadien clair, professionnel et naturel."
+          text: "Collez un message et je vais proposer une reformulation en français international ainsi qu’une réponse suggérée en français canadien."
         }
       ];
     }

@@ -504,6 +504,25 @@ code {
   color: var(--text-strong) !important;
 }
 
+.message-section + .message-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.message-section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.message-section-body {
+  white-space: pre-wrap;
+}
+
 .chat-form {
   display: flex;
   flex-direction: column;
