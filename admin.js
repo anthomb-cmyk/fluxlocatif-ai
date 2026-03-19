@@ -7,6 +7,7 @@ const tabs = {
   users: document.getElementById("usersTab"),
   sessions: document.getElementById("sessionsTab"),
   messages: document.getElementById("messagesTab"),
+  clients: document.getElementById("clientsTab"),
   apartments: document.getElementById("apartmentsTab"),
   candidates: document.getElementById("candidatesTab")
 };
@@ -16,6 +17,7 @@ const refreshBtn = document.getElementById("refreshBtn");
 const usersBody = document.getElementById("usersBody");
 const sessionsBody = document.getElementById("sessionsBody");
 const messagesBody = document.getElementById("messagesBody");
+const clientsBody = document.getElementById("clientsBody");
 const apartmentsBody = document.getElementById("apartmentsBody");
 const candidatesBody = document.getElementById("candidatesBody");
 
@@ -34,8 +36,14 @@ const apartmentSearch = document.getElementById("apartmentSearch");
 const apartmentCityFilter = document.getElementById("apartmentCityFilter");
 const apartmentDisponibiliteFilter = document.getElementById("apartmentDisponibiliteFilter");
 const clearApartmentFiltersBtn = document.getElementById("clearApartmentFiltersBtn");
-const clientNameInput = document.getElementById("clientName");
-const createClientBtn = document.getElementById("createClientBtn");
+
+const clientForm = document.getElementById("clientForm");
+const clientFormStatus = document.getElementById("clientFormStatus");
+const clientFormTitle = document.getElementById("clientFormTitle");
+const editingClientIdInput = document.getElementById("editingClientId");
+const editingClientBadge = document.getElementById("editingClientBadge");
+const cancelClientEditBtn = document.getElementById("cancelClientEditBtn");
+const submitClientBtn = document.getElementById("submitClientBtn");
 
 const candidateStatusFilter = document.getElementById("candidateStatusFilter");
 const candidateSearch = document.getElementById("candidateSearch");
@@ -100,6 +108,30 @@ function clientLabel(clientId) {
   return client?.nom || clientId;
 }
 
+function clientBooleanToSelectValue(value) {
+  return value === true ? "oui" : value === false ? "non" : "";
+}
+
+function formatClientCreditLabel(value) {
+  if (value === "bas") return "Bas (0–599)";
+  if (value === "moyen") return "Moyen (600–699)";
+  if (value === "haut") return "Haut (700+)";
+  return value || "-";
+}
+
+function clientSelectValueToBoolean(value) {
+  if (value === "oui") return true;
+  if (value === "non") return false;
+  return null;
+}
+
+function parseCommaSeparatedList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function populateClientSelect(selectedValue = "") {
   const clientSelect = document.getElementById("aptClientId");
   if (!clientSelect) return;
@@ -122,24 +154,10 @@ async function reloadClients() {
   return allClients;
 }
 
-async function createClient() {
-  const name = clientNameInput?.value?.trim() || "";
-  if (!name) return;
-
-  await fetchJSON("/api/admin/clients", {
-    method: "POST",
-    body: JSON.stringify({
-      nom: name,
-      criteres: {}
-    })
-  });
-
-  await reloadClients();
-  populateClientSelect();
-
-  if (clientNameInput) {
-    clientNameInput.value = "";
-  }
+async function loadListingsCollection() {
+  const listingsData = await fetchJSON("/api/listings");
+  allApartments = Object.values(listingsData.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+  return allApartments;
 }
 
 function parseOptionalNumber(value) {
@@ -183,6 +201,7 @@ function switchTab(tabName) {
     users: "Utilisateurs",
     sessions: "Sessions",
     messages: "Conversations",
+    clients: "Clients",
     apartments: "Appartements",
     candidates: "Candidats"
   };
@@ -271,6 +290,53 @@ function resetApartmentForm() {
   editingRefBadge.textContent = "";
 }
 
+function resetClientForm() {
+  if (!clientForm) return;
+
+  clientForm.reset();
+  if (editingClientIdInput) editingClientIdInput.value = "";
+  clientFormTitle.textContent = "Ajouter un client";
+  submitClientBtn.textContent = "Ajouter le client";
+  cancelClientEditBtn.style.display = "none";
+  editingClientBadge.style.display = "none";
+  editingClientBadge.textContent = "";
+  clientFormStatus.textContent = "";
+  clientFormStatus.style.color = "";
+}
+
+function fillClientForm(client) {
+  if (!clientForm) return;
+
+  const criteria = client.criteres || {};
+
+  editingClientIdInput.value = client.id || "";
+  document.getElementById("clientNom").value = client.nom || "";
+  document.getElementById("clientRevenuMinimum").value =
+    criteria.revenu_minimum === null || criteria.revenu_minimum === undefined ? "" : String(criteria.revenu_minimum);
+  document.getElementById("clientCreditMin").value = criteria.credit_min || "";
+  document.getElementById("clientAccepteTal").value = clientBooleanToSelectValue(criteria.accepte_tal);
+  document.getElementById("clientMaxOccupants").value =
+    criteria.max_occupants === null || criteria.max_occupants === undefined ? "" : String(criteria.max_occupants);
+  document.getElementById("clientAnimauxAcceptes").value = clientBooleanToSelectValue(criteria.animaux_acceptes);
+  document.getElementById("clientEmploisAcceptes").value = Array.isArray(criteria.emplois_acceptes)
+    ? criteria.emplois_acceptes.join(", ")
+    : "";
+  document.getElementById("clientAncienneteMinMois").value =
+    criteria.anciennete_min_mois === null || criteria.anciennete_min_mois === undefined
+      ? ""
+      : String(criteria.anciennete_min_mois);
+
+  clientFormTitle.textContent = "Modifier un client";
+  submitClientBtn.textContent = "Sauvegarder les modifications";
+  cancelClientEditBtn.style.display = "inline-flex";
+  editingClientBadge.style.display = "inline-flex";
+  editingClientBadge.textContent = `Modification : ${client.nom || client.id}`;
+  clientFormStatus.textContent = "";
+  clientFormStatus.style.color = "";
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function fillApartmentForm(row) {
   editingApartmentRefInput.value = row.ref || "";
 
@@ -322,6 +388,48 @@ function fillApartmentForm(row) {
   apartmentFormStatus.style.color = "";
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function countLinkedApartments(clientId) {
+  return allApartments.filter((apartment) => apartment.client_id === clientId).length;
+}
+
+function renderClientsTable(rows) {
+  if (!clientsBody) return;
+
+  clientsBody.innerHTML = "";
+
+  if (!rows.length) {
+    clientsBody.innerHTML = `<tr><td colspan="10">Aucun client trouvé.</td></tr>`;
+    return;
+  }
+
+  rows.forEach((client) => {
+    const criteria = client.criteres || {};
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${client.nom || "-"}</td>
+      <td>${criteria.revenu_minimum ?? "-"}</td>
+      <td>${formatClientCreditLabel(criteria.credit_min)}</td>
+      <td>${criteria.accepte_tal ? "Oui" : "Non"}</td>
+      <td>${criteria.max_occupants ?? "-"}</td>
+      <td>${criteria.animaux_acceptes ? "Oui" : "Non"}</td>
+      <td>${Array.isArray(criteria.emplois_acceptes) && criteria.emplois_acceptes.length ? criteria.emplois_acceptes.join(", ") : "-"}</td>
+      <td>${criteria.anciennete_min_mois ?? "-"}</td>
+      <td>${countLinkedApartments(client.id)}</td>
+      <td><button type="button" class="secondary-btn edit-client-btn" data-id="${client.id}">Modifier</button></td>
+    `;
+
+    clientsBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".edit-client-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const client = allClients.find((item) => item.id === btn.dataset.id);
+      if (client) fillClientForm(client);
+    });
+  });
 }
 
 function populateCityFilter(rows) {
@@ -472,17 +580,78 @@ function applyApartmentFilters() {
   renderApartmentsTable(getFilteredApartments());
 }
 
-async function loadApartments() {
-  const [clients, listingsData] = await Promise.all([
+async function loadClients() {
+  const [clients, apartments] = await Promise.all([
     reloadClients(),
-    fetchJSON("/api/listings")
+    loadListingsCollection()
   ]);
 
   allClients = clients;
+  allApartments = apartments;
   populateClientSelect();
-  allApartments = Object.values(listingsData.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+  renderClientsTable(allClients);
+}
+
+async function loadApartments() {
+  const [clients, apartments] = await Promise.all([
+    reloadClients(),
+    loadListingsCollection()
+  ]);
+
+  allClients = clients;
+  allApartments = apartments;
+  populateClientSelect();
   populateCityFilter(allApartments);
   applyApartmentFilters();
+}
+
+async function createOrUpdateClient(event) {
+  event.preventDefault();
+
+  if (!clientForm) return;
+
+  clientFormStatus.textContent = "";
+  clientFormStatus.style.color = "";
+
+  const editingId = editingClientIdInput.value.trim();
+  const payload = {
+    nom: document.getElementById("clientNom").value.trim(),
+    criteres: {
+      revenu_minimum: parseOptionalNumber(document.getElementById("clientRevenuMinimum").value),
+      credit_min: document.getElementById("clientCreditMin").value || null,
+      accepte_tal: clientSelectValueToBoolean(document.getElementById("clientAccepteTal").value),
+      max_occupants: parseOptionalNumber(document.getElementById("clientMaxOccupants").value),
+      animaux_acceptes: clientSelectValueToBoolean(document.getElementById("clientAnimauxAcceptes").value),
+      emplois_acceptes: parseCommaSeparatedList(document.getElementById("clientEmploisAcceptes").value),
+      anciennete_min_mois: parseOptionalNumber(document.getElementById("clientAncienneteMinMois").value)
+    }
+  };
+
+  try {
+    if (editingId) {
+      await fetchJSON(`/api/admin/clients/${encodeURIComponent(editingId)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+
+      clientFormStatus.textContent = "Client modifié avec succès.";
+    } else {
+      await fetchJSON("/api/admin/clients", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      clientFormStatus.textContent = "Client ajouté avec succès.";
+    }
+
+    clientFormStatus.style.color = "green";
+    resetClientForm();
+    await loadClients();
+    applyApartmentFilters();
+  } catch (error) {
+    clientFormStatus.textContent = error.message || "Erreur lors de l’opération.";
+    clientFormStatus.style.color = "red";
+  }
 }
 
 async function createOrUpdateApartment(event) {
@@ -671,6 +840,7 @@ async function refreshCurrentTab() {
   if (currentTab === "users") await loadUsers();
   if (currentTab === "sessions") await loadSessions();
   if (currentTab === "messages") await loadMessages();
+  if (currentTab === "clients") await loadClients();
   if (currentTab === "apartments") await loadApartments();
   if (currentTab === "candidates") await loadCandidates();
 }
@@ -694,8 +864,16 @@ if (apartmentForm) {
   apartmentForm.addEventListener("submit", createOrUpdateApartment);
 }
 
+if (clientForm) {
+  clientForm.addEventListener("submit", createOrUpdateClient);
+}
+
 if (cancelEditBtn) {
   cancelEditBtn.addEventListener("click", resetApartmentForm);
+}
+
+if (cancelClientEditBtn) {
+  cancelClientEditBtn.addEventListener("click", resetClientForm);
 }
 
 if (apartmentSearch) {
@@ -717,10 +895,6 @@ if (clearApartmentFiltersBtn) {
     apartmentDisponibiliteFilter.value = "";
     applyApartmentFilters();
   });
-}
-
-if (createClientBtn) {
-  createClientBtn.addEventListener("click", createClient);
 }
 
 if (candidateStatusFilter) {

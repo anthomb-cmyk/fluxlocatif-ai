@@ -23,6 +23,7 @@
         <button class="menu-btn active" data-tab="users">Utilisateurs</button>
         <button class="menu-btn" data-tab="sessions">Sessions</button>
         <button class="menu-btn" data-tab="messages">Conversations</button>
+        <button class="menu-btn" data-tab="clients">Clients</button>
         <button class="menu-btn" data-tab="apartments">Appartements</button>
         <button class="menu-btn" data-tab="candidates">Candidats</button>
       </div>
@@ -93,12 +94,80 @@
         </div>
       </section>
 
-      <section class="card hidden" id="apartmentsTab">
-        <div class="filters" style="margin-bottom:16px;">
-          <input id="clientName" type="text" placeholder="Créer un client" />
-          <button id="createClientBtn" type="button" class="secondary-btn">Créer un client</button>
+      <section class="card hidden" id="clientsTab">
+        <div class="form-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <h3 id="clientFormTitle">Ajouter un client</h3>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <div id="editingClientBadge" style="display:none;font-weight:800;"></div>
+              <button type="button" id="cancelClientEditBtn" class="secondary-btn" style="display:none;">
+                Annuler la modification
+              </button>
+            </div>
+          </div>
+
+          <form id="clientForm" class="admin-form">
+            <input id="editingClientId" type="hidden" />
+
+            <div class="form-grid">
+              <input id="clientNom" type="text" placeholder="Nom du client / propriétaire" required />
+              <input id="clientRevenuMinimum" type="number" min="0" placeholder="Revenu minimum requis" />
+
+              <select id="clientCreditMin">
+                <option value="">Crédit minimum</option>
+                <option value="bas">Bas (0–599)</option>
+                <option value="moyen">Moyen (600–699)</option>
+                <option value="haut">Haut (700+)</option>
+              </select>
+
+              <select id="clientAccepteTal">
+                <option value="">Accepte TAL</option>
+                <option value="oui">Oui</option>
+                <option value="non">Non</option>
+              </select>
+
+              <input id="clientMaxOccupants" type="number" min="0" placeholder="Nombre maximal d’occupants" />
+
+              <select id="clientAnimauxAcceptes">
+                <option value="">Animaux acceptés</option>
+                <option value="oui">Oui</option>
+                <option value="non">Non</option>
+              </select>
+
+              <input id="clientEmploisAcceptes" type="text" placeholder="Emplois acceptés (ex. temps plein, temps partiel)" />
+              <input id="clientAncienneteMinMois" type="number" min="0" placeholder="Ancienneté minimum (mois)" />
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="submitClientBtn" class="primary-btn">Ajouter le client</button>
+            </div>
+          </form>
+
+          <div id="clientFormStatus"></div>
         </div>
 
+        <div class="table-wrap" style="margin-top: 22px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Revenu minimum</th>
+                <th>Crédit min</th>
+                <th>TAL</th>
+                <th>Max occupants</th>
+                <th>Animaux</th>
+                <th>Emplois acceptés</th>
+                <th>Ancienneté min</th>
+                <th>Appartements liés</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="clientsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card hidden" id="apartmentsTab">
         <div class="form-card">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <h3 id="apartmentFormTitle">Ajouter un appartement</h3>
@@ -344,6 +413,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="admin.js?v=11"></script>
+  <script src="admin.js?v=12"></script>
 </body>
 </html>
