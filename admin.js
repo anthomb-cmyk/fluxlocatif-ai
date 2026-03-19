@@ -54,6 +54,7 @@ let allApartments = [];
 let allCandidates = [];
 let lastPendingCandidatesCount = 0;
 let allClients = [];
+let candidateMatchResults = {};
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -130,6 +131,43 @@ function parseCommaSeparatedList(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parseEmploymentLengthMonths(value) {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value).trim().toLowerCase();
+  if (!text) return null;
+
+  const match = text.match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return null;
+
+  const amount = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(amount)) return null;
+
+  if (text.includes("an")) {
+    return Math.round(amount * 12);
+  }
+
+  if (text.includes("mois")) {
+    return Math.round(amount);
+  }
+
+  return Math.round(amount);
+}
+
+function formatMatchStatus(value) {
+  if (value === "accepté") return "Accepté";
+  if (value === "à revoir") return "À revoir";
+  if (value === "refusé") return "Refusé";
+  return "-";
+}
+
+function matchStatusClass(value) {
+  if (value === "accepté") return "match-badge accepted";
+  if (value === "à revoir") return "match-badge review";
+  if (value === "refusé") return "match-badge refused";
+  return "";
 }
 
 function populateClientSelect(selectedValue = "") {
@@ -759,17 +797,59 @@ async function updateCandidateStatus(id, status) {
   await loadCandidates();
 }
 
+async function evaluateCandidate(candidate) {
+  if (!candidate?.id) return;
+
+  if (!allApartments.length) {
+    await loadListingsCollection();
+  }
+
+  const apartmentRef = String(candidate.apartment_ref || "").replace(/^L-/i, "");
+  const listing = allApartments.find((apartment) => String(apartment.ref) === apartmentRef);
+
+  if (!listing) {
+    candidateMatchResults[candidate.id] = {
+      status: "refusé",
+      score: 0,
+      reasons: ["appartement introuvable"]
+    };
+    renderCandidatesTable(getFilteredCandidates());
+    return;
+  }
+
+  const result = await fetchJSON("/api/match", {
+    method: "POST",
+    body: JSON.stringify({
+      listing,
+      candidate: {
+        ...candidate,
+        revenu_mensuel: candidate.monthly_income,
+        credit: candidate.credit_level,
+        tal: candidate.tal_record,
+        nombre_personnes: candidate.occupants_total,
+        animaux: candidate.pets,
+        statut_emploi: candidate.employment_status,
+        anciennete_mois: parseEmploymentLengthMonths(candidate.employment_length)
+      }
+    })
+  });
+
+  candidateMatchResults[candidate.id] = result;
+  renderCandidatesTable(getFilteredCandidates());
+}
+
 function renderCandidatesTable(rows) {
   if (!candidatesBody) return;
 
   candidatesBody.innerHTML = "";
 
   if (!rows.length) {
-    candidatesBody.innerHTML = `<tr><td colspan="17">Aucun candidat trouvé.</td></tr>`;
+    candidatesBody.innerHTML = `<tr><td colspan="20">Aucun candidat trouvé.</td></tr>`;
     return;
   }
 
   rows.forEach((candidate) => {
+    const matchResult = candidateMatchResults[candidate.id] || null;
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
@@ -789,7 +869,11 @@ function renderCandidatesTable(rows) {
       <td>${candidate.employee_notes || "-"}</td>
       <td>${candidate.admin_notes || "-"}</td>
       <td>${candidate.status || "-"}</td>
+      <td>${matchResult?.status ? `<span class="${matchStatusClass(matchResult.status)}">${formatMatchStatus(matchResult.status)}</span>` : "-"}</td>
+      <td>${matchResult?.score ?? "-"}</td>
+      <td>${Array.isArray(matchResult?.reasons) && matchResult.reasons.length ? matchResult.reasons.join(", ") : "-"}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="secondary-btn evaluate-candidate-btn" data-id="${candidate.id}">Évaluer</button>
         <button type="button" class="secondary-btn approve-candidate-btn" data-id="${candidate.id}" style="background:#dcfce7;color:#166534;">Approuver</button>
         <button type="button" class="secondary-btn reject-candidate-btn" data-id="${candidate.id}" style="background:#fee2e2;color:#991b1b;">Refuser</button>
       </td>
@@ -801,6 +885,15 @@ function renderCandidatesTable(rows) {
   document.querySelectorAll(".approve-candidate-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       await updateCandidateStatus(btn.dataset.id, "approuvé");
+    });
+  });
+
+  document.querySelectorAll(".evaluate-candidate-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const candidate = allCandidates.find((item) => item.id === btn.dataset.id);
+      if (candidate) {
+        await evaluateCandidate(candidate);
+      }
     });
   });
 
@@ -816,7 +909,10 @@ function applyCandidateFilters() {
 }
 
 async function loadCandidates() {
-  const data = await fetchJSON("/api/admin/candidates");
+  const [data] = await Promise.all([
+    fetchJSON("/api/admin/candidates"),
+    loadListingsCollection()
+  ]);
   allCandidates = data.candidates || [];
   applyCandidateFilters();
 }

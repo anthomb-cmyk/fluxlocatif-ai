@@ -235,6 +235,35 @@ td.long {
   font-weight: 700;
 }
 
+#clientFormStatus {
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.match-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 800;
+}
+
+.match-badge.accepted {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.match-badge.review {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.match-badge.refused {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 @media (max-width: 980px) {
   .admin-shell {
     grid-template-columns: 1fr;
