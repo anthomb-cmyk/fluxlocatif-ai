@@ -280,6 +280,29 @@ function parseBoolean(value) {
   return ["true", "oui", "yes", "1"].includes(normalized);
 }
 
+function parseEmploymentLengthMonths(value) {
+  if (value === null || value === undefined) return null;
+
+  const text = String(value).trim().toLowerCase();
+  if (!text) return null;
+
+  const match = text.match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return null;
+
+  const amount = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(amount)) return null;
+
+  if (text.includes("an")) {
+    return Math.round(amount * 12);
+  }
+
+  if (text.includes("mois")) {
+    return Math.round(amount);
+  }
+
+  return Math.round(amount);
+}
+
 function normalizeCreditLevel(value) {
   const normalized = String(value || "").trim().toLowerCase();
 
@@ -385,6 +408,79 @@ function evaluateMatch(listing, candidate, criteria = null) {
   }
 
   return { score, status, reasons };
+}
+
+function normalizeCandidateForMatching(candidate) {
+  return {
+    ...candidate,
+    revenu_mensuel: candidate?.revenu_mensuel ?? candidate?.monthly_income ?? candidate?.monthly_income,
+    credit: candidate?.credit ?? candidate?.credit_level,
+    tal: candidate?.tal ?? candidate?.tal_record,
+    nombre_personnes: candidate?.nombre_personnes ?? candidate?.occupants_total,
+    animaux: candidate?.animaux ?? candidate?.pets,
+    statut_emploi: candidate?.statut_emploi ?? candidate?.employment_status,
+    anciennete_mois:
+      candidate?.anciennete_mois ??
+      candidate?.employment_length_months ??
+      parseEmploymentLengthMonths(candidate?.employment_length)
+  };
+}
+
+async function buildCandidateMatchFields(candidate, listingsMap = null, clientsMap = null) {
+  const listings = listingsMap || await loadListingsMap();
+  const normalizedRef = normalizeRef(candidate?.apartment_ref);
+  const listing = listings[normalizedRef];
+  const now = new Date().toISOString();
+
+  if (!listing) {
+    return {
+      match_status: "refusé",
+      match_score: 0,
+      match_reasons: ["appartement introuvable"],
+      match_updated_at: now
+    };
+  }
+
+  const clients = clientsMap || await loadClientsMap();
+  const client = listing.client_id ? clients[String(listing.client_id)] || null : null;
+  const criteria = client?.criteres || null;
+  const result = evaluateMatch(listing, normalizeCandidateForMatching(candidate), criteria);
+
+  return {
+    match_status: result.status,
+    match_score: result.score,
+    match_reasons: result.reasons,
+    match_updated_at: now
+  };
+}
+
+function candidateNeedsMatch(candidate) {
+  return (
+    !candidate ||
+    candidate.match_status === undefined ||
+    candidate.match_score === undefined ||
+    !Array.isArray(candidate.match_reasons) ||
+    !candidate.match_updated_at
+  );
+}
+
+async function ensureCandidatesMatchFields(candidates, persist = false) {
+  let changed = false;
+  const listings = await loadListingsMap();
+  const clients = await loadClientsMap();
+
+  for (const candidate of candidates) {
+    if (!candidateNeedsMatch(candidate)) continue;
+
+    Object.assign(candidate, await buildCandidateMatchFields(candidate, listings, clients));
+    changed = true;
+  }
+
+  if (changed && persist) {
+    await writeJsonFile(CANDIDATES_PATH, candidates);
+  }
+
+  return { candidates, changed };
 }
 
 function buildTranslatorFallbackReply(message) {
@@ -913,7 +1009,8 @@ app.delete("/api/admin/apartments/:ref", async (req, res) => {
 app.get("/api/admin/candidates", async (req, res) => {
   try {
     const requestedStatus = String(req.query.status || "").trim();
-    const candidates = await readJsonFile(CANDIDATES_PATH, []);
+    const storedCandidates = await readJsonFile(CANDIDATES_PATH, []);
+    const { candidates } = await ensureCandidatesMatchFields(storedCandidates, true);
     const filtered = requestedStatus
       ? candidates.filter((candidate) => candidate.status === requestedStatus)
       : candidates;
@@ -930,11 +1027,15 @@ app.get("/api/admin/candidates", async (req, res) => {
 app.post("/api/admin/candidates", async (req, res) => {
   try {
     const candidates = await readJsonFile(CANDIDATES_PATH, []);
-    const candidate = {
+    const baseCandidate = {
       id: createId("candidate"),
       created_at: new Date().toISOString(),
       admin_notes: "",
       ...req.body
+    };
+    const candidate = {
+      ...baseCandidate,
+      ...(await buildCandidateMatchFields(baseCandidate))
     };
 
     candidates.push(candidate);
@@ -965,9 +1066,37 @@ app.put("/api/admin/candidates/:id", async (req, res) => {
       });
     }
 
-    Object.assign(candidate, req.body || {}, {
+    const payload = { ...(req.body || {}) };
+    const shouldReevaluate =
+      Boolean(payload.reevaluate_match) ||
+      [
+        "apartment_ref",
+        "monthly_income",
+        "credit_level",
+        "tal_record",
+        "occupants_total",
+        "pets",
+        "employment_status",
+        "employment_length",
+        "revenu_mensuel",
+        "credit",
+        "tal",
+        "nombre_personnes",
+        "animaux",
+        "statut_emploi",
+        "anciennete_mois",
+        "employment_length_months"
+      ].some((key) => Object.prototype.hasOwnProperty.call(payload, key));
+
+    delete payload.reevaluate_match;
+
+    Object.assign(candidate, payload, {
       updated_at: new Date().toISOString()
     });
+
+    if (shouldReevaluate || candidateNeedsMatch(candidate)) {
+      Object.assign(candidate, await buildCandidateMatchFields(candidate));
+    }
 
     await writeJsonFile(CANDIDATES_PATH, candidates);
 
