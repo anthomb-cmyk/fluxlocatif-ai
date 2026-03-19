@@ -43,6 +43,7 @@ let currentTab = "users";
 let allApartments = [];
 let allCandidates = [];
 let lastPendingCandidatesCount = 0;
+let allClients = [];
 
 function showFatalError(message) {
   document.body.innerHTML = `
@@ -89,6 +90,28 @@ async function requireAdmin() {
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString("fr-CA");
+}
+
+function clientLabel(clientId) {
+  if (!clientId) return "-";
+  const client = allClients.find((item) => item.id === clientId);
+  return client?.nom || clientId;
+}
+
+function populateClientSelect(selectedValue = "") {
+  const clientSelect = document.getElementById("aptClientId");
+  if (!clientSelect) return;
+
+  clientSelect.innerHTML = `<option value="">Aucun client lié</option>`;
+
+  allClients.forEach((client) => {
+    const option = document.createElement("option");
+    option.value = client.id;
+    option.textContent = client.nom || client.id;
+    clientSelect.appendChild(option);
+  });
+
+  clientSelect.value = selectedValue;
 }
 
 function parseOptionalNumber(value) {
@@ -225,6 +248,7 @@ function fillApartmentForm(row) {
 
   document.getElementById("aptAdresse").value = row.adresse || "";
   document.getElementById("aptVille").value = row.ville || "";
+  populateClientSelect(row.client_id || "");
   document.getElementById("aptType").value = row.type_logement || "";
   document.getElementById("aptChambres").value =
     row.chambres === null || row.chambres === undefined ? "" : String(row.chambres);
@@ -352,6 +376,7 @@ function renderApartmentsTable(rows) {
       <td>L-${row.ref || "-"}</td>
       <td>${row.adresse || "-"}</td>
       <td>${row.ville || "-"}</td>
+      <td>${clientLabel(row.client_id)}</td>
       <td>${row.type_logement || "-"}</td>
       <td>${row.chambres ?? "-"}</td>
       <td>${row.superficie || "-"}</td>
@@ -420,8 +445,14 @@ function applyApartmentFilters() {
 }
 
 async function loadApartments() {
-  const data = await fetchJSON("/api/listings");
-  allApartments = Object.values(data.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
+  const [clientsData, listingsData] = await Promise.all([
+    fetchJSON("/api/admin/clients"),
+    fetchJSON("/api/listings")
+  ]);
+
+  allClients = clientsData.clients || [];
+  populateClientSelect();
+  allApartments = Object.values(listingsData.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
   populateCityFilter(allApartments);
   applyApartmentFilters();
 }
@@ -437,6 +468,7 @@ async function createOrUpdateApartment(event) {
   const payload = {
     adresse: document.getElementById("aptAdresse").value.trim(),
     ville: document.getElementById("aptVille").value.trim(),
+    client_id: document.getElementById("aptClientId").value || null,
     type_logement: document.getElementById("aptType").value,
     chambres: document.getElementById("aptChambres").value,
     superficie: document.getElementById("aptSuperficie").value.trim(),

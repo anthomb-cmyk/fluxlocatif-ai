@@ -18,6 +18,7 @@ const HOST = "0.0.0.0";
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
+const CLIENTS_PATH = path.join(__dirname, "clients.json");
 const CANDIDATES_PATH = path.join(DATA_DIR, "candidates.json");
 const CHAT_MESSAGES_PATH = path.join(DATA_DIR, "chat-messages.json");
 const CHAT_SESSIONS_PATH = path.join(DATA_DIR, "chat-sessions.json");
@@ -95,6 +96,7 @@ function toListingRecord(key, value) {
     laveuse_secheuse: value?.laveuse_secheuse ?? "",
     nombre_logements_batisse: buildingUnitsValue,
     rangement: value?.rangement ?? "",
+    client_id: value?.client_id ?? null,
     address: value?.address ?? value?.adresse ?? "",
     city: value?.city ?? value?.ville ?? "",
     rent: rentValue,
@@ -115,6 +117,28 @@ async function loadListingsMap() {
   });
 
   return normalized;
+}
+
+async function loadClientsMap() {
+  return readJsonFile(CLIENTS_PATH, {});
+}
+
+function normalizeClientRecord(id, value = {}) {
+  return {
+    id: String(value.id || id || ""),
+    nom: String(value.nom || "").trim(),
+    criteres: {
+      revenu_minimum: parseNumber(value?.criteres?.revenu_minimum),
+      credit_min: value?.criteres?.credit_min ?? null,
+      accepte_tal: Boolean(value?.criteres?.accepte_tal),
+      max_occupants: parseNumber(value?.criteres?.max_occupants),
+      animaux_acceptes: Boolean(value?.criteres?.animaux_acceptes),
+      emplois_acceptes: Array.isArray(value?.criteres?.emplois_acceptes)
+        ? value.criteres.emplois_acceptes.map((job) => String(job))
+        : [],
+      anciennete_min_mois: parseNumber(value?.criteres?.anciennete_min_mois)
+    }
+  };
 }
 
 async function saveListingsMap(listingsMap) {
@@ -155,11 +179,16 @@ async function saveListingsMap(listingsMap) {
         electros_inclus: listing.electros_inclus || "",
         laveuse_secheuse: listing.laveuse_secheuse || "",
         nombre_logements_batisse: listing.nombre_logements_batisse ?? null,
-        rangement: listing.rangement || ""
+        rangement: listing.rangement || "",
+        client_id: listing.client_id ?? null
       };
     });
 
   await writeJsonFile(LISTINGS_PATH, output);
+}
+
+async function saveClientsMap(clientsMap) {
+  await writeJsonFile(CLIENTS_PATH, clientsMap);
 }
 
 function nextListingRef(listingsMap) {
@@ -269,15 +298,32 @@ function normalizeCreditLevel(value) {
   return 0;
 }
 
-function evaluateMatch(listing, candidate) {
+function getDefaultCriteria(listing) {
+  const rent = parseNumber(listing?.loyer ?? listing?.rent);
+
+  return {
+    revenu_minimum: rent !== null && rent > 0 ? rent * 3 : null,
+    credit_min: listing?.credit_requis ?? listing?.required_credit ?? listing?.credit_minimum ?? null,
+    accepte_tal: false,
+    max_occupants: 3,
+    animaux_acceptes: false,
+    emplois_acceptes: ["temps plein"],
+    anciennete_min_mois: 3
+  };
+}
+
+function evaluateMatch(listing, candidate, criteria = null) {
   let score = 100;
   const reasons = [];
+  const resolvedCriteria = {
+    ...getDefaultCriteria(listing),
+    ...(criteria || {})
+  };
 
   const monthlyIncome = parseNumber(candidate?.revenu_mensuel ?? candidate?.monthly_income);
-  const rent = parseNumber(listing?.loyer ?? listing?.rent);
-  const ratio = monthlyIncome !== null && rent !== null && rent > 0 ? monthlyIncome / rent : null;
+  const minimumIncome = parseNumber(resolvedCriteria.revenu_minimum);
 
-  if (ratio !== null && ratio < 3) {
+  if (minimumIncome !== null && monthlyIncome !== null && monthlyIncome < minimumIncome) {
     score -= 25;
     reasons.push("revenu insuffisant");
   } else {
@@ -285,7 +331,7 @@ function evaluateMatch(listing, candidate) {
   }
 
   const candidateCredit = normalizeCreditLevel(candidate?.credit ?? candidate?.credit_level);
-  const requiredCredit = normalizeCreditLevel(listing?.credit_requis ?? listing?.required_credit ?? listing?.credit_minimum);
+  const requiredCredit = normalizeCreditLevel(resolvedCriteria.credit_min);
 
   if (requiredCredit > 0) {
     if (candidateCredit < requiredCredit) {
@@ -296,30 +342,35 @@ function evaluateMatch(listing, candidate) {
     }
   }
 
-  if (parseBoolean(candidate?.tal)) {
+  if (!resolvedCriteria.accepte_tal && parseBoolean(candidate?.tal)) {
     score -= 30;
     reasons.push("dossier TAL refusé");
   }
 
   const occupants = parseNumber(candidate?.nombre_personnes ?? candidate?.occupants_total);
-  if (occupants !== null && occupants > 3) {
+  const maxOccupants = parseNumber(resolvedCriteria.max_occupants);
+  if (occupants !== null && maxOccupants !== null && occupants > maxOccupants) {
     score -= 15;
     reasons.push("trop d’occupants");
   }
 
-  if (parseBoolean(candidate?.animaux ?? candidate?.pets)) {
+  if (!resolvedCriteria.animaux_acceptes && parseBoolean(candidate?.animaux ?? candidate?.pets)) {
     score -= 10;
     reasons.push("animaux non acceptés");
   }
 
   const employmentStatus = String(candidate?.statut_emploi ?? candidate?.employment_status ?? "").trim().toLowerCase();
-  if (employmentStatus !== "temps plein") {
+  const acceptedJobs = Array.isArray(resolvedCriteria.emplois_acceptes)
+    ? resolvedCriteria.emplois_acceptes.map((job) => String(job).trim().toLowerCase())
+    : [];
+  if (acceptedJobs.length && !acceptedJobs.includes(employmentStatus)) {
     score -= 10;
     reasons.push("emploi non accepté");
   }
 
   const seniorityMonths = parseNumber(candidate?.anciennete_mois ?? candidate?.employment_length_months);
-  if (seniorityMonths !== null && seniorityMonths < 3) {
+  const minimumSeniority = parseNumber(resolvedCriteria.anciennete_min_mois);
+  if (seniorityMonths !== null && minimumSeniority !== null && seniorityMonths < minimumSeniority) {
     score -= 10;
     reasons.push("ancienneté insuffisante");
   }
@@ -627,7 +678,7 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-app.post("/api/match", (req, res) => {
+app.post("/api/match", async (req, res) => {
   const listing = req.body?.listing;
   const candidate = req.body?.candidate;
 
@@ -638,7 +689,15 @@ app.post("/api/match", (req, res) => {
     });
   }
 
-  return res.json(evaluateMatch(listing, candidate));
+  let criteria = null;
+
+  if (listing.client_id) {
+    const clientsMap = await loadClientsMap();
+    const client = clientsMap[String(listing.client_id)] || null;
+    criteria = client?.criteres || null;
+  }
+
+  return res.json(evaluateMatch(listing, candidate, criteria));
 });
 
 app.get("/api/admin/user-daily-time", async (req, res) => {
@@ -695,6 +754,76 @@ app.get("/api/admin/apartments", async (_req, res) => {
     res.status(500).json({
       ok: false,
       error: "Impossible de charger les appartements."
+    });
+  }
+});
+
+app.get("/api/admin/clients", async (_req, res) => {
+  try {
+    const clientsMap = await loadClientsMap();
+    const clients = Object.entries(clientsMap).map(([id, client]) => normalizeClientRecord(id, client));
+    res.json({ ok: true, clients });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: "Impossible de charger les clients."
+    });
+  }
+});
+
+app.post("/api/admin/clients", async (req, res) => {
+  try {
+    const clientsMap = await loadClientsMap();
+    const id = String(req.body?.id || `client_${Date.now()}`);
+    const client = normalizeClientRecord(id, { ...req.body, id });
+
+    clientsMap[id] = client;
+    await saveClientsMap(clientsMap);
+
+    res.status(201).json({
+      ok: true,
+      client
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: "Impossible de créer le client."
+    });
+  }
+});
+
+app.put("/api/admin/clients/:id", async (req, res) => {
+  try {
+    const clientsMap = await loadClientsMap();
+    const id = String(req.params.id);
+
+    if (!clientsMap[id]) {
+      return res.status(404).json({
+        ok: false,
+        error: "Client introuvable."
+      });
+    }
+
+    const client = normalizeClientRecord(id, {
+      ...clientsMap[id],
+      ...req.body,
+      criteres: {
+        ...(clientsMap[id]?.criteres || {}),
+        ...(req.body?.criteres || {})
+      }
+    });
+
+    clientsMap[id] = client;
+    await saveClientsMap(clientsMap);
+
+    return res.json({
+      ok: true,
+      client
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Impossible de modifier le client."
     });
   }
 });
