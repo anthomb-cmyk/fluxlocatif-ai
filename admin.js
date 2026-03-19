@@ -34,6 +34,8 @@ const apartmentSearch = document.getElementById("apartmentSearch");
 const apartmentCityFilter = document.getElementById("apartmentCityFilter");
 const apartmentDisponibiliteFilter = document.getElementById("apartmentDisponibiliteFilter");
 const clearApartmentFiltersBtn = document.getElementById("clearApartmentFiltersBtn");
+const clientNameInput = document.getElementById("clientName");
+const createClientBtn = document.getElementById("createClientBtn");
 
 const candidateStatusFilter = document.getElementById("candidateStatusFilter");
 const candidateSearch = document.getElementById("candidateSearch");
@@ -112,6 +114,32 @@ function populateClientSelect(selectedValue = "") {
   });
 
   clientSelect.value = selectedValue;
+}
+
+async function reloadClients() {
+  const clientsData = await fetchJSON("/api/admin/clients");
+  allClients = clientsData.clients || [];
+  return allClients;
+}
+
+async function createClient() {
+  const name = clientNameInput?.value?.trim() || "";
+  if (!name) return;
+
+  await fetchJSON("/api/admin/clients", {
+    method: "POST",
+    body: JSON.stringify({
+      nom: name,
+      criteres: {}
+    })
+  });
+
+  await reloadClients();
+  populateClientSelect();
+
+  if (clientNameInput) {
+    clientNameInput.value = "";
+  }
 }
 
 function parseOptionalNumber(value) {
@@ -445,12 +473,12 @@ function applyApartmentFilters() {
 }
 
 async function loadApartments() {
-  const [clientsData, listingsData] = await Promise.all([
-    fetchJSON("/api/admin/clients"),
+  const [clients, listingsData] = await Promise.all([
+    reloadClients(),
     fetchJSON("/api/listings")
   ]);
 
-  allClients = clientsData.clients || [];
+  allClients = clients;
   populateClientSelect();
   allApartments = Object.values(listingsData.listings || {}).sort((a, b) => Number(a.ref) - Number(b.ref));
   populateCityFilter(allApartments);
@@ -689,6 +717,10 @@ if (clearApartmentFiltersBtn) {
     apartmentDisponibiliteFilter.value = "";
     applyApartmentFilters();
   });
+}
+
+if (createClientBtn) {
+  createClientBtn.addEventListener("click", createClient);
 }
 
 if (candidateStatusFilter) {
