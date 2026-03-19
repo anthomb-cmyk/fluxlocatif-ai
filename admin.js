@@ -1,11 +1,6 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
 
-console.log("[admin] page load", {
-  hasSupabaseUrl: Boolean(SUPABASE_URL),
-  hasSupabaseAnonKey: Boolean(SUPABASE_KEY)
-});
-
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const tabs = {
@@ -60,31 +55,6 @@ let allCandidates = [];
 let lastPendingCandidatesCount = 0;
 let allClients = [];
 
-function setAuthDebugStatus(message = "", type = "error") {
-  let element = document.getElementById("authDebugStatus");
-
-  if (!element) {
-    element = document.createElement("div");
-    element.id = "authDebugStatus";
-    element.style.cssText = "position:fixed;top:12px;right:12px;z-index:9999;padding:10px 12px;border-radius:12px;font:600 13px Inter, Arial, sans-serif;max-width:420px;background:#fee2e2;color:#991b1b;box-shadow:0 12px 30px rgba(0,0,0,.12);";
-    document.body.appendChild(element);
-  }
-
-  if (!message) {
-    element.remove();
-    return;
-  }
-
-  element.textContent = message;
-  if (type === "warn") {
-    element.style.background = "#fef3c7";
-    element.style.color = "#92400e";
-  } else {
-    element.style.background = "#fee2e2";
-    element.style.color = "#991b1b";
-  }
-}
-
 function showFatalError(message) {
   document.body.innerHTML = `
     <div style="font-family: Inter, Arial, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto;">
@@ -99,12 +69,6 @@ function showFatalError(message) {
 async function waitForActiveSession(maxAttempts = 10, delayMs = 150) {
   for (let index = 0; index < maxAttempts; index += 1) {
     const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
-    console.log("[admin] getSession result", {
-      attempt: index + 1,
-      hasSession: Boolean(sessionData?.session),
-      userId: sessionData?.session?.user?.id || null,
-      error: sessionError ? { message: sessionError.message, name: sessionError.name } : null
-    });
 
     if (sessionError) {
       throw sessionError;
@@ -124,43 +88,26 @@ async function requireAdmin() {
   const session = await waitForActiveSession();
 
   if (!session) {
-    console.warn("[admin] reason before redirect to login", {
-      reason: "no active session after retry window"
-    });
-    setAuthDebugStatus("Auth debug: aucune session active détectée, redirection vers la connexion.");
     window.location.href = `/login.html?next=${encodeURIComponent("/admin.html")}`;
     throw new Error("No active session. You must log in first.");
   }
 
   const userId = session.user.id;
-  console.log("[admin] current user", { userId });
 
   const { data: adminRow, error: adminError } = await supabaseClient
     .from("admin_users")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
-  console.log("[admin] admin_users lookup result", {
-    userId,
-    found: Boolean(adminRow),
-    error: adminError ? { message: adminError.message, name: adminError.name } : null
-  });
 
   if (adminError) {
-    setAuthDebugStatus(`Auth debug: erreur admin_users - ${adminError.message}`);
     throw new Error("Erreur lecture admin_users: " + adminError.message);
   }
 
   if (!adminRow) {
-    console.warn("[admin] reason before redirect to login", {
-      reason: "authenticated user missing in admin_users",
-      userId
-    });
-    setAuthDebugStatus("Auth debug: compte connecté mais absent de admin_users.");
     throw new Error(`Votre compte est connecté, mais n'existe pas dans admin_users. UUID actuel: ${userId}`);
   }
 
-  setAuthDebugStatus("");
   return session.user;
 }
 
@@ -1023,12 +970,7 @@ if (clearCandidateFiltersBtn) {
 }
 
 supabaseClient.auth.onAuthStateChange((event) => {
-  console.log("[admin] auth state change", { event });
   if (event === "SIGNED_OUT") {
-    console.warn("[admin] reason before redirect to login", {
-      reason: "SIGNED_OUT event"
-    });
-    setAuthDebugStatus("Auth debug: session fermée, redirection vers la connexion.", "warn");
     window.location.href = `/login.html?next=${encodeURIComponent("/admin.html")}`;
   }
 });
