@@ -1,6 +1,11 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
 
+console.log("[employee] page load", {
+  hasSupabaseUrl: Boolean(SUPABASE_URL),
+  hasSupabaseAnonKey: Boolean(SUPABASE_KEY)
+});
+
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const chatState = {
@@ -43,20 +48,84 @@ const listingSelectorCard = document.getElementById("listingSelectorCard");
 const candidateForm = document.getElementById("candidateForm");
 const candidateStatus = document.getElementById("candidateStatus");
 
-async function requireLogin() {
-  const { data, error } = await supabaseClient.auth.getSession();
+function setAuthDebugStatus(message = "", type = "error") {
+  let element = document.getElementById("authDebugStatus");
 
-  if (error) {
-    console.error("Erreur session :", error);
+  if (!element) {
+    element = document.createElement("div");
+    element.id = "authDebugStatus";
+    element.style.cssText = "position:fixed;top:12px;right:12px;z-index:9999;padding:10px 12px;border-radius:12px;font:600 13px Inter, Arial, sans-serif;max-width:360px;background:#fee2e2;color:#991b1b;box-shadow:0 12px 30px rgba(0,0,0,.12);";
+    document.body.appendChild(element);
   }
 
-  if (!data?.session) {
-    window.location.href = "/login.html";
+  if (!message) {
+    element.remove();
+    return;
+  }
+
+  element.textContent = message;
+  if (type === "warn") {
+    element.style.background = "#fef3c7";
+    element.style.color = "#92400e";
+  } else {
+    element.style.background = "#fee2e2";
+    element.style.color = "#991b1b";
+  }
+}
+
+async function waitForActiveSession(maxAttempts = 10, delayMs = 150) {
+  for (let index = 0; index < maxAttempts; index += 1) {
+    const { data, error } = await supabaseClient.auth.getSession();
+    console.log("[employee] getSession result", {
+      attempt: index + 1,
+      hasSession: Boolean(data?.session),
+      userId: data?.session?.user?.id || null,
+      error: error ? { message: error.message, name: error.name } : null
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.session) {
+      return data.session;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+
+  return null;
+}
+
+async function requireLogin() {
+  try {
+    const session = await waitForActiveSession();
+
+    if (!session) {
+      console.warn("[employee] reason before redirect to login", {
+        reason: "no active session after retry window"
+      });
+      setAuthDebugStatus("Auth debug: aucune session active détectée, redirection vers la connexion.");
+      window.location.href = `/login.html?next=${encodeURIComponent(window.location.pathname || "/")}`;
+      throw new Error("Not logged in");
+    }
+
+    chatState.currentUser = session.user;
+    console.log("[employee] current user", {
+      userId: session.user.id
+    });
+    setAuthDebugStatus("");
+    return session.user;
+  } catch (error) {
+    console.error("[employee] auth guard error", {
+      message: error.message || String(error),
+      name: error.name || "Error"
+    });
+    if (!String(error.message || "").includes("Not logged in")) {
+      setAuthDebugStatus(`Auth debug: ${error.message || "erreur session"}`);
+    }
     throw new Error("Not logged in");
   }
-
-  chatState.currentUser = data.session.user;
-  return data.session.user;
 }
 
 function currentHistory() {
@@ -687,8 +756,13 @@ if (candidateForm) {
 }
 
 supabaseClient.auth.onAuthStateChange((event) => {
+  console.log("[employee] auth state change", { event });
   if (event === "SIGNED_OUT") {
-    window.location.href = "/login.html";
+    console.warn("[employee] reason before redirect to login", {
+      reason: "SIGNED_OUT event"
+    });
+    setAuthDebugStatus("Auth debug: session fermée, redirection vers la connexion.", "warn");
+    window.location.href = `/login.html?next=${encodeURIComponent(window.location.pathname || "/")}`;
   }
 });
 
