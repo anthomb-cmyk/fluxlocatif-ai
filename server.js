@@ -525,6 +525,11 @@ function getDefaultCriteria(listing) {
   };
 }
 
+function isListingRelevantForMatching(listing) {
+  const status = String(listing?.statut ?? listing?.status ?? "").trim().toLowerCase();
+  return !status || ["actif", "active", "disponible", "en attente"].includes(status);
+}
+
 function evaluateMatch(listing, candidate, criteria = null) {
   let score = 100;
   const reasons = [];
@@ -533,11 +538,19 @@ function evaluateMatch(listing, candidate, criteria = null) {
     ...(criteria || {})
   };
 
+  const rent = parseNumber(listing?.loyer ?? listing?.rent);
   const monthlyIncome = parseNumber(candidate?.revenu_mensuel ?? candidate?.monthly_income);
   const minimumIncome = parseNumber(resolvedCriteria.revenu_minimum);
+  const incomeRatio = rent !== null && rent > 0 && monthlyIncome !== null ? monthlyIncome / rent : null;
 
-  if (minimumIncome !== null && monthlyIncome !== null && monthlyIncome < minimumIncome) {
-    score -= 25;
+  if (incomeRatio !== null && incomeRatio < 2.5) {
+    score -= 40;
+    reasons.push("revenu très insuffisant");
+  } else if (incomeRatio !== null && incomeRatio >= 3) {
+    score += 10;
+    reasons.push("revenu très solide");
+  } else if (minimumIncome !== null && monthlyIncome !== null && monthlyIncome < minimumIncome) {
+    score -= 20;
     reasons.push("revenu insuffisant");
   } else {
     reasons.push("revenu conforme");
@@ -548,27 +561,35 @@ function evaluateMatch(listing, candidate, criteria = null) {
 
   if (requiredCredit > 0) {
     if (candidateCredit < requiredCredit) {
-      score -= 20;
+      score -= 18;
       reasons.push("crédit insuffisant");
     } else {
       reasons.push("crédit conforme");
     }
   }
 
+  if (candidateCredit >= 3) {
+    score += 8;
+    reasons.push("bon crédit");
+  } else if (candidateCredit === 1) {
+    score -= 18;
+    reasons.push("crédit faible");
+  }
+
   if (!resolvedCriteria.accepte_tal && parseBoolean(candidate?.tal)) {
-    score -= 30;
-    reasons.push("dossier TAL refusé");
+    score -= 55;
+    reasons.push("dossier TAL défavorable");
   }
 
   const occupants = parseNumber(candidate?.nombre_personnes ?? candidate?.occupants_total);
   const maxOccupants = parseNumber(resolvedCriteria.max_occupants);
   if (occupants !== null && maxOccupants !== null && occupants > maxOccupants) {
-    score -= 15;
+    score -= 8;
     reasons.push("trop d’occupants");
   }
 
   if (!resolvedCriteria.animaux_acceptes && parseBoolean(candidate?.animaux ?? candidate?.pets)) {
-    score -= 10;
+    score -= 6;
     reasons.push("animaux non acceptés");
   }
 
@@ -577,14 +598,14 @@ function evaluateMatch(listing, candidate, criteria = null) {
     ? resolvedCriteria.emplois_acceptes.map((job) => String(job).trim().toLowerCase())
     : [];
   if (acceptedJobs.length && !acceptedJobs.includes(employmentStatus)) {
-    score -= 10;
+    score -= 6;
     reasons.push("emploi non accepté");
   }
 
   const seniorityMonths = parseNumber(candidate?.anciennete_mois ?? candidate?.employment_length_months);
   const minimumSeniority = parseNumber(resolvedCriteria.anciennete_min_mois);
   if (seniorityMonths !== null && minimumSeniority !== null && seniorityMonths < minimumSeniority) {
-    score -= 10;
+    score -= 6;
     reasons.push("ancienneté insuffisante");
   }
 
@@ -595,7 +616,7 @@ function evaluateMatch(listing, candidate, criteria = null) {
   score = Math.max(0, Math.min(100, score));
 
   let status = "refusé";
-  if (locationResult.forceReject) {
+  if (locationResult.forceReject || (!resolvedCriteria.accepte_tal && parseBoolean(candidate?.tal))) {
     status = "refusé";
   } else if (score >= 85) {
     status = "accepté";
@@ -627,6 +648,35 @@ function normalizeCandidateForMatching(candidate) {
   };
 }
 
+async function buildAlternativeListings(candidate, listingsMap = null, clientsMap = null, limit = 5) {
+  const listings = listingsMap || await loadListingsMap();
+  const clients = clientsMap || await loadClientsMap();
+  const targetedRef = normalizeRef(candidate?.apartment_ref);
+  const normalizedCandidate = normalizeCandidateForMatching(candidate);
+
+  return Object.values(listings)
+    .filter((listing) => normalizeRef(listing.ref) !== targetedRef)
+    .filter((listing) => isListingRelevantForMatching(listing))
+    .map((listing) => {
+      const client = listing.client_id ? clients[String(listing.client_id)] || null : null;
+      const criteria = client?.criteres || null;
+      const result = evaluateMatch(listing, normalizedCandidate, criteria);
+
+      return {
+        ref: `L-${normalizeRef(listing.ref)}`,
+        address: listing.adresse || listing.address || "",
+        city: listing.ville || listing.city || "",
+        client_id: listing.client_id ?? null,
+        match_score: result.score,
+        match_status: result.status,
+        reasons: result.reasons
+      };
+    })
+    .filter((listing) => listing.match_status !== "refusé" && listing.match_score >= 70)
+    .sort((a, b) => b.match_score - a.match_score)
+    .slice(0, limit);
+}
+
 async function buildCandidateMatchFields(candidate, listingsMap = null, clientsMap = null) {
   const listings = listingsMap || await loadListingsMap();
   const normalizedRef = normalizeRef(candidate?.apartment_ref);
@@ -638,6 +688,7 @@ async function buildCandidateMatchFields(candidate, listingsMap = null, clientsM
       match_status: "refusé",
       match_score: 0,
       match_reasons: ["appartement introuvable"],
+      alternative_listings: await buildAlternativeListings(candidate, listings, clientsMap),
       match_updated_at: now
     };
   }
@@ -651,6 +702,7 @@ async function buildCandidateMatchFields(candidate, listingsMap = null, clientsM
     match_status: result.status,
     match_score: result.score,
     match_reasons: result.reasons,
+    alternative_listings: await buildAlternativeListings(candidate, listings, clients),
     match_updated_at: now
   };
 }
@@ -661,6 +713,7 @@ function candidateNeedsMatch(candidate) {
     candidate.match_status === undefined ||
     candidate.match_score === undefined ||
     !Array.isArray(candidate.match_reasons) ||
+    !Array.isArray(candidate.alternative_listings) ||
     !candidate.match_updated_at
   );
 }
