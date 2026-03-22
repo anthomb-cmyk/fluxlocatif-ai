@@ -1,0 +1,22 @@
+[
+  { "label": "Montréal", "zone": "Montréal", "lat": 45.5017, "lng": -73.5673 },
+  { "label": "Laval", "zone": "Laval", "lat": 45.6066, "lng": -73.7124 },
+  { "label": "Longueuil", "zone": "Rive-Sud", "lat": 45.5312, "lng": -73.5181 },
+  { "label": "Brossard", "zone": "Rive-Sud", "lat": 45.4634, "lng": -73.4657 },
+  { "label": "Sherbrooke", "zone": "Estrie", "lat": 45.4042, "lng": -71.8929 },
+  { "label": "Québec", "zone": "Capitale-Nationale", "lat": 46.8139, "lng": -71.2080 },
+  { "label": "Gatineau", "zone": "Outaouais", "lat": 45.4765, "lng": -75.7013 },
+  { "label": "Trois-Rivieres", "zone": "Mauricie", "lat": 46.3430, "lng": -72.5430 },
+  { "label": "Saint-Hyacinthe", "zone": "Montérégie", "lat": 45.6308, "lng": -72.9560 },
+  { "label": "Drummondville", "zone": "Centre-du-Québec", "lat": 45.8800, "lng": -72.4842 },
+  { "label": "Granby", "zone": "Montérégie", "lat": 45.4034, "lng": -72.7340 },
+  { "label": "Cowansville", "zone": "Montérégie", "lat": 45.2011, "lng": -72.7492 },
+  { "label": "Waterloo", "zone": "Estrie", "lat": 45.3490, "lng": -72.5159 },
+  { "label": "Beloeil", "zone": "Rive-Sud", "lat": 45.5668, "lng": -73.2051 },
+  { "label": "Saint-Jean-sur-Richelieu", "zone": "Montérégie", "lat": 45.3070, "lng": -73.2627 },
+  { "label": "Chambly", "zone": "Rive-Sud", "lat": 45.4501, "lng": -73.2825 },
+  { "label": "Boucherville", "zone": "Rive-Sud", "lat": 45.5910, "lng": -73.4360 },
+  { "label": "Saint-Jérôme", "zone": "Laurentides", "lat": 45.7764, "lng": -74.0037 },
+  { "label": "Terrebonne", "zone": "Lanaudière", "lat": 45.7004, "lng": -73.6473 },
+  { "label": "Repentigny", "zone": "Lanaudière", "lat": 45.7422, "lng": -73.4501 }
+]

@@ -25,6 +25,7 @@ const SUPABASE_SERVER_KEY =
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
+const LOCATIONS_PATH = path.join(__dirname, "locations-quebec.json");
 const CLIENTS_PATH = path.join(__dirname, "clients.json");
 const CANDIDATES_PATH = path.join(DATA_DIR, "candidates.json");
 const CHAT_MESSAGES_PATH = path.join(DATA_DIR, "chat-messages.json");
@@ -70,8 +71,163 @@ async function writeJsonFile(filePath, value) {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2));
 }
 
+const QUEBEC_LOCATIONS = await readJsonFile(LOCATIONS_PATH, []);
+const QUEBEC_LOCATION_MAP = new Map(
+  QUEBEC_LOCATIONS.map((location) => [normalizeLocationText(location.label), location])
+);
+
 function normalizeRef(ref) {
   return String(ref || "").trim().replace(/^L-/i, "");
+}
+
+function normalizeLocationText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
+function parseCoordinate(value) {
+  return parseNumber(value);
+}
+
+function getPreloadedLocation(value) {
+  const normalizedValue = normalizeLocationText(value);
+  return normalizedValue ? QUEBEC_LOCATION_MAP.get(normalizedValue) || null : null;
+}
+
+function getListingLocation(listing = {}) {
+  const rawLabel = String(listing.ville || listing.city || "").trim();
+  const preloadedLocation = getPreloadedLocation(rawLabel);
+  const label = rawLabel || preloadedLocation?.label || "";
+
+  return {
+    label,
+    zone: String(listing.zone || preloadedLocation?.zone || "").trim(),
+    lat: parseCoordinate(listing.lat) ?? parseCoordinate(preloadedLocation?.lat),
+    lng: parseCoordinate(listing.lng) ?? parseCoordinate(preloadedLocation?.lng)
+  };
+}
+
+function getCandidatePreferredLocation(candidate = {}) {
+  const rawLabel = String(candidate.preferred_location_label || "").trim();
+  const preloadedLocation = getPreloadedLocation(rawLabel);
+  const label = rawLabel || preloadedLocation?.label || "";
+
+  return {
+    label,
+    zone: String(candidate.preferred_location_zone || preloadedLocation?.zone || "").trim(),
+    lat: parseCoordinate(candidate.preferred_location_lat) ?? parseCoordinate(preloadedLocation?.lat),
+    lng: parseCoordinate(candidate.preferred_location_lng) ?? parseCoordinate(preloadedLocation?.lng)
+  };
+}
+
+function haversineDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getFlexibleLocationRadiusKm(preferredLocation) {
+  const locationKey = normalizeLocationText(preferredLocation?.label);
+
+  if (["montreal", "laval", "longueuil", "brossard"].includes(locationKey)) {
+    return 18;
+  }
+
+  if (["sherbrooke", "quebeccity", "gatineau", "troisrivieres"].includes(locationKey)) {
+    return 30;
+  }
+
+  return 24;
+}
+
+function evaluateLocationCompatibility(listing, candidate) {
+  const preferredLocation = getCandidatePreferredLocation(candidate);
+  const listingLocation = getListingLocation(listing);
+  const preferredLabel = normalizeLocationText(preferredLocation.label);
+  const listingLabel = normalizeLocationText(listingLocation.label);
+
+  if (!preferredLabel) {
+    return {
+      scoreDelta: 0,
+      reasons: []
+    };
+  }
+
+  if (preferredLabel && listingLabel && preferredLabel === listingLabel) {
+    return {
+      scoreDelta: 10,
+      reasons: ["ville recherchée conforme"]
+    };
+  }
+
+  if (!parseBoolean(candidate.location_flexible)) {
+    return {
+      scoreDelta: -55,
+      forceReject: true,
+      reasons: ["ville recherchée non respectée"]
+    };
+  }
+
+  if (
+    preferredLocation.lat !== null &&
+    preferredLocation.lng !== null &&
+    listingLocation.lat !== null &&
+    listingLocation.lng !== null
+  ) {
+    const distanceKm = haversineDistanceKm(
+      preferredLocation.lat,
+      preferredLocation.lng,
+      listingLocation.lat,
+      listingLocation.lng
+    );
+    const acceptedRadiusKm = getFlexibleLocationRadiusKm(preferredLocation);
+
+    if (distanceKm <= acceptedRadiusKm * 0.5) {
+      return {
+        scoreDelta: 4,
+        reasons: ["secteur voisin acceptable"]
+      };
+    }
+
+    if (distanceKm <= acceptedRadiusKm) {
+      return {
+        scoreDelta: -8,
+        reasons: ["localisation acceptable avec flexibilité"]
+      };
+    }
+
+    return {
+      scoreDelta: -60,
+      forceReject: true,
+      reasons: ["localisation trop éloignée"]
+    };
+  }
+
+  if (
+    preferredLocation.zone &&
+    listingLocation.zone &&
+    normalizeLocationText(preferredLocation.zone) === normalizeLocationText(listingLocation.zone)
+  ) {
+    return {
+      scoreDelta: -12,
+      reasons: ["même zone géographique acceptable"]
+    };
+  }
+
+  return {
+    scoreDelta: -50,
+    forceReject: true,
+    reasons: ["zone géographique non compatible"]
+  };
 }
 
 function resolveClientIdFromUser(user) {
@@ -86,6 +242,7 @@ function resolveClientIdFromUser(user) {
 
 function toListingRecord(key, value) {
   const ref = normalizeRef(value?.ref || key);
+  const preloadedLocation = getPreloadedLocation(value?.ville ?? value?.city);
   const rentValue = value?.loyer ?? value?.rent ?? "";
   const bedroomsValue = value?.chambres ?? value?.bedrooms ?? "";
   const availabilityValue = value?.disponibilite ?? value?.availability ?? "";
@@ -100,7 +257,10 @@ function toListingRecord(key, value) {
     ...value,
     ref,
     adresse: value?.adresse ?? value?.address ?? "",
-    ville: value?.ville ?? value?.city ?? "",
+    ville: value?.ville ?? value?.city ?? preloadedLocation?.label ?? "",
+    zone: value?.zone ?? preloadedLocation?.zone ?? "",
+    lat: parseCoordinate(value?.lat) ?? parseCoordinate(preloadedLocation?.lat),
+    lng: parseCoordinate(value?.lng) ?? parseCoordinate(preloadedLocation?.lng),
     type_logement: value?.type_logement ?? "",
     chambres: bedroomsValue,
     superficie: value?.superficie ?? "",
@@ -125,7 +285,7 @@ function toListingRecord(key, value) {
     rangement: value?.rangement ?? "",
     client_id: value?.client_id ?? null,
     address: value?.address ?? value?.adresse ?? "",
-    city: value?.city ?? value?.ville ?? "",
+    city: value?.city ?? value?.ville ?? preloadedLocation?.label ?? "",
     rent: rentValue,
     bedrooms: bedroomsValue,
     availability: availabilityValue,
@@ -186,6 +346,9 @@ async function saveListingsMap(listingsMap) {
         description: listing.description || "",
         adresse: listing.adresse || listing.address || "",
         ville: listing.ville || listing.city || "",
+        zone: listing.zone || "",
+        lat: parseCoordinate(listing.lat),
+        lng: parseCoordinate(listing.lng),
         type_logement: listing.type_logement || "",
         chambres: listing.chambres || listing.bedrooms || "",
         superficie: listing.superficie || "",
@@ -425,10 +588,16 @@ function evaluateMatch(listing, candidate, criteria = null) {
     reasons.push("ancienneté insuffisante");
   }
 
-  score = Math.max(0, score);
+  const locationResult = evaluateLocationCompatibility(listing, candidate);
+  score += locationResult.scoreDelta || 0;
+  reasons.push(...(locationResult.reasons || []));
+
+  score = Math.max(0, Math.min(100, score));
 
   let status = "refusé";
-  if (score >= 85) {
+  if (locationResult.forceReject) {
+    status = "refusé";
+  } else if (score >= 85) {
     status = "accepté";
   } else if (score >= 70) {
     status = "à revoir";
@@ -446,6 +615,11 @@ function normalizeCandidateForMatching(candidate) {
     nombre_personnes: candidate?.nombre_personnes ?? candidate?.occupants_total,
     animaux: candidate?.animaux ?? candidate?.pets,
     statut_emploi: candidate?.statut_emploi ?? candidate?.employment_status,
+    preferred_location_label: candidate?.preferred_location_label,
+    preferred_location_zone: candidate?.preferred_location_zone,
+    preferred_location_lat: candidate?.preferred_location_lat,
+    preferred_location_lng: candidate?.preferred_location_lng,
+    location_flexible: candidate?.location_flexible,
     anciennete_mois:
       candidate?.anciennete_mois ??
       candidate?.employment_length_months ??
@@ -1399,7 +1573,12 @@ app.put("/api/admin/candidates/:id", async (req, res) => {
         "animaux",
         "statut_emploi",
         "anciennete_mois",
-        "employment_length_months"
+        "employment_length_months",
+        "preferred_location_label",
+        "preferred_location_zone",
+        "preferred_location_lat",
+        "preferred_location_lng",
+        "location_flexible"
       ].some((key) => Object.prototype.hasOwnProperty.call(payload, key));
 
     delete payload.reevaluate_match;

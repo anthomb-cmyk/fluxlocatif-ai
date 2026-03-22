@@ -49,6 +49,20 @@
 
         <form id="candidateForm" class="candidate-form">
           <input id="aptRef" type="text" placeholder="Appartement visé (ex: 1001)" required />
+          <input id="preferredLocationInput" type="text" list="preferredLocationList" placeholder="Ville ou secteur recherché" required />
+          <datalist id="preferredLocationList"></datalist>
+          <div id="preferredLocationHint" class="candidate-helper">Sélectionnez la ville ou le secteur recherché dans la liste.</div>
+          <input id="preferredLocationLabel" type="hidden" />
+          <input id="preferredLocationZone" type="hidden" />
+          <input id="preferredLocationLat" type="hidden" />
+          <input id="preferredLocationLng" type="hidden" />
+
+          <select id="locationFlexible" required>
+            <option value="">Secteurs voisins acceptés ?</option>
+            <option value="non">Non, ville précise seulement</option>
+            <option value="oui">Oui, des secteurs voisins peuvent convenir</option>
+          </select>
+
           <input id="name" type="text" placeholder="Nom complet" />
           <input id="phone" type="text" placeholder="Téléphone" />
           <input id="email" type="email" placeholder="Email" />
@@ -164,6 +178,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=14"></script>
+  <script src="script.js?v=15"></script>
 </body>
 </html>

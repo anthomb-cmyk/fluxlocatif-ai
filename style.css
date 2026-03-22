@@ -731,6 +731,19 @@ body:has(.mode-btn[data-mode="listing"].active) #listingSelectBox {
   color: var(--danger-text);
 }
 
+.candidate-helper {
+  margin-top: -4px;
+  margin-bottom: 2px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.candidate-helper.error {
+  color: var(--danger-text);
+}
+
 .listing-selector-card {
   width: 100%;
   background: var(--brand-gradient);

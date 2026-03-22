@@ -42,6 +42,19 @@ const listingSelectorCard = document.getElementById("listingSelectorCard");
 
 const candidateForm = document.getElementById("candidateForm");
 const candidateStatus = document.getElementById("candidateStatus");
+const preferredLocationInput = document.getElementById("preferredLocationInput");
+const preferredLocationList = document.getElementById("preferredLocationList");
+const preferredLocationHint = document.getElementById("preferredLocationHint");
+const preferredLocationLabel = document.getElementById("preferredLocationLabel");
+const preferredLocationZone = document.getElementById("preferredLocationZone");
+const preferredLocationLat = document.getElementById("preferredLocationLat");
+const preferredLocationLng = document.getElementById("preferredLocationLng");
+const locationFlexible = document.getElementById("locationFlexible");
+
+const locationState = {
+  options: [],
+  selected: null
+};
 
 function resolveClientId(user) {
   return String(
@@ -128,6 +141,14 @@ function normalizeRefKey(ref) {
   const value = String(ref ?? "").trim();
   if (!value) return "";
   return value.replace(/^L-/i, "");
+}
+
+function normalizeLocationText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
 }
 
 function setPending(isPending) {
@@ -520,6 +541,77 @@ function setCandidateStatus(message = "", type = "") {
   }
 }
 
+function setPreferredLocationHint(message, type = "") {
+  if (!preferredLocationHint) return;
+  preferredLocationHint.textContent = message;
+  preferredLocationHint.className = "candidate-helper";
+
+  if (type) {
+    preferredLocationHint.classList.add(type);
+  }
+}
+
+function clearSelectedPreferredLocation() {
+  locationState.selected = null;
+
+  if (preferredLocationLabel) preferredLocationLabel.value = "";
+  if (preferredLocationZone) preferredLocationZone.value = "";
+  if (preferredLocationLat) preferredLocationLat.value = "";
+  if (preferredLocationLng) preferredLocationLng.value = "";
+}
+
+function applySelectedPreferredLocation(location) {
+  locationState.selected = location;
+
+  if (preferredLocationInput) preferredLocationInput.value = location.label;
+  if (preferredLocationLabel) preferredLocationLabel.value = location.label;
+  if (preferredLocationZone) preferredLocationZone.value = location.zone;
+  if (preferredLocationLat) preferredLocationLat.value = String(location.lat);
+  if (preferredLocationLng) preferredLocationLng.value = String(location.lng);
+
+  setPreferredLocationHint(`Zone enregistrée : ${location.zone}.`, "");
+}
+
+function resolveSelectedPreferredLocation() {
+  const typedValue = preferredLocationInput?.value || "";
+  const normalizedTypedValue = normalizeLocationText(typedValue);
+
+  if (!normalizedTypedValue) {
+    clearSelectedPreferredLocation();
+    setPreferredLocationHint("Sélectionnez la ville ou le secteur recherché dans la liste.", "");
+    return null;
+  }
+
+  const matchedLocation = locationState.options.find(
+    (location) => normalizeLocationText(location.label) === normalizedTypedValue
+  ) || null;
+
+  if (!matchedLocation) {
+    clearSelectedPreferredLocation();
+    setPreferredLocationHint("Choisissez une option existante dans la liste de villes.", "error");
+    return null;
+  }
+
+  applySelectedPreferredLocation(matchedLocation);
+  return matchedLocation;
+}
+
+async function loadPreferredLocations() {
+  const locations = await fetchJSON("/locations-quebec.json", {}, 8000);
+  locationState.options = Array.isArray(locations) ? locations : [];
+
+  if (preferredLocationList) {
+    preferredLocationList.innerHTML = "";
+
+    locationState.options.forEach((location) => {
+      const option = document.createElement("option");
+      option.value = location.label;
+      option.label = `${location.label} — ${location.zone}`;
+      preferredLocationList.appendChild(option);
+    });
+  }
+}
+
 async function handleCandidateSubmit(event) {
   event.preventDefault();
 
@@ -532,6 +624,7 @@ async function handleCandidateSubmit(event) {
   }
 
   const apartmentRef = normalizeRefKey(document.getElementById("aptRef").value.trim());
+  const selectedLocation = resolveSelectedPreferredLocation();
 
   const payload = {
     apartment_ref: apartmentRef ? Number(apartmentRef) : null,
@@ -547,6 +640,11 @@ async function handleCandidateSubmit(event) {
     occupants_total: document.getElementById("occupants").value || null,
     tal_record: document.getElementById("tal").value,
     pets: document.getElementById("pets").value,
+    preferred_location_label: selectedLocation?.label || "",
+    preferred_location_zone: selectedLocation?.zone || "",
+    preferred_location_lat: selectedLocation?.lat ?? null,
+    preferred_location_lng: selectedLocation?.lng ?? null,
+    location_flexible: locationFlexible?.value || "",
     employee_notes: document.getElementById("notes").value.trim(),
     status: "en attente",
     employee_user_id: chatState.currentUser?.id || "employee-manuel"
@@ -554,6 +652,24 @@ async function handleCandidateSubmit(event) {
 
   if (!payload.apartment_ref) {
     setCandidateStatus("Veuillez entrer un appartement visé valide.", "error");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Envoyer la fiche";
+    }
+    return;
+  }
+
+  if (!selectedLocation) {
+    setCandidateStatus("Veuillez sélectionner une ville ou un secteur valide dans la liste.", "error");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Envoyer la fiche";
+    }
+    return;
+  }
+
+  if (!payload.location_flexible) {
+    setCandidateStatus("Veuillez préciser si des secteurs voisins sont acceptés.", "error");
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = "Envoyer la fiche";
@@ -579,6 +695,8 @@ async function handleCandidateSubmit(event) {
     );
 
     candidateForm.reset();
+    clearSelectedPreferredLocation();
+    setPreferredLocationHint("Sélectionnez la ville ou le secteur recherché dans la liste.", "");
   } catch (error) {
     console.error("Candidate submit error:", error);
     setCandidateStatus(
@@ -743,6 +861,11 @@ if (candidateForm) {
   candidateForm.addEventListener("submit", handleCandidateSubmit);
 }
 
+if (preferredLocationInput) {
+  preferredLocationInput.addEventListener("change", resolveSelectedPreferredLocation);
+  preferredLocationInput.addEventListener("blur", resolveSelectedPreferredLocation);
+}
+
 supabaseClient.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     window.location.href = `/login.html?next=${encodeURIComponent(window.location.pathname || "/")}`;
@@ -764,6 +887,13 @@ supabaseClient.auth.onAuthStateChange((event) => {
     checkServer(),
     loadListings()
   ]);
+
+  try {
+    await loadPreferredLocations();
+  } catch (error) {
+    console.error("Load preferred locations error:", error);
+    setPreferredLocationHint("La liste des villes n’a pas pu être chargée pour le moment.", "error");
+  }
 
   if (!serverOk) {
     setServerStatus("Serveur non connecté", "error");
