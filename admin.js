@@ -799,6 +799,98 @@ async function evaluateCandidate(candidate) {
   await loadCandidates();
 }
 
+function normalizeRef(value) {
+  return String(value || "").replace(/^L-/i, "").trim();
+}
+
+async function reassignCandidateToListing(candidateId, listingRef) {
+  await fetchJSON(`/api/admin/candidates/${candidateId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      apartment_ref: Number(normalizeRef(listingRef)),
+      reevaluate_match: true
+    })
+  });
+
+  await loadCandidates();
+}
+
+function formatAlternativeListings(alternatives = []) {
+  if (!Array.isArray(alternatives) || !alternatives.length) {
+    return `<div style="color:#6b7280;">Aucune alternative compatible trouvée.</div>`;
+  }
+
+  return alternatives.map((listing) => `
+    <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px 14px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+        <div>
+          <div style="font-weight:800;color:#191d45;">${listing.ref}</div>
+          <div>${listing.address || "-"}</div>
+          <div style="color:#6b7280;">${listing.city || "-"} · client_id: ${listing.client_id || "-"}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+          <div style="font-weight:800;color:#4f46e5;">Score ${listing.match_score ?? "-"}</div>
+          <button type="button" class="secondary-btn reassign-candidate-btn" data-ref="${listing.ref}">Réassigner</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;color:#374151;">${Array.isArray(listing.reasons) && listing.reasons.length ? listing.reasons.join(", ") : "-"}</div>
+    </div>
+  `).join("");
+}
+
+function openAlternativeListingsModal(candidate) {
+  const existingModal = document.getElementById("alternativeListingsModal");
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const modal = document.createElement("div");
+  modal.id = "alternativeListingsModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  modal.innerHTML = `
+    <div style="width:min(780px,100%);max-height:85vh;overflow:auto;background:#fff;border-radius:24px;padding:24px;box-shadow:0 24px 60px rgba(15,23,42,.22);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
+        <div>
+          <div style="font-size:.85rem;font-weight:800;color:#1e90ff;text-transform:uppercase;letter-spacing:.05em;">Suggestions</div>
+          <h3 style="margin:6px 0 0;color:#191d45;">Autres logements compatibles</h3>
+          <div style="margin-top:6px;color:#6b7280;">${candidate.candidate_name || "Candidat"} · logement initial L-${candidate.apartment_ref || "-"}</div>
+        </div>
+        <button type="button" id="closeAlternativeListingsModal" class="secondary-btn">Fermer</button>
+      </div>
+      <div style="display:grid;gap:12px;">
+        ${formatAlternativeListings(candidate.alternative_listings || [])}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  document.getElementById("closeAlternativeListingsModal")?.addEventListener("click", closeModal);
+
+  modal.querySelectorAll(".reassign-candidate-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Réassignation...";
+
+      try {
+        await reassignCandidateToListing(candidate.id, button.dataset.ref);
+        closeModal();
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = "Réassigner";
+        alert(error.message || "Impossible de réassigner le candidat.");
+      }
+    });
+  });
+}
+
 function renderCandidatesTable(rows) {
   if (!candidatesBody) return;
 
@@ -834,6 +926,7 @@ function renderCandidatesTable(rows) {
       <td>${Array.isArray(candidate.match_reasons) && candidate.match_reasons.length ? candidate.match_reasons.join(", ") : "-"}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" class="secondary-btn evaluate-candidate-btn" data-id="${candidate.id}">Évaluer</button>
+        <button type="button" class="secondary-btn alternatives-candidate-btn" data-id="${candidate.id}">Suggestions</button>
         <button type="button" class="secondary-btn approve-candidate-btn" data-id="${candidate.id}" style="background:#dcfce7;color:#166534;">Approuver</button>
         <button type="button" class="secondary-btn reject-candidate-btn" data-id="${candidate.id}" style="background:#fee2e2;color:#991b1b;">Refuser</button>
       </td>
@@ -853,6 +946,15 @@ function renderCandidatesTable(rows) {
       const candidate = allCandidates.find((item) => item.id === btn.dataset.id);
       if (candidate) {
         await evaluateCandidate(candidate);
+      }
+    });
+  });
+
+  document.querySelectorAll(".alternatives-candidate-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const candidate = allCandidates.find((item) => item.id === btn.dataset.id);
+      if (candidate) {
+        openAlternativeListingsModal(candidate);
       }
     });
   });
