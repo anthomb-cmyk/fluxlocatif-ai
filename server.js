@@ -7,6 +7,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import OpenAI from "openai";
+import { Resend } from "resend";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -18,11 +19,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://nuuzkvgyolxbawvqyugu.supabase.co";
+const PUBLIC_APP_URL = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
 const SUPABASE_SERVER_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.SUPABASE_PUBLISHABLE_KEY ||
   "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
+const INVITATION_FROM_EMAIL = String(process.env.INVITATION_FROM_EMAIL || process.env.FROM_EMAIL || "").trim();
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
@@ -38,6 +42,7 @@ const USER_DAILY_TIME_PATH = path.join(DATA_DIR, "user-daily-time.json");
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 const hasSupabaseAdminAccess = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 // Prefer the service-role key for backend token verification. Fallback keys keep the route fail-closed,
 // but they are not the ideal long-term backend credential.
@@ -487,7 +492,8 @@ function createClientId(clientsMap, companyName, invitations = []) {
 }
 
 function buildOnboardingLink(req, token) {
-  return `${req.protocol}://${req.get("host")}/client-onboarding.html?token=${encodeURIComponent(token)}`;
+  const baseUrl = PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+  return `${baseUrl}/client-onboarding.html?token=${encodeURIComponent(token)}`;
 }
 
 function isInvitationExpired(invitation) {
@@ -515,7 +521,92 @@ function sanitizeInvitation(invitation) {
     status: getInvitationStatus(invitation),
     expires_at: invitation.expires_at,
     created_at: invitation.created_at,
-    account_created_at: invitation.account_created_at || null
+    account_created_at: invitation.account_created_at || null,
+    account_exists: Boolean(invitation.account_exists),
+    existing_account_linked_at: invitation.existing_account_linked_at || null
+  };
+}
+
+async function findSupabaseUserByEmail(email) {
+  ensureSupabaseAdminAvailable();
+
+  const targetEmail = String(email || "").trim().toLowerCase();
+  if (!targetEmail) {
+    return null;
+  }
+
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await supabaseServerClient.auth.admin.listUsers({
+      page,
+      perPage
+    });
+
+    if (error) {
+      throw createHttpError(500, error.message || "Impossible de vérifier l’existence du compte.");
+    }
+
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const foundUser = users.find((user) => String(user.email || "").trim().toLowerCase() === targetEmail) || null;
+
+    if (foundUser) {
+      return foundUser;
+    }
+
+    if (users.length < perPage) {
+      return null;
+    }
+
+    page += 1;
+  }
+}
+
+async function sendClientInvitationEmail(invitation, onboardingLink) {
+  if (!resendClient || !INVITATION_FROM_EMAIL) {
+    return {
+      sent: false,
+      reason: "email_not_configured"
+    };
+  }
+
+  const recipientName = invitation.name || invitation.contact_name || "Client";
+  const subject = "Bienvenue chez FluxLocatif — activez votre espace client";
+  const html = `
+    <p>Bonjour ${recipientName},</p>
+    <p>Merci de nous avoir choisis.</p>
+    <p>Votre espace client est prêt. Pour commencer, veuillez utiliser le lien sécurisé ci-dessous afin d’activer votre compte et ajouter votre premier logement :</p>
+    <p><a href="${onboardingLink}">${onboardingLink}</a></p>
+    <p>Ce lien est valide pendant 7 jours.</p>
+    <p>Si vous avez des questions, vous pouvez répondre directement à ce courriel.</p>
+    <p>L’équipe FluxLocatif</p>
+  `;
+
+  await resendClient.emails.send({
+    from: INVITATION_FROM_EMAIL,
+    to: invitation.email,
+    subject,
+    html,
+    text: [
+      `Bonjour ${recipientName},`,
+      "",
+      "Merci de nous avoir choisis.",
+      "",
+      "Votre espace client est prêt. Pour commencer, veuillez utiliser le lien sécurisé ci-dessous afin d’activer votre compte et ajouter votre premier logement :",
+      "",
+      onboardingLink,
+      "",
+      "Ce lien est valide pendant 7 jours.",
+      "",
+      "Si vous avez des questions, vous pouvez répondre directement à ce courriel.",
+      "",
+      "L’équipe FluxLocatif"
+    ].join("\n")
+  });
+
+  return {
+    sent: true
   };
 }
 
@@ -1621,6 +1712,7 @@ app.post("/api/admin/client-invitations", async (req, res) => {
     const token = createSecureToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const existingUser = await findSupabaseUserByEmail(email).catch(() => null);
 
     const invitation = {
       id: createId("invite"),
@@ -1632,6 +1724,8 @@ app.post("/api/admin/client-invitations", async (req, res) => {
       email,
       phone,
       main_city: mainCity,
+      account_exists: Boolean(existingUser),
+      existing_supabase_user_id: existingUser?.id || null,
       status: "pending",
       expires_at: expiresAt,
       created_at: now.toISOString()
@@ -1639,11 +1733,18 @@ app.post("/api/admin/client-invitations", async (req, res) => {
 
     invitations.push(invitation);
     await saveClientInvitations(invitations);
+    const onboardingLink = buildOnboardingLink(req, token);
+    const emailDelivery = await sendClientInvitationEmail(invitation, onboardingLink).catch((error) => ({
+      sent: false,
+      reason: error?.message || "email_send_failed"
+    }));
 
     return res.status(201).json({
       ok: true,
       invitation: sanitizeInvitation(invitation),
-      onboarding_link: buildOnboardingLink(req, token)
+      onboarding_link: onboardingLink,
+      invitation_email_sent: emailDelivery.sent,
+      invitation_email_error: emailDelivery.sent ? null : emailDelivery.reason
     });
   } catch (error) {
     return res.status(500).json({
@@ -1710,6 +1811,14 @@ app.post("/api/client-onboarding/account", async (req, res) => {
       });
     }
 
+    if (invitation.account_exists) {
+      return res.status(409).json({
+        ok: false,
+        code: "existing_account_requires_login",
+        error: "Un compte existe déjà pour ce courriel. Connectez-vous pour continuer l’activation de votre invitation."
+      });
+    }
+
     const { data, error } = await supabaseServerClient.auth.admin.createUser({
       email: invitation.email,
       password,
@@ -1771,6 +1880,113 @@ app.post("/api/client-onboarding/account", async (req, res) => {
     return res.status(error.status || 500).json({
       ok: false,
       error: error.message || "Impossible de créer le compte client."
+    });
+  }
+});
+
+app.post("/api/client-onboarding/link-existing-account", async (req, res) => {
+  try {
+    ensureSupabaseAdminAvailable();
+
+    const token = String(req.body?.token || "").trim();
+    const fullName = String(req.body?.full_name || "").trim();
+    const companyName = String(req.body?.company_name || "").trim();
+    const phone = String(req.body?.phone || "").trim();
+    const mainCity = String(req.body?.main_city || "").trim();
+    const emailNotifications = Boolean(req.body?.email_notifications);
+    const marketingCommunications = Boolean(req.body?.marketing_communications);
+
+    if (!token || !fullName || !companyName || !mainCity) {
+      return res.status(400).json({
+        ok: false,
+        error: "Les champs requis du compte client sont incomplets."
+      });
+    }
+
+    const { invitations, invitation, index, status } = await resolveInvitationByToken(token);
+    ensureInvitationUsable(status, invitation);
+
+    const accessToken = getBearerToken(req);
+    if (!accessToken) {
+      throw createHttpError(401, "Session requise pour relier cette invitation à un compte existant.");
+    }
+
+    const { data: authData, error: authError } = await supabaseServerClient.auth.getUser(accessToken);
+    if (authError || !authData?.user) {
+      throw createHttpError(401, "Session invalide.");
+    }
+
+    const sessionUser = authData.user;
+    const invitedEmail = String(invitation.email || "").trim().toLowerCase();
+    const sessionEmail = String(sessionUser.email || "").trim().toLowerCase();
+
+    if (!invitedEmail || invitedEmail !== sessionEmail) {
+      throw createHttpError(403, "Le compte connecté ne correspond pas à l’adresse invitée.");
+    }
+
+    const currentUserMetadata = sessionUser.user_metadata || {};
+    const currentAppMetadata = sessionUser.app_metadata || {};
+    const { data: updatedUserData, error: updateError } = await supabaseServerClient.auth.admin.updateUserById(sessionUser.id, {
+      user_metadata: {
+        ...currentUserMetadata,
+        client_id: invitation.client_id,
+        full_name: fullName,
+        company_name: companyName,
+        phone,
+        main_city: mainCity
+      },
+      app_metadata: {
+        ...currentAppMetadata,
+        client_id: invitation.client_id
+      }
+    });
+
+    if (updateError || !updatedUserData?.user) {
+      throw createHttpError(400, updateError?.message || "Impossible de relier le compte existant à l’invitation.");
+    }
+
+    const clientsMap = await loadClientsMap();
+    const existingClient = clientsMap[invitation.client_id] || {};
+    const client = normalizeClientRecord(invitation.client_id, {
+      ...existingClient,
+      id: invitation.client_id,
+      nom: companyName,
+      company_name: companyName,
+      contact_name: fullName,
+      email: invitation.email,
+      phone,
+      main_city: mainCity,
+      onboarding_user_id: sessionUser.id,
+      notification_preferences: {
+        email_notifications: emailNotifications,
+        marketing_communications: marketingCommunications
+      },
+      criteres: existingClient.criteres || {}
+    });
+
+    clientsMap[invitation.client_id] = client;
+    await saveClientsMap(clientsMap);
+
+    invitations[index] = {
+      ...invitation,
+      contact_name: fullName,
+      company_name: companyName,
+      phone,
+      account_created_at: new Date().toISOString(),
+      supabase_user_id: sessionUser.id,
+      existing_account_linked_at: new Date().toISOString()
+    };
+    await saveClientInvitations(invitations);
+
+    return res.json({
+      ok: true,
+      invitation: sanitizeInvitation(invitations[index]),
+      client
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Impossible de relier le compte existant."
     });
   }
 });

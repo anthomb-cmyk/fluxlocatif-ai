@@ -7,7 +7,8 @@ const state = {
   token: new URLSearchParams(window.location.search).get("token") || "",
   invitation: null,
   currentStep: 1,
-  locations: []
+  locations: [],
+  sessionUser: null
 };
 
 const onboardingContent = document.getElementById("onboardingContent");
@@ -90,6 +91,55 @@ function fillInvitationFields() {
   document.getElementById("accountEmail").value = state.invitation.email || "";
   document.getElementById("accountPhone").value = state.invitation.phone || "";
   document.getElementById("mainCity").value = state.invitation.main_city || "";
+  document.getElementById("accountEmail").readOnly = true;
+}
+
+function updateAccountStepMode() {
+  const password = document.getElementById("accountPassword");
+  const passwordConfirm = document.getElementById("accountPasswordConfirm");
+  const passwordWrap = password?.closest(".field");
+  const passwordConfirmWrap = passwordConfirm?.closest(".field");
+  const submitLabel = state.invitation?.account_exists ? "Se connecter pour continuer" : "Continuer";
+
+  if (state.invitation?.account_exists) {
+    if (password) {
+      password.required = false;
+      password.disabled = true;
+      password.value = "";
+    }
+    if (passwordConfirm) {
+      passwordConfirm.required = false;
+      passwordConfirm.disabled = true;
+      passwordConfirm.value = "";
+    }
+    if (passwordWrap) passwordWrap.style.display = "none";
+    if (passwordConfirmWrap) passwordConfirmWrap.style.display = "none";
+    setStatus(
+      accountStatus,
+      state.sessionUser && String(state.sessionUser.email || "").trim().toLowerCase() === String(state.invitation.email || "").trim().toLowerCase()
+        ? "Ce courriel existe déjà. Votre session actuelle sera utilisée pour continuer l’activation."
+        : "Ce courriel possède déjà un compte. Connectez-vous avec cette adresse pour poursuivre l’activation de votre invitation.",
+      "success"
+    );
+  } else {
+    if (password) {
+      password.required = true;
+      password.disabled = false;
+    }
+    if (passwordConfirm) {
+      passwordConfirm.required = true;
+      passwordConfirm.disabled = false;
+    }
+    if (passwordWrap) passwordWrap.style.display = "";
+    if (passwordConfirmWrap) passwordConfirmWrap.style.display = "";
+  }
+
+  submitAccountBtn.textContent = submitLabel;
+}
+
+async function loadSessionUser() {
+  const { data } = await supabaseClient.auth.getUser();
+  state.sessionUser = data?.user || null;
 }
 
 function populateMainCityOptions() {
@@ -130,6 +180,17 @@ async function validateInvitation() {
     const result = await fetchJSON(`/api/client-onboarding/invitation?token=${encodeURIComponent(state.token)}`);
     state.invitation = result.invitation || null;
     fillInvitationFields();
+    updateAccountStepMode();
+
+    if (
+      state.invitation?.account_exists &&
+      state.sessionUser &&
+      String(state.sessionUser.email || "").trim().toLowerCase() === String(state.invitation.email || "").trim().toLowerCase() &&
+      !state.invitation.account_created_at
+    ) {
+      setStatus(accountStatus, "Votre compte existant est détecté. Complétez vos informations puis continuez.", "success");
+    }
+
     setStep(result.current_step === 2 ? 2 : 1);
   } catch (error) {
     showInvalid(error.message || "Cette invitation n’est plus disponible.");
@@ -139,6 +200,49 @@ async function validateInvitation() {
 async function submitAccount(event) {
   event.preventDefault();
   setStatus(accountStatus, "", "");
+
+  if (state.invitation?.account_exists) {
+    const invitedEmail = String(state.invitation.email || "").trim().toLowerCase();
+    const sessionEmail = String(state.sessionUser?.email || "").trim().toLowerCase();
+
+    if (!state.sessionUser || invitedEmail !== sessionEmail) {
+      const nextPath = `/client-onboarding.html?token=${encodeURIComponent(state.token)}`;
+      window.location.href = `/login.html?next=${encodeURIComponent(nextPath)}`;
+      return;
+    }
+
+    submitAccountBtn.disabled = true;
+    submitAccountBtn.textContent = "Connexion...";
+
+    try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      const accessToken = sessionData?.session?.access_token || "";
+      await fetchJSON("/api/client-onboarding/link-existing-account", {
+        method: "POST",
+        headers: {
+          Authorization: accessToken ? `Bearer ${accessToken}` : ""
+        },
+        body: JSON.stringify({
+          token: state.token,
+          full_name: document.getElementById("fullName").value.trim(),
+          company_name: document.getElementById("companyName").value.trim(),
+          phone: document.getElementById("accountPhone").value.trim(),
+          main_city: document.getElementById("mainCity").value.trim(),
+          email_notifications: document.getElementById("emailNotifications").checked,
+          marketing_communications: document.getElementById("marketingCommunications").checked
+        })
+      });
+
+      setStatus(accountStatus, "Compte existant relié. Vous pouvez maintenant ajouter votre premier logement.", "success");
+      setStep(2);
+    } catch (error) {
+      setStatus(accountStatus, error.message || "Impossible de relier le compte existant.", "error");
+    } finally {
+      submitAccountBtn.disabled = false;
+      submitAccountBtn.textContent = "Se connecter pour continuer";
+    }
+    return;
+  }
 
   const password = document.getElementById("accountPassword").value;
   const passwordConfirm = document.getElementById("accountPasswordConfirm").value;
@@ -269,6 +373,7 @@ if (propertyTypeButtons) {
 }
 
 (async function init() {
+  await loadSessionUser().catch(() => {});
   await loadLocations().catch(() => {});
   await validateInvitation();
 })();

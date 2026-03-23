@@ -96,12 +96,22 @@
 
       <section class="card hidden" id="clientsTab">
         <div class="form-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-            <h3 id="clientFormTitle">Ajouter un client</h3>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-              <button type="button" id="openInviteClientBtn" class="primary-btn">
-                Invite Client
-              </button>
+          <div style="display:grid;gap:16px;">
+            <div style="display:grid;gap:8px;">
+              <h3 style="margin:0;">Gestion des clients</h3>
+              <div>
+                <button type="button" id="openInviteClientBtn" class="primary-btn">
+                  Invite Client
+                </button>
+              </div>
+              <div style="color:#6b7280;">
+                Invitez un client à créer son compte et ajouter son premier logement.
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px;">
+              <h3 id="clientFormTitle" style="margin:0;">Créer un client manuellement (option avancée)</h3>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
               <div id="editingClientBadge" style="display:none;font-weight:800;"></div>
               <button type="button" id="cancelClientEditBtn" class="secondary-btn" style="display:none;">
                 Annuler la modification

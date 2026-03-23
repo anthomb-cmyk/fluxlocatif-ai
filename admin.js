@@ -324,7 +324,7 @@ function resetClientForm() {
 
   clientForm.reset();
   if (editingClientIdInput) editingClientIdInput.value = "";
-  clientFormTitle.textContent = "Ajouter un client";
+  clientFormTitle.textContent = "Créer un client manuellement (option avancée)";
   submitClientBtn.textContent = "Ajouter le client";
   cancelClientEditBtn.style.display = "none";
   editingClientBadge.style.display = "none";
@@ -437,6 +437,12 @@ function openInviteClientModal() {
       linkInput.value = result.onboarding_link || "";
       linkWrap.style.display = "block";
       linkInput.select();
+      if (!result.invitation_email_sent) {
+        statusEl.textContent = result.invitation_email_error
+          ? `Invitation créée. Envoi email non configuré: ${result.invitation_email_error}.`
+          : "Invitation créée. Envoi email non configuré.";
+        statusEl.style.color = "#b45309";
+      }
     } catch (error) {
       statusEl.textContent = error.message || "Impossible de créer l’invitation.";
       statusEl.style.color = "#991b1b";
