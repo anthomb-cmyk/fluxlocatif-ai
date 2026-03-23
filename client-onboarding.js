@@ -85,10 +85,11 @@ function setStep(step) {
 
 function fillInvitationFields() {
   if (!state.invitation) return;
-  document.getElementById("fullName").value = state.invitation.contact_name || "";
-  document.getElementById("companyName").value = state.invitation.company_name || "";
+  document.getElementById("fullName").value = state.invitation.name || state.invitation.contact_name || "";
+  document.getElementById("companyName").value = state.invitation.company_name || state.invitation.name || "";
   document.getElementById("accountEmail").value = state.invitation.email || "";
   document.getElementById("accountPhone").value = state.invitation.phone || "";
+  document.getElementById("mainCity").value = state.invitation.main_city || "";
 }
 
 function populateMainCityOptions() {

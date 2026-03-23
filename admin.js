@@ -354,10 +354,10 @@ function openInviteClientModal() {
 
       <form id="inviteClientForm" class="admin-form">
         <div class="form-grid">
-          <input id="inviteContactName" type="text" placeholder="Nom du contact" required />
-          <input id="inviteCompanyName" type="text" placeholder="Nom du client / entreprise" required />
+          <input id="inviteName" type="text" placeholder="Nom" required />
           <input id="inviteEmail" type="email" placeholder="Courriel" required />
           <input id="invitePhone" type="text" placeholder="Téléphone (optionnel)" />
+          <input id="inviteMainCity" type="text" placeholder="Ville principale (optionnel)" />
         </div>
 
         <div class="form-actions">
@@ -368,7 +368,10 @@ function openInviteClientModal() {
       <div id="inviteClientStatus" style="margin-top:14px;font-weight:700;"></div>
       <div id="inviteClientLinkWrap" style="display:none;margin-top:14px;">
         <div style="font-size:.9rem;color:#6b7280;margin-bottom:8px;">Lien unique valable 7 jours</div>
-        <input id="inviteClientLink" type="text" readonly style="width:100%;border:1px solid rgba(79,70,229,.14);border-radius:14px;padding:12px 14px;font:inherit;" />
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <input id="inviteClientLink" type="text" readonly style="flex:1 1 360px;border:1px solid rgba(79,70,229,.14);border-radius:14px;padding:12px 14px;font:inherit;" />
+          <button type="button" id="copyInviteClientLinkBtn" class="secondary-btn">Copy link</button>
+        </div>
       </div>
     </div>
   `;
@@ -382,6 +385,28 @@ function openInviteClientModal() {
     }
   });
   document.getElementById("closeInviteClientModal")?.addEventListener("click", closeModal);
+  document.getElementById("copyInviteClientLinkBtn")?.addEventListener("click", async () => {
+    const linkInput = document.getElementById("inviteClientLink");
+    const statusEl = document.getElementById("inviteClientStatus");
+
+    if (!linkInput?.value) {
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(linkInput.value);
+      } else {
+        linkInput.select();
+        document.execCommand("copy");
+      }
+      statusEl.textContent = "Lien copié.";
+      statusEl.style.color = "#166534";
+    } catch {
+      statusEl.textContent = "Impossible de copier le lien.";
+      statusEl.style.color = "#991b1b";
+    }
+  });
 
   document.getElementById("inviteClientForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -400,10 +425,10 @@ function openInviteClientModal() {
       const result = await fetchJSON("/api/admin/client-invitations", {
         method: "POST",
         body: JSON.stringify({
-          contact_name: document.getElementById("inviteContactName").value.trim(),
-          company_name: document.getElementById("inviteCompanyName").value.trim(),
+          name: document.getElementById("inviteName").value.trim(),
           email: document.getElementById("inviteEmail").value.trim(),
-          phone: document.getElementById("invitePhone").value.trim()
+          phone: document.getElementById("invitePhone").value.trim(),
+          main_city: document.getElementById("inviteMainCity").value.trim()
         })
       });
 

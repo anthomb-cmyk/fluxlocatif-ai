@@ -28,7 +28,8 @@ const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
 const LOCATIONS_PATH = path.join(__dirname, "locations-quebec.json");
 const CLIENTS_PATH = path.join(__dirname, "clients.json");
-const CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client-invitations.json");
+const CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client_invitations.json");
+const LEGACY_CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client-invitations.json");
 const CANDIDATES_PATH = path.join(DATA_DIR, "candidates.json");
 const CHAT_MESSAGES_PATH = path.join(DATA_DIR, "chat-messages.json");
 const CHAT_SESSIONS_PATH = path.join(DATA_DIR, "chat-sessions.json");
@@ -323,7 +324,13 @@ async function loadClientsMap() {
 }
 
 async function loadClientInvitations() {
-  return readJsonFile(CLIENT_INVITATIONS_PATH, []);
+  const currentInvitations = await readJsonFile(CLIENT_INVITATIONS_PATH, null);
+
+  if (Array.isArray(currentInvitations)) {
+    return currentInvitations;
+  }
+
+  return readJsonFile(LEGACY_CLIENT_INVITATIONS_PATH, []);
 }
 
 function normalizeClientRecord(id, value = {}) {
@@ -499,10 +506,12 @@ function sanitizeInvitation(invitation) {
   return {
     id: invitation.id,
     client_id: invitation.client_id,
+    name: invitation.name || invitation.contact_name || "",
     contact_name: invitation.contact_name,
     company_name: invitation.company_name,
     email: invitation.email,
     phone: invitation.phone,
+    main_city: invitation.main_city || "",
     status: getInvitationStatus(invitation),
     expires_at: invitation.expires_at,
     created_at: invitation.created_at,
@@ -1594,21 +1603,21 @@ app.post("/api/admin/clients", async (req, res) => {
 
 app.post("/api/admin/client-invitations", async (req, res) => {
   try {
-    const contactName = String(req.body?.contact_name || "").trim();
-    const companyName = String(req.body?.company_name || "").trim();
+    const name = String(req.body?.name || req.body?.contact_name || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase();
     const phone = String(req.body?.phone || "").trim();
+    const mainCity = String(req.body?.main_city || "").trim();
 
-    if (!contactName || !companyName || !email) {
+    if (!name || !email) {
       return res.status(400).json({
         ok: false,
-        error: "contact_name, company_name et email sont obligatoires."
+        error: "name et email sont obligatoires."
       });
     }
 
     const clientsMap = await loadClientsMap();
     const invitations = await loadClientInvitations();
-    const clientId = createClientId(clientsMap, companyName, invitations);
+    const clientId = createClientId(clientsMap, name, invitations);
     const token = createSecureToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -1617,10 +1626,12 @@ app.post("/api/admin/client-invitations", async (req, res) => {
       id: createId("invite"),
       token,
       client_id: clientId,
-      contact_name: contactName,
-      company_name: companyName,
+      name,
+      contact_name: name,
+      company_name: "",
       email,
       phone,
+      main_city: mainCity,
       status: "pending",
       expires_at: expiresAt,
       created_at: now.toISOString()
