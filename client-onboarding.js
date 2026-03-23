@@ -152,22 +152,10 @@ function populateMainCityOptions() {
   });
 }
 
-function populateListingCityOptions() {
-  if (!listingCity) return;
-  listingCity.innerHTML = `<option value="">Sélectionner</option>`;
-  state.locations.forEach((location) => {
-    const option = document.createElement("option");
-    option.value = location.label;
-    option.textContent = `${location.label} — ${location.zone}`;
-    listingCity.appendChild(option);
-  });
-}
-
 async function loadLocations() {
   const data = await fetchJSON("/locations-quebec.json");
   state.locations = Array.isArray(data) ? data : [];
   populateMainCityOptions();
-  populateListingCityOptions();
 }
 
 async function validateInvitation() {
@@ -301,7 +289,7 @@ async function submitListing(event) {
     const inclusions = [
       document.getElementById("inclusionHeat").checked ? "Chauffé" : "",
       document.getElementById("inclusionElectricity").checked ? "Électricité incluse" : "",
-      document.getElementById("inclusionWater").checked ? "Eau incluse" : ""
+      document.getElementById("inclusionHotWater").checked ? "Eau chaude incluse" : ""
     ].filter(Boolean);
 
     await fetchJSON("/api/client-onboarding/listing", {
@@ -311,14 +299,13 @@ async function submitListing(event) {
         adresse: document.getElementById("listingAddress").value.trim(),
         ville: document.getElementById("listingCity").value.trim(),
         type_logement: document.getElementById("listingType").value,
-        chambres: document.getElementById("listingBedrooms").value.trim(),
         loyer: document.getElementById("listingRent").value,
         disponibilite: resolvedAvailability,
         inclusions: inclusions.join(", "),
         animaux_acceptes: document.querySelector('input[name="listingPets"]:checked')?.value || "",
         meuble: document.querySelector('input[name="listingFurnished"]:checked')?.value || "",
         stationnement: document.getElementById("listingParking").value,
-        minimum_income_rule: document.getElementById("criteriaIncomeRule").value,
+        minimum_income: document.getElementById("criteriaMinimumIncome").value,
         credit_requirement: document.getElementById("criteriaCreditRequirement").value,
         tal_policy: document.getElementById("criteriaTalPolicy").value,
         occupants_limit: document.getElementById("criteriaOccupantsLimit").value,

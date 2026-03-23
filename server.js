@@ -27,6 +27,7 @@ const SUPABASE_SERVER_KEY =
   "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
 const INVITATION_FROM_EMAIL = String(process.env.INVITATION_FROM_EMAIL || process.env.FROM_EMAIL || "").trim();
+const ADMIN_NOTIFICATION_EMAIL = String(process.env.ADMIN_NOTIFICATION_EMAIL || "").trim();
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
@@ -113,6 +114,53 @@ function parseCoordinate(value) {
 function getPreloadedLocation(value) {
   const normalizedValue = normalizeLocationText(value);
   return normalizedValue ? QUEBEC_LOCATION_MAP.get(normalizedValue) || null : null;
+}
+
+function resolveClosestQuebecLocation(value) {
+  const rawValue = String(value || "").trim();
+  const normalizedValue = normalizeLocationText(rawValue);
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const exactLocation = getPreloadedLocation(rawValue);
+  if (exactLocation) {
+    return exactLocation;
+  }
+
+  const inputTokens = normalizedValue.match(/[a-z0-9]+/g) || [];
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const location of QUEBEC_LOCATIONS) {
+    const locationKey = normalizeLocationText(location.label);
+    const locationTokens = locationKey.match(/[a-z0-9]+/g) || [];
+    let score = 0;
+
+    if (locationKey.startsWith(normalizedValue) || normalizedValue.startsWith(locationKey)) {
+      score += 6;
+    }
+
+    if (locationKey.includes(normalizedValue) || normalizedValue.includes(locationKey)) {
+      score += 4;
+    }
+
+    for (const token of inputTokens) {
+      if (locationTokens.includes(token)) {
+        score += 3;
+      } else if (locationKey.includes(token)) {
+        score += 1;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = location;
+    }
+  }
+
+  return bestScore >= 3 ? bestMatch : null;
 }
 
 function getListingLocation(listing = {}) {
@@ -602,6 +650,49 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
       "Si vous avez des questions, vous pouvez répondre directement à ce courriel.",
       "",
       "L’équipe FluxLocatif"
+    ].join("\n")
+  });
+
+  return {
+    sent: true
+  };
+}
+
+async function sendAdminClientActivatedEmail(payload) {
+  if (!resendClient || !INVITATION_FROM_EMAIL || !ADMIN_NOTIFICATION_EMAIL) {
+    return {
+      sent: false,
+      reason: "admin_email_not_configured"
+    };
+  }
+
+  const subject = `Nouveau client activé — ${payload.company_name || payload.contact_name || payload.client_id}`;
+  const html = `
+    <p>Un nouveau client a activé son espace FluxLocatif.</p>
+    <ul>
+      <li><strong>Client / entreprise :</strong> ${payload.company_name || "-"}</li>
+      <li><strong>Nom du contact :</strong> ${payload.contact_name || "-"}</li>
+      <li><strong>Courriel :</strong> ${payload.email || "-"}</li>
+      <li><strong>Téléphone :</strong> ${payload.phone || "-"}</li>
+      <li><strong>Ville principale :</strong> ${payload.main_city || "-"}</li>
+      <li><strong>client_id :</strong> ${payload.client_id || "-"}</li>
+    </ul>
+  `;
+
+  await resendClient.emails.send({
+    from: INVITATION_FROM_EMAIL,
+    to: ADMIN_NOTIFICATION_EMAIL,
+    subject,
+    html,
+    text: [
+      "Un nouveau client a activé son espace FluxLocatif.",
+      "",
+      `Client / entreprise : ${payload.company_name || "-"}`,
+      `Nom du contact : ${payload.contact_name || "-"}`,
+      `Courriel : ${payload.email || "-"}`,
+      `Téléphone : ${payload.phone || "-"}`,
+      `Ville principale : ${payload.main_city || "-"}`,
+      `client_id : ${payload.client_id || "-"}`
     ].join("\n")
   });
 
@@ -1870,6 +1961,14 @@ app.post("/api/client-onboarding/account", async (req, res) => {
       supabase_user_id: data.user.id
     };
     await saveClientInvitations(invitations);
+    await sendAdminClientActivatedEmail({
+      client_id: invitation.client_id,
+      company_name: companyName,
+      contact_name: fullName,
+      email: invitation.email,
+      phone,
+      main_city: mainCity
+    }).catch(() => null);
 
     return res.json({
       ok: true,
@@ -1977,6 +2076,14 @@ app.post("/api/client-onboarding/link-existing-account", async (req, res) => {
       existing_account_linked_at: new Date().toISOString()
     };
     await saveClientInvitations(invitations);
+    await sendAdminClientActivatedEmail({
+      client_id: invitation.client_id,
+      company_name: companyName,
+      contact_name: fullName,
+      email: invitation.email,
+      phone,
+      main_city: mainCity
+    }).catch(() => null);
 
     return res.json({
       ok: true,
@@ -2017,7 +2124,6 @@ app.post("/api/client-onboarding/listing", async (req, res) => {
       !String(payload.adresse || "").trim() ||
       !String(payload.ville || "").trim() ||
       !String(payload.type_logement || "").trim() ||
-      !String(payload.chambres || "").trim() ||
       !String(payload.loyer || "").trim() ||
       !String(payload.disponibilite || "").trim()
     ) {
@@ -2028,14 +2134,18 @@ app.post("/api/client-onboarding/listing", async (req, res) => {
     }
 
     const listings = await loadListingsMap();
+    const matchedLocation = resolveClosestQuebecLocation(payload.ville);
     const ref = nextListingRef(listings);
 
     listings[ref] = toListingRecord(`L-${ref}`, {
       ref: `L-${ref}`,
       adresse: payload.adresse,
-      ville: payload.ville,
+      ville: matchedLocation?.label || String(payload.ville || "").trim(),
+      zone: matchedLocation?.zone || "",
+      lat: parseCoordinate(matchedLocation?.lat),
+      lng: parseCoordinate(matchedLocation?.lng),
       type_logement: payload.type_logement,
-      chambres: payload.chambres,
+      chambres: payload.type_logement,
       loyer: payload.loyer,
       disponibilite: payload.disponibilite,
       inclusions: payload.inclusions,
@@ -2058,11 +2168,11 @@ app.post("/api/client-onboarding/listing", async (req, res) => {
 
     const clientsMap = await loadClientsMap();
     const existingClient = clientsMap[invitation.client_id] || {};
-    const incomeCriteria = buildIncomeCriteriaFromRent(payload.loyer, payload.minimum_income_rule);
     const talPolicy = String(payload.tal_policy || "").trim().toLowerCase();
     const occupantValue = String(payload.occupants_limit || "").trim();
-    const normalizedMaxOccupants = occupantValue === "4+" ? 4 : parseNumber(occupantValue);
+    const normalizedMaxOccupants = parseNumber(occupantValue);
     const employmentRequirement = String(payload.employment_requirement || "").trim();
+    const minimumIncome = parseNumber(payload.minimum_income);
     clientsMap[invitation.client_id] = normalizeClientRecord(invitation.client_id, {
       ...existingClient,
       id: invitation.client_id,
@@ -2076,8 +2186,8 @@ app.post("/api/client-onboarding/listing", async (req, res) => {
       notification_preferences: existingClient.notification_preferences || {},
       criteres: {
         ...(existingClient.criteres || {}),
-        revenu_minimum: incomeCriteria.revenu_minimum,
-        revenu_multiple: incomeCriteria.revenu_multiple,
+        revenu_minimum: minimumIncome,
+        revenu_multiple: null,
         credit_min:
           payload.credit_requirement === "Bon crédit requis"
             ? "haut"

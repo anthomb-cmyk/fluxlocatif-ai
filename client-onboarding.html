@@ -508,14 +508,7 @@
 
                 <div class="field">
                   <label for="listingCity">Ville</label>
-                  <select id="listingCity" required>
-                    <option value="">Sélectionner</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="listingBedrooms">Configuration</label>
-                  <input id="listingBedrooms" type="text" placeholder="Ex. 4½, condo 2 chambres" required />
+                  <input id="listingCity" type="text" placeholder="Ex. Montréal, Laval, Longueuil" required />
                 </div>
 
                 <div class="field">
@@ -534,10 +527,10 @@
                   <label for="listingAvailability">Disponibilité</label>
                   <select id="listingAvailability" required>
                     <option value="">Sélectionner</option>
-                    <option value="Maintenant">Now</option>
-                    <option value="30 jours">30 days</option>
-                    <option value="60 jours">60 days</option>
-                    <option value="custom">Custom date</option>
+                    <option value="Maintenant">Maintenant</option>
+                    <option value="30 jours">30 jours</option>
+                    <option value="60 jours">60 jours</option>
+                    <option value="custom">Date personnalisée</option>
                   </select>
                 </div>
 
@@ -558,8 +551,8 @@
                       <div><strong>Électricité incluse</strong><div class="muted">L’électricité est incluse au loyer.</div></div>
                     </label>
                     <label class="option-card">
-                      <input id="inclusionWater" type="checkbox" />
-                      <div><strong>Eau incluse</strong><div class="muted">L’eau est incluse.</div></div>
+                      <input id="inclusionHotWater" type="checkbox" />
+                      <div><strong>Eau chaude incluse</strong><div class="muted">L’eau chaude est incluse au loyer.</div></div>
                     </label>
                   </div>
                 </div>
@@ -597,14 +590,8 @@
                 </div>
 
                 <div class="field">
-                  <label for="criteriaIncomeRule">Revenu minimum</label>
-                  <select id="criteriaIncomeRule" required>
-                    <option value="">Sélectionner</option>
-                    <option value="2x">2x rent</option>
-                    <option value="2.5x">2.5x rent</option>
-                    <option value="3x">3x rent</option>
-                    <option value="flexible">Flexible</option>
-                  </select>
+                  <label for="criteriaMinimumIncome">Revenu minimum requis</label>
+                  <input id="criteriaMinimumIncome" type="number" min="0" placeholder="Ex. 4500" />
                 </div>
 
                 <div class="field">
@@ -634,7 +621,9 @@
                     <option value="1">1</option>
                     <option value="2">2</option>
                     <option value="3">3</option>
-                    <option value="4+">4+</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
                   </select>
                 </div>
 
