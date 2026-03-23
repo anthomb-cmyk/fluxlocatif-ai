@@ -43,6 +43,23 @@ const state = {
   candidates: []
 };
 
+function isClientDomain() {
+  return String(window.location.hostname || "").trim().toLowerCase() === "client.fluxlocatif.com";
+}
+
+function redirectToClientPortalEntry() {
+  const targetPath = "/client.html";
+  const targetUrl = `${CLIENT_APP_URL}${targetPath}`;
+  const currentPath = String(window.location.pathname || "").trim() || "/";
+
+  if (isClientDomain() && currentPath === targetPath) {
+    return false;
+  }
+
+  window.location.href = targetUrl;
+  return true;
+}
+
 function setCriteriaStatus(message = "", type = "") {
   if (!criteriaStatus) return;
   criteriaStatus.textContent = message;
@@ -163,8 +180,11 @@ async function requireLogin() {
   const session = await waitForActiveSession();
 
   if (!session) {
-    window.location.href = `/login.html?next=${encodeURIComponent("/client.html")}`;
-    throw new Error("No active session.");
+    if (redirectToClientPortalEntry()) {
+      throw new Error("Redirection vers le portail client.");
+    }
+
+    throw new Error("Connexion client requise.");
   }
 
   const user = session.user;
@@ -188,7 +208,10 @@ async function requireLogin() {
 
 function handleClientRouteFailure(error) {
   if (error?.status === 401) {
-    window.location.href = `/login.html?next=${encodeURIComponent("/client.html")}`;
+    if (redirectToClientPortalEntry()) {
+      return;
+    }
+
     return;
   }
 
@@ -431,7 +454,21 @@ if (candidateModal) {
 
 supabaseClient.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
-    window.location.href = `/login.html?next=${encodeURIComponent("/client.html")}`;
+    if (redirectToClientPortalEntry()) {
+      return;
+    }
+
+    state.currentSession = null;
+    state.currentUser = null;
+    state.clientId = "";
+    document.body.innerHTML = `
+      <div style="font-family: Inter, Arial, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto;">
+        <h1 style="margin-bottom: 12px;">Connexion client requise</h1>
+        <div style="padding:16px 18px;border-radius:14px;background:#eef2ff;color:#3730a3;font-weight:700;">
+          Veuillez vous reconnecter pour accéder à votre portail client.
+        </div>
+      </div>
+    `;
     return;
   }
 

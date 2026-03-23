@@ -58,6 +58,22 @@ const supabaseServerClient = SUPABASE_URL && SUPABASE_SERVER_KEY
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+
+app.use((req, res, next) => {
+  const hostname = String(req.hostname || "").trim().toLowerCase();
+  const isClientDomain = hostname === "client.fluxlocatif.com";
+
+  if (!isClientDomain) {
+    return next();
+  }
+
+  if (req.path === "/" || req.path === "/index.html" || req.path === "/login.html") {
+    return res.redirect(302, "/client.html");
+  }
+
+  return next();
+});
+
 app.use(express.static(__dirname));
 
 async function ensureDataFile(filePath, fallbackValue) {
