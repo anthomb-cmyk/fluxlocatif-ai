@@ -12,6 +12,12 @@ const tabs = {
   criteria: document.getElementById("criteriaTab")
 };
 
+const clientAuthShell = document.getElementById("clientAuthShell");
+const clientLoginForm = document.getElementById("clientLoginForm");
+const clientLoginEmail = document.getElementById("clientLoginEmail");
+const clientLoginPassword = document.getElementById("clientLoginPassword");
+const clientLoginSubmit = document.getElementById("clientLoginSubmit");
+const clientLoginStatus = document.getElementById("clientLoginStatus");
 const clientShell = document.getElementById("clientShell");
 const pageTitle = document.getElementById("pageTitle");
 const clientMeta = document.getElementById("clientMeta");
@@ -58,6 +64,36 @@ function redirectToClientPortalEntry() {
 
   window.location.href = targetUrl;
   return true;
+}
+
+function showClientLoginScreen(message = "", type = "") {
+  if (clientAuthShell) {
+    clientAuthShell.classList.remove("hidden");
+  }
+
+  if (clientShell) {
+    clientShell.classList.add("client-shell-hidden");
+  }
+
+  if (clientLoginStatus) {
+    clientLoginStatus.textContent = message;
+    clientLoginStatus.style.color = type === "error" ? "#991b1b" : type === "success" ? "#166534" : "";
+  }
+}
+
+function showClientPortalScreen() {
+  if (clientAuthShell) {
+    clientAuthShell.classList.add("hidden");
+  }
+
+  if (clientShell) {
+    clientShell.classList.remove("client-shell-hidden");
+  }
+
+  if (clientLoginStatus) {
+    clientLoginStatus.textContent = "";
+    clientLoginStatus.style.color = "";
+  }
 }
 
 function setCriteriaStatus(message = "", type = "") {
@@ -184,7 +220,10 @@ async function requireLogin() {
       throw new Error("Redirection vers le portail client.");
     }
 
-    throw new Error("Connexion client requise.");
+    state.currentSession = null;
+    state.currentUser = null;
+    state.clientId = "";
+    return null;
   }
 
   const user = session.user;
@@ -212,10 +251,45 @@ function handleClientRouteFailure(error) {
       return;
     }
 
+    showClientLoginScreen("Connexion client requise.", "error");
     return;
   }
 
   window.location.href = `${EMPLOYEE_APP_URL}/`;
+}
+
+async function signInClient(event) {
+  event.preventDefault();
+
+  if (!clientLoginSubmit) return;
+
+  clientLoginSubmit.disabled = true;
+  showClientLoginScreen("", "");
+
+  try {
+    const { error } = await supabaseClient.auth.signInWithPassword({
+      email: String(clientLoginEmail?.value || "").trim(),
+      password: String(clientLoginPassword?.value || "")
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const user = await requireLogin();
+
+    if (!user) {
+      throw new Error("Session client introuvable.");
+    }
+
+    await loadClientData();
+    showClientPortalScreen();
+    switchTab("dashboard");
+  } catch (error) {
+    showClientLoginScreen(error.message || "Impossible de se connecter.", "error");
+  } finally {
+    clientLoginSubmit.disabled = false;
+  }
 }
 
 function switchTab(tabName) {
@@ -452,6 +526,10 @@ if (candidateModal) {
   });
 }
 
+if (clientLoginForm) {
+  clientLoginForm.addEventListener("submit", signInClient);
+}
+
 supabaseClient.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
     if (redirectToClientPortalEntry()) {
@@ -461,14 +539,10 @@ supabaseClient.auth.onAuthStateChange((event) => {
     state.currentSession = null;
     state.currentUser = null;
     state.clientId = "";
-    document.body.innerHTML = `
-      <div style="font-family: Inter, Arial, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto;">
-        <h1 style="margin-bottom: 12px;">Connexion client requise</h1>
-        <div style="padding:16px 18px;border-radius:14px;background:#eef2ff;color:#3730a3;font-weight:700;">
-          Veuillez vous reconnecter pour accéder à votre portail client.
-        </div>
-      </div>
-    `;
+    state.client = null;
+    state.apartments = [];
+    state.candidates = [];
+    showClientLoginScreen("Veuillez vous connecter pour accéder à votre espace client.", "success");
     return;
   }
 
@@ -481,9 +555,15 @@ supabaseClient.auth.onAuthStateChange((event) => {
 
 (async function init() {
   try {
-    await requireLogin();
+    const user = await requireLogin();
+
+    if (!user) {
+      showClientLoginScreen();
+      return;
+    }
+
     await loadClientData();
-    clientShell.classList.remove("client-shell-hidden");
+    showClientPortalScreen();
     switchTab("dashboard");
   } catch (error) {
     if (state.currentUser) {
@@ -491,13 +571,6 @@ supabaseClient.auth.onAuthStateChange((event) => {
       return;
     }
 
-    document.body.innerHTML = `
-      <div style="font-family: Inter, Arial, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto;">
-        <h1 style="margin-bottom: 12px;">Accès client bloqué</h1>
-        <div style="padding:16px 18px;border-radius:14px;background:#fee2e2;color:#991b1b;font-weight:700;">
-          ${error.message || "Erreur client inconnue."}
-        </div>
-      </div>
-    `;
+    showClientLoginScreen(error.message || "Connexion client requise.", "error");
   }
 })();

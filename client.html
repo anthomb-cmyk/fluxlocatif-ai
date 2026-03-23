@@ -34,6 +34,65 @@
       display: none;
     }
 
+    .client-auth-shell {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px 20px;
+    }
+
+    .client-auth-shell.hidden {
+      display: none;
+    }
+
+    .client-auth-card {
+      width: min(460px, 100%);
+      border-radius: 28px;
+      border: 1px solid rgba(79,70,229,.12);
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 24px 60px rgba(15,23,42,.12);
+      padding: 28px;
+      backdrop-filter: blur(12px);
+    }
+
+    .client-auth-card h2 {
+      margin: 10px 0 8px;
+    }
+
+    .client-auth-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .client-auth-form {
+      display: grid;
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .client-auth-form input {
+      width: 100%;
+      border: 1px solid rgba(79,70,229,.14);
+      border-radius: 16px;
+      padding: 13px 14px;
+      font: inherit;
+      color: var(--text);
+      background: rgba(255,255,255,.96);
+      outline: none;
+    }
+
+    .client-auth-form input:focus {
+      border-color: rgba(79,70,229,.4);
+      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
+    }
+
+    .client-auth-status {
+      min-height: 24px;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
     .client-meta {
       color: var(--muted);
       margin-top: 6px;
@@ -117,6 +176,22 @@
 </head>
 <body>
   <div class="page-bg"></div>
+
+  <div class="client-auth-shell" id="clientAuthShell">
+    <div class="client-auth-card">
+      <span class="eyebrow">Portail client</span>
+      <h2>Connectez-vous à votre espace client</h2>
+      <p>Accédez à votre espace client FluxLocatif pour consulter vos logements, vos candidats et vos critères de location.</p>
+
+      <form id="clientLoginForm" class="client-auth-form">
+        <input id="clientLoginEmail" type="email" placeholder="Courriel" required />
+        <input id="clientLoginPassword" type="password" placeholder="Mot de passe" required />
+        <button id="clientLoginSubmit" type="submit" class="primary-btn">Se connecter</button>
+      </form>
+
+      <div id="clientLoginStatus" class="client-auth-status"></div>
+    </div>
+  </div>
 
   <div class="admin-shell client-shell-hidden" id="clientShell">
     <aside class="sidebar">
@@ -271,6 +346,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="client.js?v=3"></script>
+  <script src="client.js?v=4"></script>
 </body>
 </html>
