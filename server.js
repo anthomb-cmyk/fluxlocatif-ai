@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 import cors from "cors";
@@ -27,6 +28,7 @@ const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
 const LOCATIONS_PATH = path.join(__dirname, "locations-quebec.json");
 const CLIENTS_PATH = path.join(__dirname, "clients.json");
+const CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client-invitations.json");
 const CANDIDATES_PATH = path.join(DATA_DIR, "candidates.json");
 const CHAT_MESSAGES_PATH = path.join(DATA_DIR, "chat-messages.json");
 const CHAT_SESSIONS_PATH = path.join(DATA_DIR, "chat-sessions.json");
@@ -35,6 +37,7 @@ const USER_DAILY_TIME_PATH = path.join(DATA_DIR, "user-daily-time.json");
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
+const hasSupabaseAdminAccess = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 // Prefer the service-role key for backend token verification. Fallback keys keep the route fail-closed,
 // but they are not the ideal long-term backend credential.
 const supabaseServerClient = SUPABASE_URL && SUPABASE_SERVER_KEY
@@ -78,6 +81,15 @@ const QUEBEC_LOCATION_MAP = new Map(
 
 function normalizeRef(ref) {
   return String(ref || "").trim().replace(/^L-/i, "");
+}
+
+function slugifyText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function normalizeLocationText(value) {
@@ -310,22 +322,73 @@ async function loadClientsMap() {
   return readJsonFile(CLIENTS_PATH, {});
 }
 
+async function loadClientInvitations() {
+  return readJsonFile(CLIENT_INVITATIONS_PATH, []);
+}
+
 function normalizeClientRecord(id, value = {}) {
   return {
     id: String(value.id || id || ""),
     nom: String(value.nom || "").trim(),
+    contact_name: String(value.contact_name || "").trim(),
+    company_name: String(value.company_name || value.nom || "").trim(),
+    email: String(value.email || "").trim(),
+    phone: String(value.phone || "").trim(),
+    main_city: String(value.main_city || "").trim(),
+    onboarding_user_id: value.onboarding_user_id || null,
+    onboarding_completed_at: value.onboarding_completed_at || null,
+    notification_preferences: {
+      email_notifications: Boolean(value?.notification_preferences?.email_notifications),
+      marketing_communications: Boolean(value?.notification_preferences?.marketing_communications)
+    },
     criteres: {
       revenu_minimum: parseNumber(value?.criteres?.revenu_minimum),
+      revenu_multiple: value?.criteres?.revenu_multiple ?? null,
       credit_min: value?.criteres?.credit_min ?? null,
       accepte_tal: Boolean(value?.criteres?.accepte_tal),
+      tal_policy: value?.criteres?.tal_policy ?? null,
       max_occupants: parseNumber(value?.criteres?.max_occupants),
       animaux_acceptes: Boolean(value?.criteres?.animaux_acceptes),
       emplois_acceptes: Array.isArray(value?.criteres?.emplois_acceptes)
         ? value.criteres.emplois_acceptes.map((job) => String(job))
         : [],
+      employment_requirement: value?.criteres?.employment_requirement ?? null,
       anciennete_min_mois: parseNumber(value?.criteres?.anciennete_min_mois)
     }
   };
+}
+
+function buildIncomeCriteriaFromRent(rentValue, incomeRule) {
+  const rent = parseNumber(rentValue);
+  const normalizedRule = String(incomeRule || "").trim().toLowerCase();
+
+  if (rent === null || !rent || !normalizedRule || normalizedRule === "flexible") {
+    return { revenu_minimum: null, revenu_multiple: normalizedRule || null };
+  }
+
+  const ratio = Number(normalizedRule.replace("x", ""));
+  if (!Number.isFinite(ratio)) {
+    return { revenu_minimum: null, revenu_multiple: normalizedRule };
+  }
+
+  return {
+    revenu_minimum: Math.round(rent * ratio),
+    revenu_multiple: normalizedRule
+  };
+}
+
+function buildEmploymentCriteria(requirement) {
+  const normalizedRequirement = String(requirement || "").trim().toLowerCase();
+
+  if (normalizedRequirement === "temps plein requis") {
+    return ["temps plein"];
+  }
+
+  if (normalizedRequirement === "stable requis") {
+    return ["temps plein", "temps partiel", "autonome", "retraité"];
+  }
+
+  return [];
 }
 
 async function saveListingsMap(listingsMap) {
@@ -381,6 +444,10 @@ async function saveClientsMap(clientsMap) {
   await writeJsonFile(CLIENTS_PATH, clientsMap);
 }
 
+async function saveClientInvitations(invitations) {
+  await writeJsonFile(CLIENT_INVITATIONS_PATH, invitations);
+}
+
 function nextListingRef(listingsMap) {
   const refs = Object.keys(listingsMap).map((ref) => Number(ref)).filter(Number.isFinite);
   const nextRef = refs.length ? Math.max(...refs) + 1 : 1001;
@@ -389,6 +456,102 @@ function nextListingRef(listingsMap) {
 
 function createId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createSecureToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function createClientId(clientsMap, companyName, invitations = []) {
+  const baseSlug = slugifyText(companyName) || `client-${Date.now()}`;
+  const reservedIds = new Set([
+    ...Object.keys(clientsMap || {}),
+    ...invitations.map((item) => String(item.client_id || "")).filter(Boolean)
+  ]);
+  let candidateId = `client_${baseSlug}`;
+  let index = 1;
+
+  while (reservedIds.has(candidateId)) {
+    candidateId = `client_${baseSlug}_${index}`;
+    index += 1;
+  }
+
+  return candidateId;
+}
+
+function buildOnboardingLink(req, token) {
+  return `${req.protocol}://${req.get("host")}/client-onboarding.html?token=${encodeURIComponent(token)}`;
+}
+
+function isInvitationExpired(invitation) {
+  if (!invitation?.expires_at) return true;
+  return new Date(invitation.expires_at).getTime() <= Date.now();
+}
+
+function getInvitationStatus(invitation) {
+  if (!invitation) return "invalid";
+  if (invitation.status === "completed") return "completed";
+  if (invitation.status === "expired" || isInvitationExpired(invitation)) return "expired";
+  return "pending";
+}
+
+function sanitizeInvitation(invitation) {
+  return {
+    id: invitation.id,
+    client_id: invitation.client_id,
+    contact_name: invitation.contact_name,
+    company_name: invitation.company_name,
+    email: invitation.email,
+    phone: invitation.phone,
+    status: getInvitationStatus(invitation),
+    expires_at: invitation.expires_at,
+    created_at: invitation.created_at,
+    account_created_at: invitation.account_created_at || null
+  };
+}
+
+async function resolveInvitationByToken(token, options = {}) {
+  const invitations = await loadClientInvitations();
+  const index = invitations.findIndex((item) => item.token === token);
+  const invitation = index >= 0 ? invitations[index] : null;
+  let changed = false;
+
+  if (invitation && getInvitationStatus(invitation) === "expired" && invitation.status !== "expired") {
+    invitation.status = "expired";
+    invitation.expired_at = new Date().toISOString();
+    changed = true;
+  }
+
+  if (changed && options.persist !== false) {
+    await saveClientInvitations(invitations);
+  }
+
+  return {
+    invitations,
+    invitation,
+    index,
+    status: getInvitationStatus(invitation)
+  };
+}
+
+function ensureInvitationUsable(status, invitation) {
+  if (!invitation || status === "invalid") {
+    throw createHttpError(404, "Invitation introuvable.");
+  }
+
+  if (status === "expired") {
+    throw createHttpError(410, "Ce lien d’invitation est expiré.");
+  }
+
+  if (status === "completed") {
+    throw createHttpError(409, "Cette invitation a déjà été utilisée.");
+  }
+}
+
+function ensureSupabaseAdminAvailable() {
+  if (!hasSupabaseAdminAccess || !supabaseServerClient?.auth?.admin) {
+    throw createHttpError(503, "Configuration Supabase admin incomplète pour l’onboarding client.");
+  }
 }
 
 function getTodayString(date = new Date()) {
@@ -1429,6 +1592,293 @@ app.post("/api/admin/clients", async (req, res) => {
   }
 });
 
+app.post("/api/admin/client-invitations", async (req, res) => {
+  try {
+    const contactName = String(req.body?.contact_name || "").trim();
+    const companyName = String(req.body?.company_name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const phone = String(req.body?.phone || "").trim();
+
+    if (!contactName || !companyName || !email) {
+      return res.status(400).json({
+        ok: false,
+        error: "contact_name, company_name et email sont obligatoires."
+      });
+    }
+
+    const clientsMap = await loadClientsMap();
+    const invitations = await loadClientInvitations();
+    const clientId = createClientId(clientsMap, companyName, invitations);
+    const token = createSecureToken();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const invitation = {
+      id: createId("invite"),
+      token,
+      client_id: clientId,
+      contact_name: contactName,
+      company_name: companyName,
+      email,
+      phone,
+      status: "pending",
+      expires_at: expiresAt,
+      created_at: now.toISOString()
+    };
+
+    invitations.push(invitation);
+    await saveClientInvitations(invitations);
+
+    return res.status(201).json({
+      ok: true,
+      invitation: sanitizeInvitation(invitation),
+      onboarding_link: buildOnboardingLink(req, token)
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: "Impossible de créer l’invitation client."
+    });
+  }
+});
+
+app.get("/api/client-onboarding/invitation", async (req, res) => {
+  try {
+    const token = String(req.query.token || "").trim();
+
+    if (!token) {
+      return res.status(400).json({
+        ok: false,
+        error: "Token manquant."
+      });
+    }
+
+    const { invitation, status } = await resolveInvitationByToken(token);
+    ensureInvitationUsable(status, invitation);
+
+    return res.json({
+      ok: true,
+      invitation: sanitizeInvitation(invitation),
+      current_step: invitation.account_created_at ? 2 : 1
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Impossible de valider l’invitation."
+    });
+  }
+});
+
+app.post("/api/client-onboarding/account", async (req, res) => {
+  try {
+    ensureSupabaseAdminAvailable();
+
+    const token = String(req.body?.token || "").trim();
+    const fullName = String(req.body?.full_name || "").trim();
+    const companyName = String(req.body?.company_name || "").trim();
+    const password = String(req.body?.password || "");
+    const phone = String(req.body?.phone || "").trim();
+    const mainCity = String(req.body?.main_city || "").trim();
+    const emailNotifications = Boolean(req.body?.email_notifications);
+    const marketingCommunications = Boolean(req.body?.marketing_communications);
+
+    if (!token || !fullName || !companyName || !password || !mainCity) {
+      return res.status(400).json({
+        ok: false,
+        error: "Les champs requis du compte client sont incomplets."
+      });
+    }
+
+    const { invitations, invitation, index, status } = await resolveInvitationByToken(token);
+    ensureInvitationUsable(status, invitation);
+
+    if (invitation.account_created_at) {
+      return res.status(409).json({
+        ok: false,
+        error: "Le compte lié à cette invitation a déjà été créé."
+      });
+    }
+
+    const { data, error } = await supabaseServerClient.auth.admin.createUser({
+      email: invitation.email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        client_id: invitation.client_id,
+        full_name: fullName,
+        company_name: companyName,
+        phone,
+        main_city: mainCity
+      },
+      app_metadata: {
+        client_id: invitation.client_id
+      }
+    });
+
+    if (error || !data?.user) {
+      throw createHttpError(400, error?.message || "Impossible de créer le compte client.");
+    }
+
+    const clientsMap = await loadClientsMap();
+    const existingClient = clientsMap[invitation.client_id] || {};
+    const client = normalizeClientRecord(invitation.client_id, {
+      ...existingClient,
+      id: invitation.client_id,
+      nom: companyName,
+      company_name: companyName,
+      contact_name: fullName,
+      email: invitation.email,
+      phone,
+      main_city: mainCity,
+      onboarding_user_id: data.user.id,
+      notification_preferences: {
+        email_notifications: emailNotifications,
+        marketing_communications: marketingCommunications
+      },
+      criteres: existingClient.criteres || {}
+    });
+
+    clientsMap[invitation.client_id] = client;
+    await saveClientsMap(clientsMap);
+
+    invitations[index] = {
+      ...invitation,
+      contact_name: fullName,
+      company_name: companyName,
+      phone,
+      account_created_at: new Date().toISOString(),
+      supabase_user_id: data.user.id
+    };
+    await saveClientInvitations(invitations);
+
+    return res.json({
+      ok: true,
+      invitation: sanitizeInvitation(invitations[index]),
+      client
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Impossible de créer le compte client."
+    });
+  }
+});
+
+app.post("/api/client-onboarding/listing", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+
+    if (!token) {
+      return res.status(400).json({
+        ok: false,
+        error: "Token manquant."
+      });
+    }
+
+    const { invitations, invitation, index, status } = await resolveInvitationByToken(token);
+    ensureInvitationUsable(status, invitation);
+
+    if (!invitation.account_created_at) {
+      return res.status(409).json({
+        ok: false,
+        error: "Le compte client doit être créé avant d’ajouter le premier logement."
+      });
+    }
+
+    const payload = req.body || {};
+    if (
+      !String(payload.adresse || "").trim() ||
+      !String(payload.ville || "").trim() ||
+      !String(payload.type_logement || "").trim() ||
+      !String(payload.chambres || "").trim() ||
+      !String(payload.loyer || "").trim() ||
+      !String(payload.disponibilite || "").trim()
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "Les champs requis du premier logement sont incomplets."
+      });
+    }
+
+    const listings = await loadListingsMap();
+    const ref = nextListingRef(listings);
+
+    listings[ref] = toListingRecord(`L-${ref}`, {
+      ref: `L-${ref}`,
+      adresse: payload.adresse,
+      ville: payload.ville,
+      type_logement: payload.type_logement,
+      chambres: payload.chambres,
+      loyer: payload.loyer,
+      disponibilite: payload.disponibilite,
+      inclusions: payload.inclusions,
+      animaux_acceptes: payload.animaux_acceptes,
+      meuble: payload.meuble,
+      notes: payload.notes,
+      client_id: invitation.client_id,
+      statut: "actif"
+    });
+
+    await saveListingsMap(listings);
+
+    invitations[index] = {
+      ...invitation,
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      first_listing_ref: `L-${ref}`
+    };
+    await saveClientInvitations(invitations);
+
+    const clientsMap = await loadClientsMap();
+    const existingClient = clientsMap[invitation.client_id] || {};
+    const incomeCriteria = buildIncomeCriteriaFromRent(payload.loyer, payload.minimum_income_rule);
+    const talPolicy = String(payload.tal_policy || "").trim().toLowerCase();
+    const occupantValue = String(payload.occupants_limit || "").trim();
+    const normalizedMaxOccupants = occupantValue === "4+" ? 4 : parseNumber(occupantValue);
+    const employmentRequirement = String(payload.employment_requirement || "").trim();
+    clientsMap[invitation.client_id] = normalizeClientRecord(invitation.client_id, {
+      ...existingClient,
+      id: invitation.client_id,
+      nom: existingClient.nom || invitation.company_name,
+      company_name: existingClient.company_name || invitation.company_name,
+      contact_name: existingClient.contact_name || invitation.contact_name,
+      email: existingClient.email || invitation.email,
+      phone: existingClient.phone || invitation.phone,
+      onboarding_user_id: existingClient.onboarding_user_id || invitation.supabase_user_id || null,
+      onboarding_completed_at: invitations[index].completed_at,
+      notification_preferences: existingClient.notification_preferences || {},
+      criteres: {
+        ...(existingClient.criteres || {}),
+        revenu_minimum: incomeCriteria.revenu_minimum,
+        revenu_multiple: incomeCriteria.revenu_multiple,
+        credit_min:
+          payload.credit_requirement === "Bon crédit requis"
+            ? "haut"
+            : payload.credit_requirement === "Acceptable"
+              ? "moyen"
+              : null,
+        accepte_tal: talPolicy !== "refusé",
+        tal_policy: talPolicy || null,
+        max_occupants: normalizedMaxOccupants,
+        emplois_acceptes: buildEmploymentCriteria(employmentRequirement),
+        employment_requirement: employmentRequirement || null
+      }
+    });
+    await saveClientsMap(clientsMap);
+
+    return res.status(201).json({
+      ok: true,
+      listing: listings[ref],
+      invitation: sanitizeInvitation(invitations[index])
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Impossible d’enregistrer le premier logement."
+    });
+  }
+});
+
 app.put("/api/admin/clients/:id", async (req, res) => {
   try {
     const clientsMap = await loadClientsMap();
@@ -1668,7 +2118,8 @@ app.get("*", (req, res, next) => {
     "/index.html": "index.html",
     "/admin.html": "admin.html",
     "/login.html": "login.html",
-    "/client.html": "client.html"
+    "/client.html": "client.html",
+    "/client-onboarding.html": "client-onboarding.html"
   };
 
   const page = staticPages[req.path];

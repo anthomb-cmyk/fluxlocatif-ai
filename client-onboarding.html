@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FluxLocatif Onboarding Client</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: rgba(255, 255, 255, 0.92);
+      --border: #e5e7eb;
+      --text: #1f2350;
+      --muted: #6b7280;
+      --brand-blue: #1e90ff;
+      --brand-indigo: #4f46e5;
+      --brand-purple: #9333ea;
+      --brand-gradient: linear-gradient(135deg, #1e90ff 0%, #4f46e5 48%, #9333ea 100%);
+      --shadow-lg: 0 24px 70px rgba(79, 70, 229, 0.1);
+      --shadow-md: 0 14px 34px rgba(79, 70, 229, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(30, 144, 255, 0.16), transparent 28%),
+        radial-gradient(circle at top right, rgba(147, 51, 234, 0.12), transparent 24%),
+        linear-gradient(180deg, #f7f9ff 0%, #f4f6fb 100%);
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: 28px 20px;
+      display: grid;
+      place-items: center;
+    }
+
+    .shell {
+      width: min(1080px, 100%);
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .hero,
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.7);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-lg);
+      border-radius: 30px;
+    }
+
+    .hero {
+      padding: 28px;
+      color: #fff;
+      background: var(--brand-gradient);
+      position: sticky;
+      top: 20px;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+    }
+
+    .brand {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 26px;
+    }
+
+    .brand-mark {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.18);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 1.6rem;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.16);
+      font-size: .82rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .hero h1,
+    .card h2,
+    .card h3 {
+      margin: 0;
+    }
+
+    .hero p {
+      margin: 0;
+      line-height: 1.6;
+      color: rgba(255,255,255,.88);
+    }
+
+    .hero-list {
+      margin: 22px 0 0;
+      padding-left: 18px;
+      color: rgba(255,255,255,.92);
+      line-height: 1.6;
+    }
+
+    .card {
+      padding: 28px;
+      color: var(--text);
+    }
+
+    .progress {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .progress-step {
+      flex: 1;
+      border-radius: 999px;
+      background: rgba(79,70,229,.10);
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 700;
+      padding: 10px 14px;
+      text-align: center;
+    }
+
+    .progress-step.active {
+      background: rgba(79,70,229,.14);
+      color: var(--brand-indigo);
+    }
+
+    .step-panel {
+      display: none;
+      animation: fadeUp .26s ease;
+    }
+
+    .step-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .muted {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .field,
+    .field-full {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field-full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(79,70,229,.14);
+      border-radius: 16px;
+      padding: 13px 14px;
+      font: inherit;
+      color: var(--text);
+      background: rgba(255,255,255,.96);
+      outline: none;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(79,70,229,.4);
+      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .checkbox-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: #fbfcff;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .checkbox-card input {
+      width: 18px;
+      height: 18px;
+      margin-top: 3px;
+    }
+
+    .checkbox-card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .pill-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .choice-pill {
+      border: 1px solid rgba(79,70,229,.14);
+      border-radius: 16px;
+      padding: 12px 14px;
+      text-align: center;
+      font-weight: 800;
+      color: var(--text);
+      background: rgba(255,255,255,.96);
+      cursor: pointer;
+      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .choice-pill:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .choice-pill.active {
+      border-color: rgba(79,70,229,.45);
+      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
+      background: rgba(79,70,229,.06);
+      color: var(--brand-indigo);
+    }
+
+    .stacked-options {
+      display: grid;
+      gap: 10px;
+    }
+
+    .option-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: #fbfcff;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .option-card input {
+      width: 18px;
+      height: 18px;
+      margin-top: 3px;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-weight: 700;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .status.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .primary-btn {
+      background: var(--brand-gradient);
+      color: #fff;
+      box-shadow: var(--shadow-md);
+    }
+
+    .secondary-btn {
+      background: rgba(79,70,229,.08);
+      color: var(--brand-indigo);
+    }
+
+    .success-state,
+    .invalid-state {
+      display: none;
+      text-align: center;
+      padding: 36px 10px 10px;
+    }
+
+    .success-state.show,
+    .invalid-state.show {
+      display: block;
+    }
+
+    .state-mark {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 18px;
+      border-radius: 24px;
+      display: grid;
+      place-items: center;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #fff;
+      background: var(--brand-gradient);
+    }
+
+    @media (max-width: 920px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        position: static;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .pill-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="shell">
+      <aside class="hero">
+        <div class="brand">
+          <div class="brand-mark">F</div>
+          <div>
+            <h1>FluxLocatif</h1>
+            <p>Activation client</p>
+          </div>
+        </div>
+
+        <span class="eyebrow">Onboarding sécurisé</span>
+        <h2 style="margin:0 0 12px;">Configurez votre espace en quelques minutes</h2>
+        <p>Votre invitation vous permet d’activer votre accès, de définir vos préférences de contact et d’enregistrer votre premier logement dans une expérience guidée.</p>
+
+        <ul class="hero-list">
+          <li>Lien unique valable 7 jours</li>
+          <li>Création de compte et premier logement en 2 étapes</li>
+          <li>Accès direct à votre portail client une fois terminé</li>
+        </ul>
+      </aside>
+
+      <main class="card">
+        <div id="onboardingContent">
+          <div class="progress">
+            <div id="progressStep1" class="progress-step active">Étape 1 de 2 · Compte client</div>
+            <div id="progressStep2" class="progress-step">Étape 2 de 2 · Premier logement</div>
+          </div>
+
+          <section id="step1Panel" class="step-panel active">
+            <span class="eyebrow" style="background:rgba(30,144,255,.08);color:#1e90ff;">Étape 1</span>
+            <h2>Créez votre compte client</h2>
+            <p class="muted">Nous allons d’abord activer votre accès FluxLocatif avec vos informations principales.</p>
+
+            <form id="accountForm">
+              <div class="form-grid">
+                <div class="field">
+                  <label for="fullName">Nom complet</label>
+                  <input id="fullName" type="text" required />
+                </div>
+
+                <div class="field">
+                  <label for="companyName">Nom du client / entreprise</label>
+                  <input id="companyName" type="text" required />
+                </div>
+
+                <div class="field">
+                  <label for="accountEmail">Courriel</label>
+                  <input id="accountEmail" type="email" readonly required />
+                </div>
+
+                <div class="field">
+                  <label for="accountPhone">Téléphone</label>
+                  <input id="accountPhone" type="text" />
+                </div>
+
+                <div class="field">
+                  <label for="accountPassword">Mot de passe</label>
+                  <input id="accountPassword" type="password" required />
+                </div>
+
+                <div class="field">
+                  <label for="accountPasswordConfirm">Confirmer le mot de passe</label>
+                  <input id="accountPasswordConfirm" type="password" required />
+                </div>
+
+                <div class="field-full">
+                  <label for="mainCity">Ville principale / marché</label>
+                  <input id="mainCity" type="text" list="mainCityList" required />
+                  <datalist id="mainCityList"></datalist>
+                </div>
+
+                <div class="field-full checkbox-card">
+                  <input id="emailNotifications" type="checkbox" />
+                  <div>
+                    <strong>Recevoir les notifications par courriel</strong>
+                    <div class="muted">Ces courriels serviront uniquement à vous informer sur votre compte, vos candidats, vos logements et les actions importantes liées à votre utilisation de FluxLocatif.</div>
+                  </div>
+                </div>
+
+                <div class="field-full checkbox-card">
+                  <input id="marketingCommunications" type="checkbox" />
+                  <div>
+                    <strong>Recevoir les communications de FluxLocatif</strong>
+                    <div class="muted">J’accepte de recevoir occasionnellement des nouvelles, conseils et offres liées à la location et à l’optimisation de mes logements. Je pourrai me désabonner en tout temps.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="accountStatus" class="status"></div>
+
+              <div class="actions">
+                <div class="muted">Votre lien reste valide pendant 7 jours.</div>
+                <button id="submitAccountBtn" type="submit" class="primary-btn">Continuer</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="step2Panel" class="step-panel">
+            <span class="eyebrow" style="background:rgba(30,144,255,.08);color:#1e90ff;">Étape 2</span>
+            <h2>Ajoutez votre premier logement</h2>
+            <p class="muted">Ce premier logement permettra d’activer immédiatement votre espace client et de commencer la réception de candidats.</p>
+
+            <form id="listingForm">
+              <div class="form-grid">
+                <div class="field-full">
+                  <label for="listingAddress">Adresse</label>
+                  <input id="listingAddress" type="text" required />
+                </div>
+
+                <div class="field-full">
+                  <label>Type de logement</label>
+                  <input id="listingType" type="hidden" required />
+                  <div class="pill-grid" id="propertyTypeButtons">
+                    <button type="button" class="choice-pill" data-value="Studio">Studio</button>
+                    <button type="button" class="choice-pill" data-value="3 1/2">3½</button>
+                    <button type="button" class="choice-pill" data-value="4 1/2">4½</button>
+                    <button type="button" class="choice-pill" data-value="5 1/2">5½</button>
+                    <button type="button" class="choice-pill" data-value="Condo">Condo</button>
+                    <button type="button" class="choice-pill" data-value="Maison">Maison</button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="listingCity">Ville</label>
+                  <select id="listingCity" required>
+                    <option value="">Sélectionner</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="listingBedrooms">Configuration</label>
+                  <input id="listingBedrooms" type="text" placeholder="Ex. 4½, condo 2 chambres" required />
+                </div>
+
+                <div class="field">
+                  <label for="listingRent">Loyer</label>
+                  <input id="listingRent" type="number" min="0" list="listingRentSuggestions" required />
+                  <datalist id="listingRentSuggestions">
+                    <option value="1200"></option>
+                    <option value="1400"></option>
+                    <option value="1600"></option>
+                    <option value="1800"></option>
+                    <option value="2200"></option>
+                  </datalist>
+                </div>
+
+                <div class="field">
+                  <label for="listingAvailability">Disponibilité</label>
+                  <select id="listingAvailability" required>
+                    <option value="">Sélectionner</option>
+                    <option value="Maintenant">Now</option>
+                    <option value="30 jours">30 days</option>
+                    <option value="60 jours">60 days</option>
+                    <option value="custom">Custom date</option>
+                  </select>
+                </div>
+
+                <div class="field" id="listingAvailabilityCustomWrap" style="display:none;">
+                  <label for="listingAvailabilityCustom">Date personnalisée</label>
+                  <input id="listingAvailabilityCustom" type="date" />
+                </div>
+
+                <div class="field-full">
+                  <label>Inclusions</label>
+                  <div class="stacked-options">
+                    <label class="option-card">
+                      <input id="inclusionHeat" type="checkbox" />
+                      <div><strong>Chauffé</strong><div class="muted">Le chauffage est inclus.</div></div>
+                    </label>
+                    <label class="option-card">
+                      <input id="inclusionElectricity" type="checkbox" />
+                      <div><strong>Électricité incluse</strong><div class="muted">L’électricité est incluse au loyer.</div></div>
+                    </label>
+                    <label class="option-card">
+                      <input id="inclusionWater" type="checkbox" />
+                      <div><strong>Eau incluse</strong><div class="muted">L’eau est incluse.</div></div>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Animaux</label>
+                  <div class="stacked-options">
+                    <label class="option-card"><input type="radio" name="listingPets" value="oui" required /><div><strong>Acceptés</strong></div></label>
+                    <label class="option-card"><input type="radio" name="listingPets" value="non" /><div><strong>Refusés</strong></div></label>
+                    <label class="option-card"><input type="radio" name="listingPets" value="à discuter" /><div><strong>À discuter</strong></div></label>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Meublé</label>
+                  <div class="stacked-options">
+                    <label class="option-card"><input type="radio" name="listingFurnished" value="oui" required /><div><strong>Oui</strong></div></label>
+                    <label class="option-card"><input type="radio" name="listingFurnished" value="non" /><div><strong>Non</strong></div></label>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="listingParking">Stationnement</label>
+                  <select id="listingParking" required>
+                    <option value="">Sélectionner</option>
+                    <option value="Inclus">Inclus</option>
+                    <option value="Disponible ($)">Disponible ($)</option>
+                    <option value="Aucun">Aucun</option>
+                  </select>
+                </div>
+
+                <div class="field-full">
+                  <h3 style="margin-top:8px;">Critères locataires</h3>
+                  <p class="muted" style="margin:6px 0 0;">Ces critères structurés seront utilisés pour vos prochains matches candidats.</p>
+                </div>
+
+                <div class="field">
+                  <label for="criteriaIncomeRule">Revenu minimum</label>
+                  <select id="criteriaIncomeRule" required>
+                    <option value="">Sélectionner</option>
+                    <option value="2x">2x rent</option>
+                    <option value="2.5x">2.5x rent</option>
+                    <option value="3x">3x rent</option>
+                    <option value="flexible">Flexible</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="criteriaCreditRequirement">Crédit</label>
+                  <select id="criteriaCreditRequirement" required>
+                    <option value="">Sélectionner</option>
+                    <option value="Bon crédit requis">Bon crédit requis</option>
+                    <option value="Acceptable">Acceptable</option>
+                    <option value="Flexible">Flexible</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="criteriaTalPolicy">TAL</label>
+                  <select id="criteriaTalPolicy" required>
+                    <option value="">Sélectionner</option>
+                    <option value="Refusé">Refusé</option>
+                    <option value="Accepté cas par cas">Accepté cas par cas</option>
+                    <option value="Accepté">Accepté</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="criteriaOccupantsLimit">Occupants</label>
+                  <select id="criteriaOccupantsLimit" required>
+                    <option value="">Sélectionner</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4+">4+</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="criteriaEmploymentRequirement">Emploi</label>
+                  <select id="criteriaEmploymentRequirement" required>
+                    <option value="">Sélectionner</option>
+                    <option value="Temps plein requis">Temps plein requis</option>
+                    <option value="Stable requis">Stable requis</option>
+                    <option value="Flexible">Flexible</option>
+                  </select>
+                </div>
+
+                <div class="field-full">
+                  <label for="listingNotes">Notes</label>
+                  <textarea id="listingNotes"></textarea>
+                </div>
+              </div>
+
+              <div id="listingStatus" class="status"></div>
+
+              <div class="actions">
+                <button id="backToStep1Btn" type="button" class="secondary-btn">Retour</button>
+                <button id="submitListingBtn" type="submit" class="primary-btn">Enregistrer mon logement</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <section id="successState" class="success-state">
+          <div class="state-mark">F</div>
+          <h2>Félicitations, votre compte est activé.</h2>
+          <p class="muted">Votre premier logement a bien été enregistré.</p>
+          <button id="goToClientPortalBtn" type="button" class="primary-btn">Accéder à mon portail client</button>
+        </section>
+
+        <section id="invalidState" class="invalid-state">
+          <div class="state-mark" style="background:#fee2e2;color:#991b1b;">!</div>
+          <h2>Lien invalide ou expiré</h2>
+          <p id="invalidStateMessage" class="muted">Cette invitation n’est plus disponible.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="client-onboarding.js?v=1"></script>
+</body>
+</html>

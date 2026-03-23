@@ -44,6 +44,7 @@ const editingClientIdInput = document.getElementById("editingClientId");
 const editingClientBadge = document.getElementById("editingClientBadge");
 const cancelClientEditBtn = document.getElementById("cancelClientEditBtn");
 const submitClientBtn = document.getElementById("submitClientBtn");
+const openInviteClientBtn = document.getElementById("openInviteClientBtn");
 
 const candidateStatusFilter = document.getElementById("candidateStatusFilter");
 const candidateSearch = document.getElementById("candidateSearch");
@@ -330,6 +331,95 @@ function resetClientForm() {
   editingClientBadge.textContent = "";
   clientFormStatus.textContent = "";
   clientFormStatus.style.color = "";
+}
+
+function openInviteClientModal() {
+  const existingModal = document.getElementById("inviteClientModal");
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const modal = document.createElement("div");
+  modal.id = "inviteClientModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  modal.innerHTML = `
+    <div style="width:min(640px,100%);max-height:85vh;overflow:auto;background:#fff;border-radius:24px;padding:24px;box-shadow:0 24px 60px rgba(15,23,42,.22);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
+        <div>
+          <div style="font-size:.85rem;font-weight:800;color:#1e90ff;text-transform:uppercase;letter-spacing:.05em;">Invitation client</div>
+          <h3 style="margin:6px 0 0;color:#191d45;">Créer un lien d’onboarding</h3>
+        </div>
+        <button type="button" id="closeInviteClientModal" class="secondary-btn">Fermer</button>
+      </div>
+
+      <form id="inviteClientForm" class="admin-form">
+        <div class="form-grid">
+          <input id="inviteContactName" type="text" placeholder="Nom du contact" required />
+          <input id="inviteCompanyName" type="text" placeholder="Nom du client / entreprise" required />
+          <input id="inviteEmail" type="email" placeholder="Courriel" required />
+          <input id="invitePhone" type="text" placeholder="Téléphone (optionnel)" />
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="submitInviteClientBtn" class="primary-btn">Générer le lien</button>
+        </div>
+      </form>
+
+      <div id="inviteClientStatus" style="margin-top:14px;font-weight:700;"></div>
+      <div id="inviteClientLinkWrap" style="display:none;margin-top:14px;">
+        <div style="font-size:.9rem;color:#6b7280;margin-bottom:8px;">Lien unique valable 7 jours</div>
+        <input id="inviteClientLink" type="text" readonly style="width:100%;border:1px solid rgba(79,70,229,.14);border-radius:14px;padding:12px 14px;font:inherit;" />
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+  document.getElementById("closeInviteClientModal")?.addEventListener("click", closeModal);
+
+  document.getElementById("inviteClientForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const submitBtn = document.getElementById("submitInviteClientBtn");
+    const statusEl = document.getElementById("inviteClientStatus");
+    const linkWrap = document.getElementById("inviteClientLinkWrap");
+    const linkInput = document.getElementById("inviteClientLink");
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Création...";
+    statusEl.textContent = "";
+    linkWrap.style.display = "none";
+
+    try {
+      const result = await fetchJSON("/api/admin/client-invitations", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_name: document.getElementById("inviteContactName").value.trim(),
+          company_name: document.getElementById("inviteCompanyName").value.trim(),
+          email: document.getElementById("inviteEmail").value.trim(),
+          phone: document.getElementById("invitePhone").value.trim()
+        })
+      });
+
+      statusEl.textContent = "Invitation créée avec succès.";
+      statusEl.style.color = "#166534";
+      linkInput.value = result.onboarding_link || "";
+      linkWrap.style.display = "block";
+      linkInput.select();
+    } catch (error) {
+      statusEl.textContent = error.message || "Impossible de créer l’invitation.";
+      statusEl.style.color = "#991b1b";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Générer le lien";
+    }
+  });
 }
 
 function fillClientForm(client) {
@@ -1069,6 +1159,10 @@ if (clearCandidateFiltersBtn) {
     candidateSearch.value = "";
     applyCandidateFilters();
   });
+}
+
+if (openInviteClientBtn) {
+  openInviteClientBtn.addEventListener("click", openInviteClientModal);
 }
 
 supabaseClient.auth.onAuthStateChange((event) => {
