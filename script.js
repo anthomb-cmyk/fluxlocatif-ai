@@ -29,15 +29,17 @@ const chatState = {
   currentSession: null,
   workspaceMessages: [],
   workspaceTasks: [],
-  notifications: []
+  notifications: [],
+  highlightedWorkspaceTaskId: ""
 };
 
 const dashboardWorkspaceTab = document.getElementById("dashboardWorkspaceTab");
 const messagesWorkspaceTab = document.getElementById("messagesWorkspaceTab");
 const listingsWorkspaceTab = document.getElementById("listingsWorkspaceTab");
+const prequalificationWorkspaceTab = document.getElementById("prequalificationWorkspaceTab");
 const workspaceMessagesBadge = document.getElementById("workspaceMessagesBadge");
 const workspaceListingsBadge = document.getElementById("workspaceListingsBadge");
-const employeeNotificationsList = document.getElementById("employeeNotificationsList");
+const employeeNotificationBanner = document.getElementById("employeeNotificationBanner");
 const employeeConversationList = document.getElementById("employeeConversationList");
 const employeeConversationTitle = document.getElementById("employeeConversationTitle");
 const employeeConversationMeta = document.getElementById("employeeConversationMeta");
@@ -47,7 +49,6 @@ const employeeMessageInput = document.getElementById("employeeMessageInput");
 const employeeListingTasks = document.getElementById("employeeListingTasks");
 
 const sampleRefs = document.getElementById("sampleRefs");
-const listingPreview = document.getElementById("listingPreview");
 const chatMessages = document.getElementById("chatMessages");
 const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
@@ -241,8 +242,6 @@ function initSampleRefs() {
         listingSelect.value = normalizeRefKey(refKey);
       }
 
-      updateListingPreview(refKey);
-
       if (chatInput) {
         chatInput.focus();
       }
@@ -399,69 +398,6 @@ function switchMode(mode) {
   renderMessages();
 }
 
-function updateListingPreview(ref) {
-  if (!listingPreview) return;
-
-  const normalizedRef = normalizeRefKey(ref);
-  const listing = chatState.listings[normalizedRef];
-
-  if (!listing) {
-    listingPreview.textContent = "Numéro de référence introuvable.";
-    listingPreview.classList.remove("muted");
-    return;
-  }
-
-  const adresse = listing.adresse ?? "Non précisée";
-  const ville = listing.ville ?? "Non précisée";
-  const typeLogement = listing.type_logement ?? "Non précisé";
-  const chambres = listing.chambres ?? "Non précisé";
-  const superficie = listing.superficie ?? "Non précisée";
-  const loyer = listing.loyer ?? "Non précisé";
-  const disponibilite = listing.disponibilite ?? "Non précisée";
-  const statut = listing.statut ?? "Non précisé";
-  const notes = listing.notes ?? "Aucune note";
-  const electricite = listing.electricite ?? "Non précisée";
-  const laveuseSecheuse = listing.laveuse_secheuse ?? "Non précisée";
-  const electrosInclus = listing.electros_inclus ?? "Non précisé";
-  const balcon = listing.balcon ?? "Non précisé";
-  const wifi = listing.wifi ?? "Non précisé";
-  const accesTerrain = listing.acces_au_terrain ?? "Non précisé";
-  const stationnementsGratuits = listing.nombre_stationnements_gratuits ?? "0";
-  const stationnementsPayants = listing.nombre_stationnements_payants ?? "0";
-  const prixStationnementPayant =
-    listing.prix_stationnement_payant === null || listing.prix_stationnement_payant === undefined || listing.prix_stationnement_payant === ""
-      ? "Non précisé"
-      : `${listing.prix_stationnement_payant} $`;
-  const nombreLogementsBatiment = listing.nombre_logements_batisse ?? "Non précisé";
-  const rangement = listing.rangement ?? "Non précisé";
-
-  listingPreview.innerHTML = `
-    <strong>${formatDisplayRef(normalizedRef)}</strong><br>
-    ${adresse}<br>
-    ${ville}<br><br>
-    Type : ${typeLogement}<br>
-    Chambres : ${chambres}<br>
-    Superficie : ${superficie}<br>
-    Loyer : ${loyer}${loyer === "Non précisé" ? "" : " $"}<br>
-    Disponibilité : ${disponibilite}<br>
-    Statut : ${statut}<br>
-    Électricité : ${electricite}<br>
-    Laveuse / sécheuse : ${laveuseSecheuse}<br>
-    Électros inclus : ${electrosInclus}<br>
-    Balcon : ${balcon}<br>
-    Wifi : ${wifi}<br>
-    Accès au terrain : ${accesTerrain}<br>
-    Stationnements gratuits : ${stationnementsGratuits}<br>
-    Stationnements payants : ${stationnementsPayants}<br>
-    Prix stationnement payant : ${prixStationnementPayant}<br>
-    Logements dans la bâtisse : ${nombreLogementsBatiment}<br>
-    Rangement : ${rangement}<br>
-    Notes : ${notes}
-  `;
-
-  listingPreview.classList.remove("muted");
-}
-
 function prevalidateListing() {
   const ref = listingSelect ? normalizeRefKey(listingSelect.value) : "";
 
@@ -539,6 +475,8 @@ function switchWorkspaceTab(tabName) {
   messagesWorkspaceTab?.classList.toggle("active", tabName === "messages");
   listingsWorkspaceTab?.classList.toggle("hidden", tabName !== "listings");
   listingsWorkspaceTab?.classList.toggle("active", tabName === "listings");
+  prequalificationWorkspaceTab?.classList.toggle("hidden", tabName !== "prequalification");
+  prequalificationWorkspaceTab?.classList.toggle("active", tabName === "prequalification");
 
   document.querySelectorAll(".workspace-nav-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.workspaceTab === tabName);
@@ -546,26 +484,54 @@ function switchWorkspaceTab(tabName) {
 }
 
 function renderNotifications() {
-  if (!employeeNotificationsList) return;
+  if (!employeeNotificationBanner) return;
 
-  if (!chatState.notifications.length) {
-    employeeNotificationsList.innerHTML = `<div class="workspace-list-empty">Aucune notification récente.</div>`;
+  const unreadNotifications = chatState.notifications.filter((notification) => notification.read !== true);
+
+  if (!unreadNotifications.length) {
+    employeeNotificationBanner.innerHTML = "";
+    employeeNotificationBanner.classList.add("hidden");
     return;
   }
 
-  employeeNotificationsList.innerHTML = chatState.notifications.map((notification) => `
-    <div class="workspace-notification-card">
-      <div style="font-weight:800;">${notification.type === "message" ? "Nouveau message" : "Nouveau mandat"}</div>
-      <div class="workspace-task-meta">${formatDate(notification.created_at)}</div>
-    </div>
+  employeeNotificationBanner.classList.remove("hidden");
+  employeeNotificationBanner.innerHTML = unreadNotifications.map((notification) => `
+    <button type="button" class="workspace-alert-banner" data-id="${notification.id}" data-type="${notification.type}" data-reference="${notification.reference_id || ""}">
+      <div>
+        <div class="workspace-alert-title">${notification.type === "message" ? "Nouveau message de l’administration" : "Nouveau listing assigné"}</div>
+        <div class="workspace-alert-meta">${formatDate(notification.created_at)}</div>
+      </div>
+      <span class="workspace-alert-action">Ouvrir</span>
+    </button>
   `).join("");
+
+  document.querySelectorAll(".workspace-alert-banner").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const notificationId = button.dataset.id || "";
+      const notificationType = button.dataset.type || "";
+
+      if (notificationType === "message") {
+        switchWorkspaceTab("messages");
+        await loadEmployeeConversation();
+        return;
+      }
+
+      if (notificationType === "listing") {
+        chatState.highlightedWorkspaceTaskId = button.dataset.reference || "";
+        switchWorkspaceTab("listings");
+        await loadEmployeeListingTasks();
+        await markEmployeeNotificationRead(notificationId);
+        await loadEmployeeNotifications();
+      }
+    });
+  });
 }
 
 function renderEmployeeConversationList() {
   if (!employeeConversationList) return;
 
-  const unreadCount = chatState.workspaceMessages.filter(
-    (message) => String(message.to_user_id) === String(chatState.currentUser?.id) && message.read !== true
+  const unreadCount = chatState.notifications.filter(
+    (notification) => notification.type === "message" && notification.read !== true
   ).length;
 
   if (workspaceMessagesBadge) {
@@ -613,6 +579,22 @@ function renderEmployeeMessageThread() {
   employeeMessageThread.scrollTop = employeeMessageThread.scrollHeight;
 }
 
+async function markEmployeeNotificationRead(notificationId) {
+  if (!notificationId) return;
+
+  await fetchEmployeeJSON(`/api/employee/workspace/notifications/${encodeURIComponent(notificationId)}/read`, {
+    method: "POST"
+  });
+}
+
+async function loadEmployeeConversation() {
+  const conversationData = await fetchEmployeeJSON("/api/employee/workspace/conversation");
+  chatState.workspaceMessages = conversationData.messages || [];
+  renderEmployeeConversationList();
+  renderEmployeeMessageThread();
+  await loadEmployeeNotifications();
+}
+
 function renderEmployeeListingTasks() {
   if (!employeeListingTasks) return;
 
@@ -628,7 +610,7 @@ function renderEmployeeListingTasks() {
   }
 
   employeeListingTasks.innerHTML = chatState.workspaceTasks.map((task) => `
-    <div class="workspace-task-card">
+    <div class="workspace-task-card ${chatState.highlightedWorkspaceTaskId === task.id ? "highlighted" : ""}" data-task-id="${task.id}">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
         <div>
           <div style="font-weight:800;">${task.title || "Mandat"}</div>
@@ -665,31 +647,40 @@ function renderEmployeeListingTasks() {
   });
 
   document.querySelectorAll(".ask-task-question-btn").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       switchWorkspaceTab("messages");
+      await loadEmployeeConversation();
       if (employeeMessageInput) {
         employeeMessageInput.value = `Question sur le mandat: ${decodeURIComponent(button.dataset.title || "Mandat")} — `;
         employeeMessageInput.focus();
       }
     });
   });
+
+  if (chatState.highlightedWorkspaceTaskId) {
+    const highlightedTask = employeeListingTasks.querySelector(`[data-task-id="${chatState.highlightedWorkspaceTaskId}"]`);
+    highlightedTask?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+async function loadEmployeeListingTasks() {
+  const tasksData = await fetchEmployeeJSON("/api/employee/workspace/listing-tasks");
+  chatState.workspaceTasks = tasksData.tasks || [];
+  renderEmployeeListingTasks();
+}
+
+async function loadEmployeeNotifications() {
+  const notificationsData = await fetchEmployeeJSON("/api/employee/workspace/notifications");
+  chatState.notifications = notificationsData.notifications || [];
+  renderNotifications();
 }
 
 async function loadEmployeeWorkspace() {
-  const [conversationData, tasksData, notificationsData] = await Promise.all([
-    fetchEmployeeJSON("/api/employee/workspace/conversation"),
-    fetchEmployeeJSON("/api/employee/workspace/listing-tasks"),
-    fetchEmployeeJSON("/api/employee/workspace/notifications")
+  await Promise.all([
+    loadEmployeeNotifications(),
+    loadEmployeeListingTasks()
   ]);
-
-  chatState.workspaceMessages = conversationData.messages || [];
-  chatState.workspaceTasks = tasksData.tasks || [];
-  chatState.notifications = notificationsData.notifications || [];
-
-  renderNotifications();
   renderEmployeeConversationList();
-  renderEmployeeMessageThread();
-  renderEmployeeListingTasks();
 }
 
 async function sendEmployeeWorkspaceMessage(event) {
@@ -955,15 +946,6 @@ async function handleCandidateSubmit(event) {
   }
 }
 
-if (listingSelect) {
-  listingSelect.addEventListener("change", () => {
-    const selectedRef = normalizeRefKey(listingSelect.value);
-    if (selectedRef) {
-      updateListingPreview(selectedRef);
-    }
-  });
-}
-
 if (chatForm) {
   chatForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -992,7 +974,6 @@ if (chatForm) {
       }
 
       selectedRef = validation.ref;
-      updateListingPreview(selectedRef);
     }
 
     const userText =
@@ -1013,8 +994,6 @@ if (chatForm) {
         const resultRef = normalizeRefKey(result.reference || selectedRef);
 
         if (resultRef && chatState.listings[resultRef]) {
-          updateListingPreview(resultRef);
-
           if (listingSelect) {
             listingSelect.value = resultRef;
           }
@@ -1111,8 +1090,18 @@ if (preferredLocationInput) {
 }
 
 document.querySelectorAll(".workspace-nav-btn").forEach((button) => {
-  button.addEventListener("click", () => {
-    switchWorkspaceTab(button.dataset.workspaceTab || "dashboard");
+  button.addEventListener("click", async () => {
+    const targetTab = button.dataset.workspaceTab || "dashboard";
+    switchWorkspaceTab(targetTab);
+
+    if (targetTab === "messages") {
+      await loadEmployeeConversation();
+      return;
+    }
+
+    if (targetTab === "listings") {
+      await loadEmployeeListingTasks();
+    }
   });
 });
 

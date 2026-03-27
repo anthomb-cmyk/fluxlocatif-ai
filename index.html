@@ -9,36 +9,39 @@
 <body>
   <div class="page-bg"></div>
 
-  <div class="app-shell">
-    <aside class="sidebar glass-card">
-      <div class="brand-block">
-        <div class="brand-mark">F</div>
-        <div>
-          <h1>FluxLocatif</h1>
-          <p>Assistant interne pour l’équipe locative</p>
+  <div class="app-shell workspace-shell">
+    <main class="main-panel workspace-main">
+      <header class="workspace-topbar glass-card">
+        <div class="brand-block">
+          <div class="brand-mark">F</div>
+          <div>
+            <h1>FluxLocatif</h1>
+            <p>Assistant interne pour l’équipe locative</p>
+          </div>
         </div>
-      </div>
 
-      <div class="workspace-nav">
-        <button type="button" class="workspace-nav-btn active" data-workspace-tab="dashboard">Dashboard</button>
-        <button type="button" class="workspace-nav-btn" data-workspace-tab="messages">
-          Messages
-          <span id="workspaceMessagesBadge" class="workspace-nav-badge hidden">0</span>
-        </button>
-        <button type="button" class="workspace-nav-btn" data-workspace-tab="listings">
-          Listings
-          <span id="workspaceListingsBadge" class="workspace-nav-badge hidden">0</span>
-        </button>
-      </div>
-    </aside>
+        <div class="workspace-nav workspace-nav-inline">
+          <button type="button" class="workspace-nav-btn active" data-workspace-tab="dashboard">Dashboard</button>
+          <button type="button" class="workspace-nav-btn" data-workspace-tab="messages">
+            Messages
+            <span id="workspaceMessagesBadge" class="workspace-nav-badge hidden">0</span>
+          </button>
+          <button type="button" class="workspace-nav-btn" data-workspace-tab="listings">
+            Listings
+            <span id="workspaceListingsBadge" class="workspace-nav-badge hidden">0</span>
+          </button>
+          <button type="button" class="workspace-nav-btn" data-workspace-tab="prequalification">Préqualification</button>
+        </div>
+      </header>
 
-    <main class="main-panel">
+      <div id="employeeNotificationBanner" class="workspace-alert-stack"></div>
+
       <section id="dashboardWorkspaceTab" class="workspace-page active">
         <header class="topbar glass-card">
           <div>
             <span class="eyebrow">Espace de travail</span>
             <h2>Assistant locatif interne</h2>
-            <p>Assistant d’immeubles et traducteur dans un seul tableau de bord, avec vos notifications récentes juste en dessous.</p>
+            <p>Assistant d’immeubles et traducteur regroupés au centre de votre espace opérationnel.</p>
           </div>
 
           <div class="mode-switch" role="tablist" aria-label="Changement de mode">
@@ -95,96 +98,11 @@
           </form>
         </section>
 
-        <section class="dashboard-grid">
+        <section class="dashboard-grid dashboard-grid-single">
           <div class="panel compact">
             <span class="eyebrow">Références</span>
             <h2>Références d’exemple</h2>
             <div class="sample-list" id="sampleRefs"></div>
-          </div>
-
-          <div class="panel compact preview-panel">
-            <span class="eyebrow">Lecture seule</span>
-            <h2>Aperçu de l’immeuble</h2>
-            <div id="listingPreview" class="listing-preview muted">
-              Sélectionnez un appartement pour afficher ses informations.
-            </div>
-          </div>
-        </section>
-
-        <section class="dashboard-grid">
-          <div class="panel compact">
-            <span class="eyebrow">Notifications</span>
-            <h2>Récentes</h2>
-            <div id="employeeNotificationsList" class="workspace-list-empty">Aucune notification.</div>
-          </div>
-
-          <div class="panel compact">
-            <span class="eyebrow">Préqualification</span>
-            <h2>Nouveau locataire potentiel</h2>
-
-            <form id="candidateForm" class="candidate-form">
-              <input id="aptRef" type="text" placeholder="Appartement visé (ex: 1001)" required />
-              <input id="preferredLocationInput" type="text" list="preferredLocationList" placeholder="Ville ou secteur recherché" required />
-              <datalist id="preferredLocationList"></datalist>
-              <div id="preferredLocationHint" class="candidate-helper">Sélectionnez la ville ou le secteur recherché dans la liste.</div>
-              <input id="preferredLocationLabel" type="hidden" />
-              <input id="preferredLocationZone" type="hidden" />
-              <input id="preferredLocationLat" type="hidden" />
-              <input id="preferredLocationLng" type="hidden" />
-
-              <select id="locationFlexible" required>
-                <option value="">Secteurs voisins acceptés ?</option>
-                <option value="non">Non, ville précise seulement</option>
-                <option value="oui">Oui, des secteurs voisins peuvent convenir</option>
-              </select>
-
-              <input id="name" type="text" placeholder="Nom complet" />
-              <input id="phone" type="text" placeholder="Téléphone" />
-              <input id="email" type="email" placeholder="Email" />
-
-              <input id="job" type="text" placeholder="Emploi" />
-              <input id="employer" type="text" placeholder="Employeur" />
-              <input id="employmentLength" type="text" placeholder="Travaille là depuis combien de temps" />
-
-              <select id="employmentStatus">
-                <option value="">Statut emploi</option>
-                <option value="temps plein">Temps plein</option>
-                <option value="temps partiel">Temps partiel</option>
-                <option value="autonome">Autonome</option>
-                <option value="étudiant">Étudiant</option>
-                <option value="sans emploi">Sans emploi</option>
-                <option value="retraité">Retraité</option>
-              </select>
-
-              <input id="income" type="number" placeholder="Revenu mensuel" />
-
-              <select id="credit">
-                <option value="">Crédit</option>
-                <option value="basse">Basse</option>
-                <option value="moyenne">Moyenne</option>
-                <option value="haute">Haute</option>
-              </select>
-
-              <select id="tal">
-                <option value="">Dossier au TAL</option>
-                <option value="oui">Oui</option>
-                <option value="non">Non</option>
-              </select>
-
-              <input id="occupants" type="number" placeholder="Nombre de personnes dans l'appartement" />
-
-              <select id="pets">
-                <option value="">Animaux</option>
-                <option value="oui">Oui</option>
-                <option value="non">Non</option>
-              </select>
-
-              <textarea id="notes" placeholder="Notes employé"></textarea>
-
-              <div id="candidateStatus" class="candidate-status"></div>
-
-              <button type="submit" class="primary-btn candidate-submit-btn">Envoyer la fiche</button>
-            </form>
           </div>
         </section>
       </section>
@@ -224,10 +142,84 @@
         </div>
         <div id="employeeListingTasks" class="workspace-task-list"></div>
       </section>
+
+      <section id="prequalificationWorkspaceTab" class="workspace-page hidden">
+        <div class="workspace-section-head">
+          <span class="eyebrow">Préqualification</span>
+          <h3>Workflow employé</h3>
+          <p>Complétez la fiche de préqualification et transmettez-la à l’administration pour traitement.</p>
+        </div>
+
+        <div class="panel compact">
+          <form id="candidateForm" class="candidate-form">
+            <input id="aptRef" type="text" placeholder="Appartement visé (ex: 1001)" required />
+            <input id="preferredLocationInput" type="text" list="preferredLocationList" placeholder="Ville ou secteur recherché" required />
+            <datalist id="preferredLocationList"></datalist>
+            <div id="preferredLocationHint" class="candidate-helper">Sélectionnez la ville ou le secteur recherché dans la liste.</div>
+            <input id="preferredLocationLabel" type="hidden" />
+            <input id="preferredLocationZone" type="hidden" />
+            <input id="preferredLocationLat" type="hidden" />
+            <input id="preferredLocationLng" type="hidden" />
+
+            <select id="locationFlexible" required>
+              <option value="">Secteurs voisins acceptés ?</option>
+              <option value="non">Non, ville précise seulement</option>
+              <option value="oui">Oui, des secteurs voisins peuvent convenir</option>
+            </select>
+
+            <input id="name" type="text" placeholder="Nom complet" />
+            <input id="phone" type="text" placeholder="Téléphone" />
+            <input id="email" type="email" placeholder="Email" />
+
+            <input id="job" type="text" placeholder="Emploi" />
+            <input id="employer" type="text" placeholder="Employeur" />
+            <input id="employmentLength" type="text" placeholder="Travaille là depuis combien de temps" />
+
+            <select id="employmentStatus">
+              <option value="">Statut emploi</option>
+              <option value="temps plein">Temps plein</option>
+              <option value="temps partiel">Temps partiel</option>
+              <option value="autonome">Autonome</option>
+              <option value="étudiant">Étudiant</option>
+              <option value="sans emploi">Sans emploi</option>
+              <option value="retraité">Retraité</option>
+            </select>
+
+            <input id="income" type="number" placeholder="Revenu mensuel" />
+
+            <select id="credit">
+              <option value="">Crédit</option>
+              <option value="basse">Basse</option>
+              <option value="moyenne">Moyenne</option>
+              <option value="haute">Haute</option>
+            </select>
+
+            <select id="tal">
+              <option value="">Dossier au TAL</option>
+              <option value="oui">Oui</option>
+              <option value="non">Non</option>
+            </select>
+
+            <input id="occupants" type="number" placeholder="Nombre de personnes dans l'appartement" />
+
+            <select id="pets">
+              <option value="">Animaux</option>
+              <option value="oui">Oui</option>
+              <option value="non">Non</option>
+            </select>
+
+            <textarea id="notes" placeholder="Notes employé"></textarea>
+
+            <div id="candidateStatus" class="candidate-status"></div>
+
+            <button type="submit" class="primary-btn candidate-submit-btn">Envoyer la fiche</button>
+          </form>
+        </div>
+      </section>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=16"></script>
+  <script src="script.js?v=17"></script>
 </body>
 </html>

@@ -2984,6 +2984,24 @@ app.get("/api/employee/workspace/notifications", async (req, res) => handleEmplo
   return res.json({ ok: true, notifications });
 }));
 
+app.post("/api/employee/workspace/notifications/:id/read", async (req, res) => handleEmployeeRoute(req, res, async ({ user }) => {
+  const notificationId = String(req.params.id || "").trim();
+  const notifications = await loadNotifications();
+  const notification = notifications.find(
+    (item) => String(item.id) === notificationId && String(item.user_id) === String(user.id)
+  );
+
+  if (!notification) {
+    throw createHttpError(404, "Notification introuvable.");
+  }
+
+  notification.read = true;
+  notification.read_at = new Date().toISOString();
+  await saveNotifications(notifications);
+
+  return res.json({ ok: true, notification });
+}));
+
 app.post("/api/admin/apartments", async (req, res) => {
   try {
     const listings = await loadListingsMap();
