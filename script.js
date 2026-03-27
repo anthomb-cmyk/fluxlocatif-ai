@@ -511,8 +511,7 @@ function renderNotifications() {
       const notificationType = button.dataset.type || "";
 
       if (notificationType === "message") {
-        switchWorkspaceTab("messages");
-        await loadEmployeeConversation();
+        await openEmployeeMessages(notificationId ? [notificationId] : []);
         return;
       }
 
@@ -587,11 +586,34 @@ async function markEmployeeNotificationRead(notificationId) {
   });
 }
 
+async function markEmployeeMessageNotificationsRead(notificationIds = []) {
+  const unreadMessageNotifications = chatState.notifications.filter(
+    (notification) => notification.type === "message" && notification.read !== true
+  );
+
+  const idsToMark = notificationIds.length
+    ? unreadMessageNotifications
+        .filter((notification) => notificationIds.includes(notification.id))
+        .map((notification) => notification.id)
+    : unreadMessageNotifications.map((notification) => notification.id);
+
+  if (!idsToMark.length) return;
+
+  await Promise.all(idsToMark.map((notificationId) => markEmployeeNotificationRead(notificationId)));
+}
+
 async function loadEmployeeConversation() {
   const conversationData = await fetchEmployeeJSON("/api/employee/workspace/conversation");
   chatState.workspaceMessages = conversationData.messages || [];
   renderEmployeeConversationList();
   renderEmployeeMessageThread();
+  await loadEmployeeNotifications();
+}
+
+async function openEmployeeMessages(notificationIds = []) {
+  switchWorkspaceTab("messages");
+  await loadEmployeeConversation();
+  await markEmployeeMessageNotificationsRead(notificationIds);
   await loadEmployeeNotifications();
 }
 
@@ -648,8 +670,7 @@ function renderEmployeeListingTasks() {
 
   document.querySelectorAll(".ask-task-question-btn").forEach((button) => {
     button.addEventListener("click", async () => {
-      switchWorkspaceTab("messages");
-      await loadEmployeeConversation();
+      await openEmployeeMessages();
       if (employeeMessageInput) {
         employeeMessageInput.value = `Question sur le mandat: ${decodeURIComponent(button.dataset.title || "Mandat")} — `;
         employeeMessageInput.focus();
@@ -1092,12 +1113,13 @@ if (preferredLocationInput) {
 document.querySelectorAll(".workspace-nav-btn").forEach((button) => {
   button.addEventListener("click", async () => {
     const targetTab = button.dataset.workspaceTab || "dashboard";
-    switchWorkspaceTab(targetTab);
 
     if (targetTab === "messages") {
-      await loadEmployeeConversation();
+      await openEmployeeMessages();
       return;
     }
+
+    switchWorkspaceTab(targetTab);
 
     if (targetTab === "listings") {
       await loadEmployeeListingTasks();

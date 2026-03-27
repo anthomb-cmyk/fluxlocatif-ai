@@ -2930,7 +2930,7 @@ app.post("/api/admin/workspace/messages", async (req, res) => handleAdminRoute(r
     id: createId("notif"),
     user_id: employeeUserId,
     type: "message",
-    reference_id: employeeUserId,
+    reference_id: message.id,
     read: false,
     created_at: new Date().toISOString()
   });
@@ -2990,9 +2990,7 @@ app.get("/api/admin/workspace/listing-tasks", async (req, res) => handleAdminRou
 
 app.get("/api/employee/workspace/conversation", async (req, res) => handleEmployeeRoute(req, res, async ({ user }) => {
   const messages = await loadWorkspaceMessages();
-  const notifications = await loadNotifications();
   let changedMessages = false;
-  let changedNotifications = false;
 
   const conversation = messages
     .filter((message) => String(message.employee_user_id) === String(user.id))
@@ -3005,23 +3003,8 @@ app.get("/api/employee/workspace/conversation", async (req, res) => handleEmploy
     })
     .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
 
-  notifications.forEach((notification) => {
-    if (
-      String(notification.user_id) === String(user.id) &&
-      notification.type === "message" &&
-      notification.read !== true
-    ) {
-      notification.read = true;
-      changedNotifications = true;
-    }
-  });
-
   if (changedMessages) {
     await saveWorkspaceMessages(messages);
-  }
-
-  if (changedNotifications) {
-    await saveNotifications(notifications);
   }
 
   return res.json({ ok: true, messages: conversation });
