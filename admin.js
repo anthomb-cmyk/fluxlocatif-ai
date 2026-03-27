@@ -827,8 +827,8 @@ function openInviteClientModal() {
       linkInput.select();
       if (!result.invitation_email_sent) {
         statusEl.textContent = result.invitation_email_error
-          ? `Invitation créée. Envoi email non configuré: ${result.invitation_email_error}.`
-          : "Invitation créée. Envoi email non configuré.";
+          ? `Invitation créée. Erreur d’envoi email: ${result.invitation_email_error}.`
+          : "Invitation créée. Erreur d’envoi email.";
         statusEl.style.color = "#b45309";
       }
     } catch (error) {

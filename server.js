@@ -47,6 +47,7 @@ const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+console.log("Resend initialized:", Boolean(resendClient));
 const hasSupabaseAdminAccess = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 // Prefer the service-role key for backend token verification. Fallback keys keep the route fail-closed,
 // but they are not the ideal long-term backend credential.
@@ -830,51 +831,138 @@ function sortByCreatedAtDesc(items) {
   return [...items].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 }
 
+function extractEmailAddress(value) {
+  const rawValue = String(value || "").trim();
+  const match = rawValue.match(/<([^>]+)>/);
+  return String(match?.[1] || rawValue).trim().toLowerCase();
+}
+
+function isValidInvitationSenderEmail(value) {
+  const email = extractEmailAddress(value);
+  if (!email || !email.includes("@")) {
+    return false;
+  }
+
+  const domain = email.split("@")[1] || "";
+  return domain === "fluxlocatif.com";
+}
+
 async function sendClientInvitationEmail(invitation, onboardingLink) {
-  if (!resendClient || !INVITATION_FROM_EMAIL) {
+  if (!resendClient) {
     return {
       sent: false,
-      reason: "email_not_configured"
+      error: "RESEND_API_KEY manquant ou client Resend non initialisé."
     };
   }
 
-  const recipientName = invitation.name || invitation.contact_name || "Client";
-  const subject = "Bienvenue chez FluxLocatif — activez votre espace client";
-  const html = `
-    <p>Bonjour ${recipientName},</p>
-    <p>Merci de nous avoir choisis.</p>
-    <p>Votre espace client est prêt. Pour commencer, veuillez utiliser le lien sécurisé ci-dessous afin d’activer votre compte et ajouter votre premier logement :</p>
-    <p><a href="${onboardingLink}">${onboardingLink}</a></p>
-    <p>Ce lien est valide pendant 7 jours.</p>
-    <p>Si vous avez des questions, vous pouvez répondre directement à ce courriel.</p>
-    <p>L’équipe FluxLocatif</p>
-  `;
+  if (!INVITATION_FROM_EMAIL) {
+    return {
+      sent: false,
+      error: "INVITATION_FROM_EMAIL manquant."
+    };
+  }
 
-  await resendClient.emails.send({
-    from: INVITATION_FROM_EMAIL,
+  if (!isValidInvitationSenderEmail(INVITATION_FROM_EMAIL)) {
+    return {
+      sent: false,
+      error: "INVITATION_FROM_EMAIL doit utiliser un expéditeur vérifié sur fluxlocatif.com, par exemple noreply@fluxlocatif.com."
+    };
+  }
+
+  const clientName = String(invitation.name || invitation.contact_name || "Client").trim();
+  const subject = "Bienvenue sur FluxLocatif — Accédez à votre espace";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
+      <h2 style="color: #111;">Bienvenue sur FluxLocatif</h2>
+
+      <p>Bonjour ${clientName},</p>
+
+      <p>
+        Votre accès à votre espace client FluxLocatif est prêt.
+        Vous pourrez suivre vos logements, vos candidats et gérer vos critères en temps réel.
+      </p>
+
+      <div style="margin: 30px 0; text-align: center;">
+        <a href="${onboardingLink}" 
+           style="background-color: #000; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+           Accéder à mon espace
+        </a>
+      </div>
+
+      <p style="font-size: 14px; color: #555;">
+        Ce lien est sécurisé et valide pendant 7 jours.
+      </p>
+
+      <p style="font-size: 14px; color: #555;">
+        Si vous avez des questions, vous pouvez répondre directement à ce courriel.
+      </p>
+
+      <p style="margin-top: 30px;">
+        —<br>
+        FluxLocatif
+      </p>
+    </div>
+  `;
+  const text = [
+    `Bonjour ${clientName},`,
+    "",
+    "Bienvenue sur FluxLocatif.",
+    "",
+    "Votre accès est prêt.",
+    "",
+    "Accéder à votre espace :",
+    onboardingLink,
+    "",
+    "Ce lien est valide pendant 7 jours.",
+    "",
+    "— FluxLocatif"
+  ].join("\n");
+
+  console.log("[client-invitation-email] send:start", {
+    invitation_id: invitation.id || null,
+    email: invitation.email || "",
+    client_name: clientName
+  });
+  console.log("[client-invitation-email] payload", {
     to: invitation.email,
-    subject,
-    html,
-    text: [
-      `Bonjour ${recipientName},`,
-      "",
-      "Merci de nous avoir choisis.",
-      "",
-      "Votre espace client est prêt. Pour commencer, veuillez utiliser le lien sécurisé ci-dessous afin d’activer votre compte et ajouter votre premier logement :",
-      "",
-      onboardingLink,
-      "",
-      "Ce lien est valide pendant 7 jours.",
-      "",
-      "Si vous avez des questions, vous pouvez répondre directement à ce courriel.",
-      "",
-      "L’équipe FluxLocatif"
-    ].join("\n")
+    link: onboardingLink
   });
 
-  return {
-    sent: true
-  };
+  try {
+    const response = await resendClient.emails.send({
+      from: INVITATION_FROM_EMAIL,
+      to: invitation.email,
+      subject,
+      html,
+      text
+    });
+
+    console.log("[client-invitation-email] send:response", {
+      id: response?.data?.id || response?.id || null,
+      error: response?.error || null,
+      response
+    });
+
+    if (response?.error) {
+      return {
+        sent: false,
+        error: response.error.message || String(response.error)
+      };
+    }
+
+    return {
+      sent: true
+    };
+  } catch (error) {
+    console.error("[client-invitation-email] send:error", {
+      message: error?.message || "email_send_failed",
+      error
+    });
+    return {
+      sent: false,
+      error: error?.message || "email_send_failed"
+    };
+  }
 }
 
 async function sendAdminClientActivatedEmail(payload) {
@@ -2284,17 +2372,14 @@ app.post("/api/admin/client-invitations", async (req, res) => {
     invitations.push(invitation);
     await saveClientInvitations(invitations);
     const onboardingLink = buildOnboardingLink(req, token);
-    const emailDelivery = await sendClientInvitationEmail(invitation, onboardingLink).catch((error) => ({
-      sent: false,
-      reason: error?.message || "email_send_failed"
-    }));
+    const emailDelivery = await sendClientInvitationEmail(invitation, onboardingLink);
 
     return res.status(201).json({
       ok: true,
       invitation: sanitizeInvitation(invitation),
       onboarding_link: onboardingLink,
       invitation_email_sent: emailDelivery.sent,
-      invitation_email_error: emailDelivery.sent ? null : emailDelivery.reason
+      invitation_email_error: emailDelivery.sent ? null : emailDelivery.error
     });
   } catch (error) {
     return res.status(500).json({
