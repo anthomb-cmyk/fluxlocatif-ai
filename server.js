@@ -78,7 +78,13 @@ app.use((req, res, next) => {
   return next();
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith("index.html")) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+  }
+}));
 
 app.get("/", (req, res) => {
   return res.sendFile(path.join(__dirname, "public", "index.html"));
