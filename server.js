@@ -3493,73 +3493,72 @@ async function generateTranslatorPayload(message, options = {}) {
         listingRef: listing?.ref || ""
       })
     : createDefaultTranslatorThreadState("", options?.userId, listing?.ref || "");
-  const requestConversationHistory = trimTranslatorConversationMessages(options?.conversationHistory || []);
+
   const nativeConversationHistory = buildTranslatorConversationMessagesFromThreadState(
     threadState,
-    requestConversationHistory
+    trimTranslatorConversationMessages(options?.conversationHistory || [])
   );
-  const deterministicExtraction = buildDeterministicTranslatorExtraction(message, requestConversationHistory, threadState);
+
+  // Seul appel AI — gère extraction + traduction + réponse + next_step
   const aiResponse = await openaiService.generateTranslatorResponse({
     message,
     conversationHistory: nativeConversationHistory,
     threadState,
     listing
   });
-  const extraction = mergeTranslatorExtraction(deterministicExtraction, {
-    translation: aiResponse?.translation,
-    message_type: null,
-    listing_question_type: aiResponse?.listing_question || deterministicExtraction.listing_question_type,
-    provided_fields: normalizeTranslatorAiResponseFields(aiResponse?.extracted_fields),
+
+  // Déterministe uniquement pour les 3 champs fiables à 100%
+  const phone = extractPhoneValue(message);
+  const email = extractEmailValue(message);
+  const occupantsCount = extractTranslatorOccupantsCount(message);
+
+  // Fusionner : déterministe prioritaire sur AI pour ces 3 champs seulement
+  const mergedExtractedFields = {
+    ...(aiResponse?.extracted_fields || {}),
+    ...(phone ? { phone } : {}),
+    ...(email ? { email } : {}),
+    ...(occupantsCount ? { occupants_total: Number(occupantsCount) } : {})
+  };
+
+  const extraction = {
+    translation: String(aiResponse?.translation || "").trim(),
+    message_type: "general",
+    listing_question_type: String(aiResponse?.listing_question || "none").trim(),
+    provided_fields: normalizeTranslatorAiResponseFields(mergedExtractedFields),
     answers_previous_step: Boolean(
       threadState?.last_asked_step &&
-      aiResponse?.extracted_fields &&
-      aiResponse.extracted_fields[threadState.last_asked_step] !== null &&
-      aiResponse.extracted_fields[threadState.last_asked_step] !== undefined &&
-      aiResponse.extracted_fields[threadState.last_asked_step] !== ""
+      mergedExtractedFields[threadState.last_asked_step] !== null &&
+      mergedExtractedFields[threadState.last_asked_step] !== undefined &&
+      mergedExtractedFields[threadState.last_asked_step] !== ""
     ),
-    confidence: 0.8
-  });
+    confidence: 0.85
+  };
+
   const updatedThreadState = updateTranslatorThreadState(threadState, extraction, {
     employeeUserId: options?.userId,
     listingRef: listing?.ref || ""
   });
+
   const nextStep = getTranslatorNextStepForState(updatedThreadState, extraction, listing);
-  const deterministicReply = buildTranslatorDeterministicReply({
-    extraction,
-    threadState: updatedThreadState,
-    listing,
-    message
-  });
   updatedThreadState.current_step = nextStep;
   updatedThreadState.last_asked_step = nextStep;
+
+  const translation = String(aiResponse?.translation || "").trim()
+    || buildTranslatorFallbackTranslation(message, [], threadState);
+  const reply = String(aiResponse?.reply || "").trim()
+    || buildTranslatorDeterministicReply({ extraction, threadState: updatedThreadState, listing, message });
+  const visitRequested = Boolean(aiResponse?.visit_requested)
+    || String(aiResponse?.listing_question || "").trim() === "visit";
+  const listingQuestion = String(aiResponse?.listing_question || "none").trim() || null;
+
   updatedThreadState.conversationMessages = trimTranslatorConversationMessages([
     ...nativeConversationHistory,
-    { role: "user", content: String(message || "").trim() }
-  ]);
-
-  if (options?.translatorThreadKey) {
-    // saved after assistant message is appended below
-  }
-
-  const context = extraction.listing_question_type === "none"
-    ? (
-        Object.keys(extraction.provided_fields || {}).length
-          ? "qualification"
-          : detectTranslatorContext(message)
-      )
-    : detectTranslatorContext(message);
-  const translation = String(aiResponse?.translation || "").trim() || buildTranslatorFallbackTranslation(message, requestConversationHistory, threadState);
-  const reply = String(aiResponse?.reply || "").trim() || deterministicReply;
-  const visitRequested = Boolean(aiResponse?.visit_requested) || extraction.listing_question_type === "visit";
-  const listingQuestion = String(aiResponse?.listing_question || extraction.listing_question_type || "none").trim() || null;
-
-  updatedThreadState.conversationMessages = trimTranslatorConversationMessages([
-    ...updatedThreadState.conversationMessages,
+    { role: "user", content: String(message || "").trim() },
     buildTranslatorAssistantConversationEntry({
       translation,
       reply,
       extracted_fields: Object.fromEntries(
-        Object.entries(extraction.provided_fields || {}).map(([fieldKey, value]) => [fieldKey, value?.value ?? null])
+        Object.entries(extraction.provided_fields || {}).map(([k, v]) => [k, v?.value ?? null])
       ),
       next_step: nextStep,
       visit_requested: visitRequested,
@@ -3571,12 +3570,18 @@ async function generateTranslatorPayload(message, options = {}) {
     await saveTranslatorThreadState(updatedThreadState);
   }
 
+  const context = extraction.listing_question_type !== "none"
+    ? detectTranslatorContext(message)
+    : Object.keys(extraction.provided_fields || {}).length
+      ? "qualification"
+      : detectTranslatorContext(message);
+
   return {
     translation,
     reply,
     context,
     extracted_fields: Object.fromEntries(
-      Object.entries(extraction.provided_fields || {}).map(([fieldKey, value]) => [fieldKey, value?.value ?? null])
+      Object.entries(extraction.provided_fields || {}).map(([k, v]) => [k, v?.value ?? null])
     ),
     next_step: nextStep,
     visit_requested: visitRequested,
