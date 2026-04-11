@@ -409,9 +409,23 @@ function createNewTranslatorConversation() {
 function renderTranslatorQualificationPanel() {
   if (!translatorQualificationPanel) return;
 
-  if (chatState.currentMode !== "translator" || !chatState.translatorQualification) {
+  if (chatState.currentMode !== "translator") {
     translatorQualificationPanel.innerHTML = "";
     translatorQualificationPanel.className = "translator-qualification-panel hidden";
+    return;
+  }
+
+  if (!chatState.translatorQualification) {
+    translatorQualificationPanel.className = "translator-qualification-panel status-incomplete";
+    translatorQualificationPanel.innerHTML = `
+      <div class="translator-qualification-head">
+        <div>
+          <div class="translator-qualification-title">🟡 Qualification en attente</div>
+          <div class="translator-qualification-copy">Collez le premier message du locataire pour démarrer.</div>
+        </div>
+      </div>
+    `;
+    translatorQualificationPanel.classList.remove("hidden");
     return;
   }
 
@@ -512,13 +526,35 @@ function renderTranslatorQualificationPanel() {
 }
 
 async function refreshTranslatorQualificationPanel(options = {}) {
-  if (chatState.currentMode !== "translator" || !chatState.activeTranslatorThreadKey) {
+  if (chatState.currentMode !== "translator") {
     chatState.translatorQualification = null;
     renderTranslatorQualificationPanel();
     return;
   }
 
+  if (!chatState.activeTranslatorThreadKey) {
+    chatState.activeTranslatorThreadKey = generateTranslatorThreadKey();
+    persistChatState();
+  }
+
   try {
+    const session = chatState.currentSession;
+    if (!session?.access_token) {
+      chatState.translatorQualification = {
+        ok: true,
+        status: "incomplete",
+        confidence: "low",
+        eligible: false,
+        missing_fields: ["move_in_date", "occupants_total", "has_animals", "employment_status", "income", "credit", "tal"],
+        blocking_reasons: [],
+        matches: [],
+        visit: { ready: false, requested: false },
+        listing_ref: options.listingRef || getSelectedListingRef() || ""
+      };
+      renderTranslatorQualificationPanel();
+      return;
+    }
+
     const payload = await fetchEmployeeJSON("/api/translator/evaluate", {
       method: "POST",
       body: JSON.stringify({
@@ -527,9 +563,22 @@ async function refreshTranslatorQualificationPanel(options = {}) {
       })
     });
 
+    console.debug("[Traducteur] Évaluation reçue:", payload);
     chatState.translatorQualification = payload;
   } catch (error) {
     console.error("Translator qualification error:", error);
+    chatState.translatorQualification = {
+      ok: false,
+      status: "incomplete",
+      confidence: "low",
+      eligible: false,
+      missing_fields: [],
+      blocking_reasons: [],
+      matches: [],
+      visit: { ready: false, requested: false },
+      listing_ref: options.listingRef || getSelectedListingRef() || "",
+      _error: true
+    };
   }
 
   renderTranslatorQualificationPanel();
@@ -1018,7 +1067,7 @@ function switchMode(mode) {
   renderMessages();
   persistChatState();
 
-  if (mode === "translator" && chatState.activeTranslatorThreadKey && chatState.currentSession?.access_token) {
+  if (mode === "translator") {
     window.setTimeout(() => {
       refreshTranslatorQualificationPanel({ listingRef: getSelectedListingRef() || "" }).catch(() => {});
     }, 0);
@@ -1491,14 +1540,88 @@ async function sendToAI(input, ref = "") {
   return finalPayload;
 }
 
-function setCandidateStatus(message = "", type = "") {
+function setCandidateStatus(message = "", type = "", html = false) {
   if (!candidateStatus) return;
 
-  candidateStatus.textContent = message;
+  if (html) {
+    candidateStatus.innerHTML = message;
+  } else {
+    candidateStatus.textContent = message;
+  }
   candidateStatus.className = "candidate-status";
 
   if (type) {
     candidateStatus.classList.add(type);
+  }
+}
+
+async function runCandidateEvaluation(apartmentRef, threadKey = "") {
+  try {
+    const session = chatState.currentSession;
+    if (!session?.access_token) return;
+
+    const evalPayload = await fetchEmployeeJSON("/api/translator/evaluate", {
+      method: "POST",
+      body: JSON.stringify({
+        threadKey: threadKey || chatState.activeTranslatorThreadKey || "",
+        listingRef: apartmentRef || ""
+      })
+    });
+
+    const status = String(evalPayload.status || "incomplete").trim();
+    const statusIcon = { eligible: "🟢", refused: "🔴", incomplete: "🟡" }[status] || "🟡";
+    const statusLabel = {
+      eligible: "Locataire éligible — dossier conforme.",
+      refused: "Profil non conforme pour ce logement.",
+      incomplete: "Informations manquantes — décision non disponible."
+    }[status] || "Qualification en cours.";
+
+    const missingHtml = Array.isArray(evalPayload.missing_fields) && evalPayload.missing_fields.length
+      ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">Champs manquants : ${evalPayload.missing_fields.join(", ")}</div>`
+      : "";
+
+    const matchesHtml = Array.isArray(evalPayload.matches) && evalPayload.matches.length
+      ? `<div style="margin-top:8px;font-size:12px;">Alternatives : ${evalPayload.matches.map(m =>
+          `<strong>${m.ref}</strong>${m.city ? " — " + m.city : ""}`
+        ).join(" · ")}</div>`
+      : (status === "refused" ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">Aucune alternative disponible.</div>` : "");
+
+    const visitHtml = status === "eligible" && evalPayload.visit?.ready
+      ? `<div style="margin-top:8px;"><button type="button" class="secondary-btn" id="candidateVisitBtn" style="font-size:12px;padding:4px 10px;">Planifier une visite</button></div>`
+      : "";
+
+    const successMsg = candidateStatus?.querySelector(".candidate-success-msg")?.textContent || "";
+
+    setCandidateStatus(
+      `<div class="candidate-success-msg" style="margin-bottom:8px;">${successMsg}</div>
+       <div style="font-weight:600;">${statusIcon} ${statusLabel}</div>
+       ${missingHtml}${matchesHtml}${visitHtml}`,
+      "success",
+      true
+    );
+
+    const visitBtn = candidateStatus?.querySelector("#candidateVisitBtn");
+    if (visitBtn) {
+      visitBtn.addEventListener("click", async () => {
+        const proposedDate = window.prompt("Proposez une date et heure de visite");
+        if (!proposedDate) return;
+        try {
+          const visitResult = await fetchEmployeeJSON("/api/translator/schedule-visit", {
+            method: "POST",
+            body: JSON.stringify({
+              threadKey: threadKey || chatState.activeTranslatorThreadKey || "",
+              listingRef: apartmentRef || "",
+              proposedDate
+            })
+          });
+          setCandidateStatus(visitResult.confirmationMessage || "Visite planifiée.", "success");
+        } catch (e) {
+          alert(e.message || "Erreur lors de la planification.");
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Candidate evaluation error:", error);
   }
 }
 
@@ -1649,11 +1772,14 @@ async function handleCandidateSubmit(event) {
     );
 
     const warning = result.emailWarning ? ` ${result.emailWarning}` : "";
+    const displayRef = result.candidate?.apartment_ref || apartmentRef;
 
     setCandidateStatus(
-      `Fiche envoyée avec succès pour L-${result.candidate?.apartment_ref || apartmentRef}.${warning}`,
+      `Fiche envoyée avec succès pour L-${displayRef}.${warning}`,
       "success"
     );
+
+    runCandidateEvaluation(String(displayRef), chatState.activeTranslatorThreadKey || "");
 
     candidateForm.reset();
     clearSelectedPreferredLocation();
