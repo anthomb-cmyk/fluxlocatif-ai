@@ -118,7 +118,27 @@ function buildTranslatorListingSummary(listing) {
 }
 
 function buildTranslatorSystemPrompt({ threadState, listing }) {
-  const nextStep = String(threadState?.current_step || "").trim() || "aucun";
+  const nextStep = String(threadState?.current_step || "").trim() || null;
+  const knownFields = buildTranslatorKnownFieldsSummary(threadState);
+  const listingSummary = buildTranslatorListingSummary(listing);
+
+  const nextStepLabels = {
+    move_in_date: "Quand souhaitez-vous emménager ?",
+    occupants_total: "Vous seriez combien à habiter le logement ?",
+    has_animals: "Avez-vous des animaux ?",
+    animal_type: "Quel type d'animal avez-vous ?",
+    employment_status: "Quelle est votre situation d'emploi ?",
+    employer: "Chez quel employeur travaillez-vous ?",
+    employment_duration: "Depuis combien de temps occupez-vous cet emploi ?",
+    income: "Quel est votre revenu mensuel approximatif ?",
+    credit: "Comment est votre situation de crédit ?",
+    tal: "Avez-vous eu des problèmes au TAL ou avec un propriétaire précédent ?",
+    full_name: "Quel est votre nom complet ?",
+    phone: "Quel est votre numéro de téléphone ?",
+    email: "Quelle est votre adresse courriel ?"
+  };
+
+  const prochainQuestion = nextStep ? (nextStepLabels[nextStep] || null) : null;
 
   return [
     "Tu es un assistant interne qui aide un employé locatif à répondre à des messages de locataires potentiels.",
@@ -128,52 +148,69 @@ function buildTranslatorSystemPrompt({ threadState, listing }) {
     "2. Le reformuler en français international clair dans \"translation\"",
     "3. Proposer une réponse courte et naturelle dans \"reply\"",
     "4. Extraire toute information utile dans \"extracted_fields\"",
-    "5. Identifier le prochain champ inconnu à obtenir dans \"next_step\"",
+    "5. Indiquer si une visite a été demandée dans \"visit_requested\"",
+    "6. Identifier le type de question logement dans \"listing_question\" si applicable",
     "",
     "RÈGLES DE RÉPONSE :",
     "- Maximum 3-4 phrases",
     "- Ton direct, simple, humain — jamais formel ni robotique",
-    "- Jamais de \"Je peux vérifier\", \"N'hésitez pas\", \"Si cela vous intéresse\"",
+    "- Jamais de \"Je peux vérifier\", \"N'hésitez pas\", \"Si cela vous intéresse\", \"Voulez-vous plus de détails\"",
     "- Répondre D'ABORD à la question du locataire, ENSUITE poser UNE SEULE question",
     "- Ne jamais poser plus d'une question à la fois",
-    "- Ne jamais redemander une information déjà connue",
+    "- Ne jamais redemander une information déjà connue (voir ÉTAT DU DOSSIER ci-dessous)",
+    prochainQuestion
+      ? `- La prochaine information à obtenir est : "${prochainQuestion}" — poser cette question à la fin si naturel`
+      : "- Toutes les informations de qualification sont déjà connues",
     "",
-    "RÈGLES D'EXTRACTION :",
-    "- \"le 1 mai je peux tu amener mon chat\" → move_in_date: \"1er mai\" ET has_animals: true",
-    "- \"demain il a tu de l'électricité\" → \"demain\" n'est PAS une date d'emménagement, c'est une question sur l'électricité",
-    "- \"ouais ces correct\" après un refus → le locataire confirme qu'il continue malgré tout",
-    "- \"4\" après \"combien d'occupants\" → occupants_total: 4",
-    "- Une date précise (1er mai, 15 juin) = toujours extraire comme move_in_date même si le message contient aussi autre chose",
-    "- \"demain/ce soir/cette semaine\" seul sans date précise = NE PAS extraire comme move_in_date",
+    "EXEMPLES DE MESSAGES RÉELS À RECONNAÎTRE :",
+    "\"stu dispo\" → question de disponibilité",
+    "\"cé tu encore a louer\" → question de disponibilité",
+    "\"le 1 mai je peux tu amener mon chat\" → move_in_date: \"1er mai\" ET has_animals: true",
+    "\"ouais ces correct\" après un refus → confirmation, le locataire continue",
+    "\"4\" après \"combien d'occupants\" → occupants_total: 4",
+    "\"demain il a tu de l'électricité\" → question sur l'électricité (\"demain\" = référence à la question, PAS une date d'emménagement)",
+    "\"je travaille au tim\" → employer: \"Tim Hortons\", employment_status: \"temps plein\" probable",
+    "\"jai un petit chien propre\" → has_animals: true, animal_type: \"chien\"",
+    "\"asap\" ou \"le plus vite possible\" → NE PAS extraire comme move_in_date précise",
+    "",
+    "RÈGLES D'EXTRACTION CRITIQUES :",
+    "- Une date précise (1er mai, 15 juin, début juillet) = move_in_date même si le message contient autre chose",
+    "- \"demain\", \"ce soir\", \"cette semaine\" seul sans date = NE PAS extraire comme move_in_date",
+    "- Si le message contient une question logement (électricité, animaux, stationnement, inclusions), ignorer les mots temporels vagues pour move_in_date",
+    "- Extraire TOUS les champs présents dans un même message, pas juste un",
+    "- null = information absente du message (pas false, pas 0)",
     "",
     "RÈGLES SUR LES INFOS LOGEMENT :",
-    "- Si l'info est dans la fiche : répondre directement et clairement",
+    "- Si l'info est dans la fiche ci-dessous : répondre directement et clairement",
     "- Si l'info n'est pas dans la fiche : ne pas inventer, dire qu'on va vérifier",
     "- Ne jamais inventer une information sur le logement",
     "",
-    "ORDRE DE QUALIFICATION (obtenir dans cet ordre, une info à la fois) :",
-    "1. move_in_date",
-    "2. occupants_total",
-    "3. has_animals",
-    "4. employment_status",
-    "5. income",
-    "6. credit",
-    "7. tal",
-    "8. full_name / phone / email",
-    "",
     "FORMAT DE SORTIE JSON OBLIGATOIRE :",
-    "{\"translation\":\"...\",\"reply\":\"...\",\"extracted_fields\":{\"move_in_date\":null,\"occupants_total\":null,\"has_animals\":null,\"animal_type\":null,\"employment_status\":null,\"employer\":null,\"employment_duration\":null,\"income\":null,\"credit\":null,\"tal\":null,\"full_name\":null,\"phone\":null,\"email\":null},\"next_step\":null,\"visit_requested\":false,\"listing_question\":null}",
+    JSON.stringify({
+      translation: "reformulation en français international",
+      reply: "réponse suggérée naturelle",
+      extracted_fields: {
+        move_in_date: null, occupants_total: null, has_animals: null,
+        animal_type: null, employment_status: null, employer: null,
+        employment_duration: null, income: null, credit: null,
+        tal: null, full_name: null, phone: null, email: null
+      },
+      next_step: null,
+      visit_requested: false,
+      listing_question: null
+    }),
     "",
-    "ÉTAT DU DOSSIER ACTUEL :",
-    buildTranslatorKnownFieldsSummary(threadState),
+    "ÉTAT DU DOSSIER ACTUEL (ne jamais redemander ces infos) :",
+    knownFields,
     "",
-    `PROCHAIN CHAMP À OBTENIR : ${nextStep}`,
+    nextStep
+      ? `PROCHAIN CHAMP À OBTENIR : ${nextStep}`
+      : "DOSSIER COMPLET — toutes les informations sont connues",
     "",
     "LOGEMENT SÉLECTIONNÉ :",
-    buildTranslatorListingSummary(listing)
+    listingSummary
   ].join("\n");
 }
-
 function normalizeTranslatorResponsePayload(payload = {}) {
   const extracted = payload?.extracted_fields && typeof payload.extracted_fields === "object" && !Array.isArray(payload.extracted_fields)
     ? payload.extracted_fields
