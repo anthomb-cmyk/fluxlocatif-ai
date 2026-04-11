@@ -1,4 +1,5 @@
 const DEFAULT_LISTING_CACHE_TTL_MS = 10 * 60 * 1000;
+
 const STEP_LABELS = {
   move_in_date: "la date d'emménagement souhaitée",
   occupants_total: "le nombre de personnes qui habiteraient le logement",
@@ -16,10 +17,7 @@ const STEP_LABELS = {
 };
 
 function normalizeQuestionKey(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function buildListingFallback(listing) {
@@ -35,73 +33,46 @@ function buildListingFallback(listing) {
     listing.disponibilite ? `Disponibilité : ${listing.disponibilite}` : "",
     listing.statut ? `Statut : ${listing.statut}` : "",
     listing.notes ? `Notes : ${listing.notes}` : ""
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function summarizeTranslatorConversationEntries(entries = []) {
-  if (!Array.isArray(entries) || !entries.length) {
-    return "aucun";
-  }
-
-  return entries.slice(-4).map((entry, index) => {
-    const sender = String(entry?.sender || entry?.label || "").trim().toLowerCase();
-    const roleLabel = sender === "assistant" ? "Équipe" : sender === "user" ? "Locataire" : "Échange";
-    const text = String(entry?.text || "").trim().replace(/\s+/g, " ");
-    const compactText = text.length > 180 ? `${text.slice(0, 177)}...` : text;
-    return `${index + 1}. ${roleLabel} : ${compactText || "(vide)"}`;
-  }).join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function truncateConversationHistory(history = [], maxMessages = 10) {
-  if (!Array.isArray(history)) {
-    return [];
-  }
+  if (!Array.isArray(history)) return [];
 
   return history.slice(-maxMessages).map((entry) => {
     if (entry?.role && entry?.content) {
-      return {
-        role: String(entry.role).trim(),
-        content: String(entry.content).trim()
-      };
+      return { role: String(entry.role).trim(), content: String(entry.content).trim() };
     }
 
     const sections = Array.isArray(entry?.sections)
-      ? entry.sections.slice(0, 4).map((section) => ({
-          title: String(section?.title || "").trim(),
-          text: String(section?.text || "").trim()
+      ? entry.sections.slice(0, 4).map((s) => ({
+          title: String(s?.title || "").trim(),
+          text: String(s?.text || "").trim()
         }))
       : [];
 
     const content = [
       String(entry?.text || "").trim(),
-      ...sections.map((section) => `${section.title ? `${section.title} : ` : ""}${section.text}`.trim())
-    ]
-      .filter(Boolean)
-      .join("\n");
+      ...sections.map((s) => `${s.title ? `${s.title} : ` : ""}${s.text}`.trim())
+    ].filter(Boolean).join("\n");
 
     return {
       role: String(entry?.sender || "").trim().toLowerCase() === "assistant" ? "assistant" : "user",
       content
     };
-  }).filter((entry) => entry.role && entry.content);
+  }).filter((e) => e.role && e.content);
 }
 
 function buildTranslatorKnownFieldsSummary(threadState) {
   const knownFields = Object.entries(threadState?.qualification || {})
-    .filter(([, value]) => value?.known)
-    .map(([key, value]) => `${key}: ${String(value?.value ?? "").trim()}`)
+    .filter(([, v]) => v?.known)
+    .map(([k, v]) => `${k}: ${String(v?.value ?? "").trim()}`)
     .filter(Boolean);
-
   return knownFields.length ? knownFields.join("\n") : "Aucune information connue pour le moment.";
 }
 
 function buildTranslatorListingSummary(listing) {
-  if (!listing) {
-    return "Aucun logement sélectionné";
-  }
-
+  if (!listing) return "Aucun logement sélectionné";
   return JSON.stringify({
     ref: String(listing.ref || "").trim(),
     adresse: String(listing.adresse || listing.address || "").trim(),
@@ -117,126 +88,21 @@ function buildTranslatorListingSummary(listing) {
   }, null, 2);
 }
 
-function buildTranslatorSystemPrompt({ threadState, listing }) {
-  const nextStep = String(threadState?.current_step || "").trim() || null;
-  const knownFields = buildTranslatorKnownFieldsSummary(threadState);
-  const listingSummary = buildTranslatorListingSummary(listing);
-
-  const nextStepLabels = {
-    move_in_date: "Quand souhaitez-vous emménager ?",
-    occupants_total: "Vous seriez combien à habiter le logement ?",
-    has_animals: "Avez-vous des animaux ?",
-    animal_type: "Quel type d'animal avez-vous ?",
-    employment_status: "Quelle est votre situation d'emploi ?",
-    employer: "Chez quel employeur travaillez-vous ?",
-    employment_duration: "Depuis combien de temps occupez-vous cet emploi ?",
-    income: "Quel est votre revenu mensuel approximatif ?",
-    credit: "Comment est votre situation de crédit ?",
-    tal: "Avez-vous eu des problèmes au TAL ou avec un propriétaire précédent ?",
-    full_name: "Quel est votre nom complet ?",
-    phone: "Quel est votre numéro de téléphone ?",
-    email: "Quelle est votre adresse courriel ?"
-  };
-
-  const prochainQuestion = nextStep ? (nextStepLabels[nextStep] || null) : null;
-
-  return [
-    "Tu es un assistant interne qui aide un employé locatif à répondre à des messages de locataires potentiels.",
-    "",
-    "TON RÔLE :",
-    "1. Comprendre le message du locataire même s'il est mal écrit (fautes, québécois, Marketplace, abréviations)",
-    "2. Le reformuler en français international clair dans \"translation\"",
-    "3. Proposer une réponse courte et naturelle dans \"reply\"",
-    "4. Extraire toute information utile dans \"extracted_fields\"",
-    "5. Indiquer si une visite a été demandée dans \"visit_requested\"",
-    "6. Identifier le type de question logement dans \"listing_question\" si applicable",
-    "",
-    "RÈGLES DE RÉPONSE :",
-    "- Maximum 3-4 phrases",
-    "- Ton direct, simple, humain — jamais formel ni robotique",
-    "- Jamais de \"Je peux vérifier\", \"N'hésitez pas\", \"Si cela vous intéresse\", \"Voulez-vous plus de détails\"",
-    "- Répondre D'ABORD à la question du locataire, ENSUITE poser UNE SEULE question",
-    "- Ne jamais poser plus d'une question à la fois",
-    "- Ne jamais redemander une information déjà connue (voir ÉTAT DU DOSSIER ci-dessous)",
-    prochainQuestion
-      ? `- La prochaine information à obtenir est : "${prochainQuestion}" — poser cette question à la fin si naturel`
-      : "- Toutes les informations de qualification sont déjà connues",
-    "",
-    "EXEMPLES DE MESSAGES RÉELS À RECONNAÎTRE :",
-    "\"stu dispo\" → question de disponibilité",
-    "\"cé tu encore a louer\" → question de disponibilité",
-    "\"le 1 mai je peux tu amener mon chat\" → move_in_date: \"1er mai\" ET has_animals: true",
-    "\"ouais ces correct\" après un refus → confirmation, le locataire continue",
-    "\"4\" après \"combien d'occupants\" → occupants_total: 4",
-    "\"demain il a tu de l'électricité\" → question sur l'électricité (\"demain\" = référence à la question, PAS une date d'emménagement)",
-    "\"je travaille au tim\" → employer: \"Tim Hortons\", employment_status: \"temps plein\" probable",
-    "\"jai un petit chien propre\" → has_animals: true, animal_type: \"chien\"",
-    "\"asap\" ou \"le plus vite possible\" → NE PAS extraire comme move_in_date précise",
-    "",
-    "RÈGLES D'EXTRACTION CRITIQUES :",
-    "- Une date précise (1er mai, 15 juin, début juillet) = move_in_date même si le message contient autre chose",
-    "- \"demain\", \"ce soir\", \"cette semaine\" seul sans date = NE PAS extraire comme move_in_date",
-    "- Si le message contient une question logement (électricité, animaux, stationnement, inclusions), ignorer les mots temporels vagues pour move_in_date",
-    "- Extraire TOUS les champs présents dans un même message, pas juste un",
-    "- null = information absente du message (pas false, pas 0)",
-    "",
-    "RÈGLES SUR LES INFOS LOGEMENT :",
-    "- Si l'info est dans la fiche ci-dessous : répondre directement et clairement",
-    "- Si l'info n'est pas dans la fiche : ne pas inventer, dire qu'on va vérifier",
-    "- Ne jamais inventer une information sur le logement",
-    "",
-    "FORMAT DE SORTIE JSON OBLIGATOIRE :",
-    JSON.stringify({
-      translation: "reformulation en français international",
-      reply: "réponse suggérée naturelle",
-      extracted_fields: {
-        move_in_date: null, occupants_total: null, has_animals: null,
-        animal_type: null, employment_status: null, employer: null,
-        employment_duration: null, income: null, credit: null,
-        tal: null, full_name: null, phone: null, email: null
-      },
-      next_step: null,
-      visit_requested: false,
-      listing_question: null
-    }),
-    "",
-    "ÉTAT DU DOSSIER ACTUEL (ne jamais redemander ces infos) :",
-    knownFields,
-    "",
-    nextStep
-      ? `PROCHAIN CHAMP À OBTENIR : ${nextStep}`
-      : "DOSSIER COMPLET — toutes les informations sont connues",
-    "",
-    "LOGEMENT SÉLECTIONNÉ :",
-    listingSummary
-  ].join("\n");
-}
-function normalizeTranslatorResponsePayload(payload = {}) {
-  const extracted = payload?.extracted_fields && typeof payload.extracted_fields === "object" && !Array.isArray(payload.extracted_fields)
-    ? payload.extracted_fields
-    : {};
-
+function normalizeExtractedFields(raw = {}) {
   return {
-    translation: String(payload?.translation || "").trim(),
-    reply: String(payload?.reply || "").trim(),
-    extracted_fields: {
-      move_in_date: extracted.move_in_date ?? null,
-      occupants_total: extracted.occupants_total ?? null,
-      has_animals: extracted.has_animals ?? null,
-      animal_type: extracted.animal_type ?? null,
-      employment_status: extracted.employment_status ?? null,
-      employer: extracted.employer ?? null,
-      employment_duration: extracted.employment_duration ?? null,
-      income: extracted.income ?? null,
-      credit: extracted.credit ?? null,
-      tal: extracted.tal ?? null,
-      full_name: extracted.full_name ?? null,
-      phone: extracted.phone ?? null,
-      email: extracted.email ?? null
-    },
-    next_step: payload?.next_step ?? null,
-    visit_requested: Boolean(payload?.visit_requested),
-    listing_question: payload?.listing_question ?? null
+    move_in_date: raw.move_in_date ?? null,
+    occupants_total: raw.occupants_total ?? null,
+    has_animals: raw.has_animals ?? null,
+    animal_type: raw.animal_type ?? null,
+    employment_status: raw.employment_status ?? null,
+    employer: raw.employer ?? null,
+    employment_duration: raw.employment_duration ?? null,
+    income: raw.income ?? null,
+    credit: raw.credit ?? null,
+    tal: raw.tal ?? null,
+    full_name: raw.full_name ?? null,
+    phone: raw.phone ?? null,
+    email: raw.email ?? null
   };
 }
 
@@ -251,25 +117,18 @@ export function createOpenAIService({
   function cleanupExpiredCacheEntries() {
     const now = Date.now();
     for (const [key, value] of listingReplyCache.entries()) {
-      if (!value || value.expiresAt <= now) {
-        listingReplyCache.delete(key);
-      }
+      if (!value || value.expiresAt <= now) listingReplyCache.delete(key);
     }
   }
 
   function getListingCacheKey(message, listing) {
-    return [
-      String(listing?.ref || "").trim(),
-      normalizeQuestionKey(message)
-    ].join("::");
+    return [String(listing?.ref || "").trim(), normalizeQuestionKey(message)].join("::");
   }
 
   function getCachedListingReply(message, listing) {
     cleanupExpiredCacheEntries();
     const entry = listingReplyCache.get(getListingCacheKey(message, listing));
-    if (!entry || entry.expiresAt <= Date.now()) {
-      return null;
-    }
+    if (!entry || entry.expiresAt <= Date.now()) return null;
     return entry.reply;
   }
 
@@ -280,164 +139,206 @@ export function createOpenAIService({
     });
   }
 
-  async function generateTranslatorExtraction(message, options = {}) {
-    if (!openaiClient) {
-      return null;
-    }
+  // ─────────────────────────────────────────────────────────
+  // APPEL 1 — Extraction + traduction uniquement
+  // Pas de réponse générée ici. Juste lire ce que le locataire a dit.
+  // ─────────────────────────────────────────────────────────
+  async function extractTranslatorFields({ message, conversationHistory, threadState, listing } = {}) {
+    if (!openaiClient) return null;
 
-    const response = await openaiClient.chat.completions.create({
-      model: translatorModel,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "Tu es un extracteur structuré pour un assistant conversationnel locatif interne.\nTu analyses le message d'un locataire potentiel et tu retournes uniquement un objet JSON valide.\n\nChamps autorisés : translation, message_type, listing_question_type, provided_fields, answers_previous_step, confidence.\n\nRègles :\n- translation : reformule le message en français international, court, clair, fidèle au sens réel\n- message_type : listing_question | qualification_answer | mixed | general\n- listing_question_type : availability | price | electricity | heating | inclusions | appliances | pets | parking | location | deposit | visit | none\n- provided_fields : extrait uniquement les champs clairement présents dans le message. Clés autorisées : move_in_date, occupants_total, has_animals, animal_type, employment_status, employer, employment_duration, income, credit, tal, full_name, phone, email\n- answers_previous_step : true si le message répond à la dernière question posée\n- confidence : nombre entre 0 et 1\n\nComportement critique :\n- Si le message est court (ex: \"4\", \"oui\", \"non\", \"le 1er\"), l'interpréter selon la dernière question posée fournie en contexte\n- Si le message contient à la fois une réponse et une nouvelle question, extraire les deux\n- Être robuste aux fautes, québécismes, abréviations, messages Marketplace\n- Ne jamais inventer d'information sur le logement\n\nRÈGLE CRITIQUE sur move_in_date :\n- Si le message contient une question sur le logement (électricité, chauffage, animaux, stationnement, électros, visite, prix), NE PAS extraire \"demain\", \"ce soir\", \"cette semaine\" comme move_in_date\n- Ces mots temporels dans ce contexte font référence à la question posée, pas à une date d'emménagement\n- N'extraire move_in_date que si le locataire exprime clairement QUAND il veut emménager, sans autre contexte de question logement dans le même message"
+    const lastAskedStep = String(threadState?.last_asked_step || "").trim();
+    const lastAskedLabel = lastAskedStep ? (STEP_LABELS[lastAskedStep] || lastAskedStep) : "aucune";
+    const listingSummary = buildTranslatorListingSummary(listing);
+
+    const systemPrompt = [
+      "Tu es un extracteur de données pour un système de qualification de locataires.",
+      "Tu analyses le message d'un locataire et retournes UNIQUEMENT un objet JSON.",
+      "Tu ne génères PAS de réponse — seulement l'extraction et la traduction.",
+      "",
+      "FORMAT DE SORTIE JSON STRICT :",
+      JSON.stringify({
+        translation: "reformulation en français international clair",
+        extracted_fields: {
+          move_in_date: null, occupants_total: null, has_animals: null,
+          animal_type: null, employment_status: null, employer: null,
+          employment_duration: null, income: null, credit: null,
+          tal: null, full_name: null, phone: null, email: null
         },
-        {
-          role: "user",
-          content: [
-            `Message actuel du locataire :\n${message}`,
-            options?.listing ? `\nAppartement sélectionné :\n${options.buildTranslatorListingContext(options.listing)}` : "\nAppartement sélectionné : aucun.",
-            options?.conversationEntries?.length
-              ? `\nHistorique récent utile :\n${options.conversationEntries.map((entry, index) => `${index + 1}. ${options.renderTranslatorHistoryEntry(entry)}`).join("\n\n")}`
-              : "\nHistorique récent utile : aucun.",
-            options?.threadState?.last_asked_step
-              ? `\nLa dernière question posée au locataire portait sur : ${STEP_LABELS[options.threadState.last_asked_step] ?? options.threadState.last_asked_step}`
-              : "\nLa dernière question posée au locataire portait sur : aucune.",
-            `\nType de question logement détecté par le déterministe : ${options?.deterministicExtraction?.listing_question_type || "none"}`,
-            `\nExtraction déterministe déjà repérée : ${JSON.stringify({
-              listing_question_type: options?.deterministicExtraction?.listing_question_type || "none",
-              provided_fields: Object.fromEntries(
-                Object.entries(options?.deterministicExtraction?.provided_fields || {}).map(([key, value]) => [key, value.value])
-              ),
-              answers_previous_step: Boolean(options?.deterministicExtraction?.answers_previous_step)
-            })}`
-          ].join("\n")
-        }
-      ]
-    });
-
-    const content = response.choices?.[0]?.message?.content?.trim();
-
-    if (!content) {
-      return null;
-    }
+        listing_question: "none",
+        visit_requested: false
+      }),
+      "",
+      "RÈGLES D'EXTRACTION :",
+      "- Extraire TOUS les champs présents dans le message",
+      "- null = absent du message",
+      "- has_animals: true si animaux mentionnés, false si explicitement aucun animal",
+      "- move_in_date: SEULEMENT si date précise (1er mai, 15 juin, début juillet)",
+      "- move_in_date: JAMAIS extraire 'demain', 'asap', 'bientôt', 'le plus vite possible'",
+      "- Si message contient question logement + mot temporel vague: NE PAS extraire move_in_date",
+      "- occupants_total: extraire si chiffre ou mention du nombre de personnes",
+      "- listing_question: availability | electricity | heating | inclusions | appliances | pets | parking | price | location | deposit | visit | none",
+      `- Dernière question posée au locataire : "${lastAskedLabel}" — contexte pour interpréter les réponses courtes`,
+      "",
+      "LOGEMENT SÉLECTIONNÉ :",
+      listingSummary
+    ].join("\n");
 
     try {
-      return JSON.parse(content);
+      const response = await openaiClient.chat.completions.create({
+        model: translatorModel,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...truncateConversationHistory(conversationHistory, 8),
+          { role: "user", content: String(message || "").trim() }
+        ]
+      });
+
+      const content = response.choices?.[0]?.message?.content?.trim();
+      if (!content) return null;
+
+      const parsed = JSON.parse(content);
+      return {
+        translation: String(parsed?.translation || "").trim(),
+        extracted_fields: normalizeExtractedFields(parsed?.extracted_fields || {}),
+        listing_question: String(parsed?.listing_question || "none").trim(),
+        visit_requested: Boolean(parsed?.visit_requested)
+      };
     } catch {
       return null;
     }
   }
 
-  async function generateTranslatorReply({
-    answerLine,
+  // ─────────────────────────────────────────────────────────
+  // APPEL 2 — Génération de réponse uniquement
+  // L'AI reçoit des instructions directes : quoi dire + quelle question poser.
+  // Elle ne sait pas ce qui vient d'être extrait.
+  // ─────────────────────────────────────────────────────────
+  async function generateTranslatorReplyFromInstructions({
+    translation,
+    listingAnswer,
     nextQuestion,
-    extraction,
-    threadState,
     listing,
-    conversationEntries
+    conversationHistory
   } = {}) {
-    if (!openaiClient) {
+    if (!openaiClient) return null;
+
+    const listingSummary = buildTranslatorListingSummary(listing);
+
+    const systemPrompt = [
+      "Tu es un employé en location immobilière qui répond brièvement à un locataire.",
+      "",
+      "RÈGLES ABSOLUES :",
+      "- Maximum 2 phrases au total",
+      "- Ton direct et naturel, jamais formel",
+      "- Si une réponse logement est fournie : commence par cette information",
+      "- Si une question est fournie : termine TOUJOURS par cette question, mot pour mot",
+      "- Ne JAMAIS confirmer ou répéter ce que le locataire a dit dans son message",
+      "- Ne JAMAIS ajouter : 'Avez-vous d'autres questions', 'N'hésitez pas', 'Merci', 'Parfait'",
+      "- Ne JAMAIS inventer d'informations sur le logement",
+      "- Ne pas déduire ou reformuler la question — la poser telle quelle",
+      "",
+      "LOGEMENT :",
+      listingSummary
+    ].join("\n");
+
+    const userContent = [
+      `Message du locataire (traduit) : ${translation || "message reçu"}`,
+      listingAnswer
+        ? `Information à communiquer sur le logement : ${listingAnswer}`
+        : "Pas de question sur le logement dans ce message.",
+      nextQuestion
+        ? `Question OBLIGATOIRE à poser à la fin, mot pour mot : "${nextQuestion}"`
+        : "Dossier complet — pas de question à poser."
+    ].join("\n");
+
+    try {
+      const response = await openaiClient.chat.completions.create({
+        model: translatorModel,
+        temperature: 0.3,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...truncateConversationHistory(conversationHistory, 6),
+          { role: "user", content: userContent }
+        ]
+      });
+
+      return response.choices?.[0]?.message?.content?.trim() || null;
+    } catch {
       return null;
     }
-
-    const response = await openaiClient.chat.completions.create({
-      model: translatorModel,
-      temperature: 0.5,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Tu es un assistant interne qui aide un employé locatif à répondre à des messages de locataires potentiels écrits en style Marketplace ou québécois oral.\n\nTu reçois :\n- La réponse à la question logement (si applicable)\n- La prochaine question à poser pour qualifier le candidat\n- L'historique récent de la conversation\n- L'état du dossier (ce qui est déjà connu)\n\nTu dois rédiger UNE réponse courte, naturelle et humaine qui :\n1. Répond d'abord à la question du locataire si une réponse est fournie\n2. Pose ensuite UNE SEULE question pour faire avancer le dossier\n\nRègles absolues :\n- Maximum 3 à 4 phrases au total\n- Ton direct, simple, humain — jamais formel ni robotique\n- Jamais de \"Je peux vérifier\", \"Si cela vous intéresse\", \"Voulez-vous plus de détails\", \"N'hésitez pas\"\n- Si la réponse logement est fournie : l'utiliser directement et clairement\n- Si la réponse logement est vide ou inconnue : ne rien inventer, rester prudent et naturel\n- Une seule question à la fin, jamais une liste\n- Ne pas répéter l'information que le locataire vient de donner\n- Sonner comme un vrai employé qui répond vite entre deux dossiers\n\nRÈGLE sur les questions répétées :\n- Si la \"Dernière question posée\" est move_in_date ET que le message actuel ne contient PAS de date d'emménagement, NE PAS reposer la même question\n- Si le locataire pose une question logement sans répondre à la question précédente, répondre à sa question d'abord, puis reposer la question en attente de façon naturelle SEULEMENT si c'est fluide\n- Exemple correct : \"Non, l'électricité n'est pas incluse. Au fait, vous souhaiteriez emménager pour quelle date ?\"\n- Exemple incorrect : \"Non, l'électricité n'est pas incluse. Quand est-ce que vous aimeriez emménager ?\""
-        },
-        {
-          role: "user",
-          content: [
-            `Réponse à la question logement : ${String(answerLine || "").trim() || "aucune"}`,
-            `Prochaine question à poser : ${String(nextQuestion || "").trim() || "aucune"}`,
-            `Traduction du message du locataire : ${String(extraction?.translation || "").trim() || "aucune"}`,
-            `Dernière question posée : ${STEP_LABELS[threadState?.last_asked_step] || "aucune"}`,
-            `Historique récent : ${summarizeTranslatorConversationEntries(conversationEntries)}`,
-            `État du dossier connu : ${JSON.stringify({
-              listing_ref: String(listing?.ref || threadState?.listing_ref || "").trim(),
-              current_step: String(threadState?.current_step || "").trim() || null,
-              known_fields: Object.fromEntries(
-                Object.entries(threadState?.qualification || {})
-                  .filter(([, value]) => value?.known)
-                  .map(([key, value]) => [key, value?.value ?? null])
-              )
-            })}`
-          ].join("\n")
-        }
-      ]
-    });
-
-    return response.choices?.[0]?.message?.content?.trim() || null;
   }
 
+  // ─────────────────────────────────────────────────────────
+  // POINT D'ENTRÉE PRINCIPAL
+  // Appelé par generateTranslatorPayload dans server.js
+  // Reçoit nextQuestion et listingAnswer calculés côté serveur
+  // ─────────────────────────────────────────────────────────
   async function generateTranslatorResponse({
     message,
     conversationHistory,
     threadState,
-    listing
+    listing,
+    nextQuestion,
+    listingAnswer
   } = {}) {
-    if (!openaiClient) {
-      return null;
-    }
+    if (!openaiClient) return null;
 
-    const messages = [
-      {
-        role: "system",
-        content: buildTranslatorSystemPrompt({ threadState, listing })
-      },
-      ...truncateConversationHistory(conversationHistory, 40).map((entry) => ({
-        role: entry.role === "assistant" ? "assistant" : "user",
-        content: entry.content
-      })),
-      {
-        role: "user",
-        content: String(message || "").trim()
-      }
-    ];
-
-    const response = await openaiClient.chat.completions.create({
-      model: translatorModel,
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages
+    // Appel 1 : extraction pure
+    const extraction = await extractTranslatorFields({
+      message,
+      conversationHistory,
+      threadState,
+      listing
     });
 
-    const content = response.choices?.[0]?.message?.content?.trim();
+    if (!extraction) return null;
 
-    if (!content) {
-      return null;
-    }
+    // Appel 2 : réponse avec instructions directes venant du serveur
+    const reply = await generateTranslatorReplyFromInstructions({
+      translation: extraction.translation,
+      listingAnswer: listingAnswer || null,
+      nextQuestion: nextQuestion || null,
+      listing,
+      conversationHistory
+    });
 
-    try {
-      return normalizeTranslatorResponsePayload(JSON.parse(content));
-    } catch {
-      return null;
-    }
+    return {
+      translation: extraction.translation,
+      reply: reply || "",
+      extracted_fields: extraction.extracted_fields,
+      next_step: null,
+      visit_requested: extraction.visit_requested,
+      listing_question: extraction.listing_question
+    };
+  }
+
+  // Alias pour compatibilité avec les anciens appels
+  async function generateTranslatorExtraction(message, options = {}) {
+    return extractTranslatorFields({
+      message,
+      conversationHistory: [],
+      threadState: options?.threadState || null,
+      listing: options?.listing || null
+    });
+  }
+
+  async function generateTranslatorReply(options = {}) {
+    return generateTranslatorReplyFromInstructions(options);
   }
 
   async function streamListingReply(message, listing, { signal, onToken } = {}) {
     const cachedReply = getCachedListingReply(message, listing);
     if (cachedReply) {
-      if (typeof onToken === "function" && cachedReply) {
-        onToken(cachedReply);
-      }
+      if (typeof onToken === "function") onToken(cachedReply);
       return cachedReply;
     }
 
     if (!openaiClient) {
       const fallback = buildListingFallback(listing);
       setCachedListingReply(message, listing, fallback);
-      if (typeof onToken === "function" && fallback) {
-        onToken(fallback);
-      }
+      if (typeof onToken === "function") onToken(fallback);
       return fallback;
     }
 
@@ -448,8 +349,7 @@ export function createOpenAIService({
       messages: [
         {
           role: "system",
-          content:
-            "Tu es un assistant interne pour une equipe de location. Reponds seulement avec les informations fournies sur l'appartement. Si l'information manque, dis-le clairement sans inventer."
+          content: "Tu es un assistant interne pour une equipe de location. Reponds seulement avec les informations fournies sur l'appartement. Si l'information manque, dis-le clairement sans inventer."
         },
         {
           role: "user",
@@ -460,14 +360,11 @@ export function createOpenAIService({
     });
 
     let reply = "";
-
     for await (const chunk of stream) {
       const delta = chunk.choices?.[0]?.delta?.content || "";
       if (!delta) continue;
       reply += delta;
-      if (typeof onToken === "function") {
-        onToken(delta);
-      }
+      if (typeof onToken === "function") onToken(delta);
     }
 
     const finalReply = reply.trim() || "Aucune réponse disponible.";
