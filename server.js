@@ -3508,8 +3508,35 @@ async function generateTranslatorPayload(message, options = {}) {
   const listingAnswer = resolveTranslatorListingAnswer(preliminaryListingQuestionType, listing, message) || "";
 
   // ── Étape 3 : calculer la prochaine question à poser côté serveur
-  // On se base sur le threadState actuel pour savoir ce qui manque
-  const currentNextStep = getNextTranslatorStateStep(threadState);
+  // On simule les champs que le message actuel va apporter
+  // pour ne pas redemander une info que le locataire vient de donner
+  const preExtractedFields = buildDeterministicTranslatorExtraction(message, [], threadState)?.provided_fields || {};
+  const moveInDateInMessage = extractMoveInDateValue(message);
+  const hasAnimalsInMessage = /\b(chien|chat|animal|animaux|chiot|pitou|minou|perroquet|lapin)\b/i.test(message);
+  const noAnimalsInMessage = /\bpas d.animaux\b|\bsans animaux\b|\baucun animal\b/i.test(message);
+  const occupantsInMessage = extractTranslatorOccupantsCount(message);
+
+  // Construire un thread state simulé avec les champs du message actuel
+  const simulatedQualification = { ...(threadState?.qualification || {}) };
+  if (moveInDateInMessage && isPreciseMoveInDateValue(moveInDateInMessage)) {
+    simulatedQualification.move_in_date = { known: true, value: moveInDateInMessage };
+  }
+  if (hasAnimalsInMessage) {
+    simulatedQualification.has_animals = { known: true, value: true };
+  }
+  if (noAnimalsInMessage) {
+    simulatedQualification.has_animals = { known: true, value: false };
+  }
+  if (occupantsInMessage) {
+    simulatedQualification.occupants_total = { known: true, value: Number(occupantsInMessage) };
+  }
+  // Ajouter les champs extraits par le déterministe
+  Object.entries(preExtractedFields).forEach(([k, v]) => {
+    if (v?.known) simulatedQualification[k] = v;
+  });
+
+  const simulatedThreadState = { ...threadState, qualification: simulatedQualification };
+  const currentNextStep = getNextTranslatorStateStep(simulatedThreadState);
   const nextQuestion = currentNextStep ? buildTranslatorStepQuestion(currentNextStep, listing) : "";
 
   // ── Étape 4 : appel AI avec instructions directes (2 appels internes : extraction + réponse)
