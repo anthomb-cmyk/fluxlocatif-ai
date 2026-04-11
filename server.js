@@ -3499,20 +3499,34 @@ async function generateTranslatorPayload(message, options = {}) {
     trimTranslatorConversationMessages(options?.conversationHistory || [])
   );
 
-  // Seul appel AI — gère extraction + traduction + réponse + next_step
+  // ── Étape 1 : extraction rapide côté déterministe pour avoir listing_question_type
+  // avant l'appel AI, pour calculer listingAnswer à passer à l'AI
+  const preliminaryExtraction = buildDeterministicTranslatorExtraction(message, [], threadState);
+  const preliminaryListingQuestionType = preliminaryExtraction?.listing_question_type || "none";
+
+  // ── Étape 2 : calculer la réponse logement côté serveur (déterministe, fiable)
+  const listingAnswer = resolveTranslatorListingAnswer(preliminaryListingQuestionType, listing, message) || "";
+
+  // ── Étape 3 : calculer la prochaine question à poser côté serveur
+  // On se base sur le threadState actuel pour savoir ce qui manque
+  const currentNextStep = getNextTranslatorStateStep(threadState);
+  const nextQuestion = currentNextStep ? buildTranslatorStepQuestion(currentNextStep, listing) : "";
+
+  // ── Étape 4 : appel AI avec instructions directes (2 appels internes : extraction + réponse)
   const aiResponse = await openaiService.generateTranslatorResponse({
     message,
     conversationHistory: nativeConversationHistory,
     threadState,
-    listing
+    listing,
+    nextQuestion,    // calculé côté serveur
+    listingAnswer    // calculé côté serveur
   });
 
-  // Déterministe uniquement pour les 3 champs fiables à 100%
+  // ── Étape 5 : déterministe pour les 3 champs fiables à 100%
   const phone = extractPhoneValue(message);
   const email = extractEmailValue(message);
   const occupantsCount = extractTranslatorOccupantsCount(message);
 
-  // Fusionner : déterministe prioritaire sur AI pour ces 3 champs seulement
   const mergedExtractedFields = {
     ...(aiResponse?.extracted_fields || {}),
     ...(phone ? { phone } : {}),
@@ -3520,10 +3534,12 @@ async function generateTranslatorPayload(message, options = {}) {
     ...(occupantsCount ? { occupants_total: Number(occupantsCount) } : {})
   };
 
+  const listingQuestionType = String(aiResponse?.listing_question || preliminaryListingQuestionType || "none").trim();
+
   const extraction = {
     translation: String(aiResponse?.translation || "").trim(),
     message_type: "general",
-    listing_question_type: String(aiResponse?.listing_question || "none").trim(),
+    listing_question_type: listingQuestionType,
     provided_fields: normalizeTranslatorAiResponseFields(mergedExtractedFields),
     answers_previous_step: Boolean(
       threadState?.last_asked_step &&
@@ -3534,6 +3550,7 @@ async function generateTranslatorPayload(message, options = {}) {
     confidence: 0.85
   };
 
+  // ── Étape 6 : mettre à jour le thread state avec les champs extraits
   const updatedThreadState = updateTranslatorThreadState(threadState, extraction, {
     employeeUserId: options?.userId,
     listingRef: listing?.ref || ""
@@ -3548,8 +3565,8 @@ async function generateTranslatorPayload(message, options = {}) {
   const reply = String(aiResponse?.reply || "").trim()
     || buildTranslatorDeterministicReply({ extraction, threadState: updatedThreadState, listing, message });
   const visitRequested = Boolean(aiResponse?.visit_requested)
-    || String(aiResponse?.listing_question || "").trim() === "visit";
-  const listingQuestion = String(aiResponse?.listing_question || "none").trim() || null;
+    || listingQuestionType === "visit";
+  const listingQuestion = listingQuestionType !== "none" ? listingQuestionType : null;
 
   updatedThreadState.conversationMessages = trimTranslatorConversationMessages([
     ...nativeConversationHistory,
@@ -3570,7 +3587,7 @@ async function generateTranslatorPayload(message, options = {}) {
     await saveTranslatorThreadState(updatedThreadState);
   }
 
-  const context = extraction.listing_question_type !== "none"
+  const context = listingQuestionType !== "none"
     ? detectTranslatorContext(message)
     : Object.keys(extraction.provided_fields || {}).length
       ? "qualification"
