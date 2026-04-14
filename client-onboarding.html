@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FluxLocatif Onboarding Client</title>
+  <title>FluxLocatif — Onboarding Client</title>
   <style>
     :root {
       --bg: #f5f7fb;
-      --card: rgba(255, 255, 255, 0.92);
+      --card: rgba(255,255,255,0.94);
       --border: #e5e7eb;
       --text: #1f2350;
       --muted: #6b7280;
@@ -15,50 +15,46 @@
       --brand-indigo: #4f46e5;
       --brand-purple: #9333ea;
       --brand-gradient: linear-gradient(135deg, #1e90ff 0%, #4f46e5 48%, #9333ea 100%);
-      --shadow-lg: 0 24px 70px rgba(79, 70, 229, 0.1);
-      --shadow-md: 0 14px 34px rgba(79, 70, 229, 0.08);
+      --shadow-lg: 0 24px 70px rgba(79,70,229,0.10);
+      --shadow-md: 0 14px 34px rgba(79,70,229,0.08);
+      --radius-card: 28px;
+      --radius-field: 14px;
     }
 
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
       min-height: 100vh;
       font-family: Inter, Arial, Helvetica, sans-serif;
+      font-size: 15px;
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(30, 144, 255, 0.16), transparent 28%),
-        radial-gradient(circle at top right, rgba(147, 51, 234, 0.12), transparent 24%),
+        radial-gradient(circle at top left, rgba(30,144,255,.14), transparent 28%),
+        radial-gradient(circle at top right, rgba(147,51,234,.10), transparent 24%),
         linear-gradient(180deg, #f7f9ff 0%, #f4f6fb 100%);
     }
 
     .page {
       min-height: 100vh;
-      padding: 28px 20px;
+      padding: 28px 20px 60px;
       display: grid;
-      place-items: center;
+      place-items: start center;
     }
 
     .shell {
-      width: min(1080px, 100%);
+      width: min(1120px, 100%);
       display: grid;
-      grid-template-columns: 360px minmax(0, 1fr);
+      grid-template-columns: 300px minmax(0, 1fr);
       gap: 24px;
       align-items: start;
     }
 
-    .hero,
-    .card {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,.7);
-      backdrop-filter: blur(14px);
-      box-shadow: var(--shadow-lg);
-      border-radius: 30px;
-    }
-
+    /* ── Hero ── */
     .hero {
-      padding: 28px;
-      color: #fff;
       background: var(--brand-gradient);
+      border-radius: var(--radius-card);
+      padding: 28px 24px;
+      color: #fff;
       position: sticky;
       top: 20px;
       overflow: hidden;
@@ -67,609 +63,964 @@
     .hero::after {
       content: "";
       position: absolute;
-      inset: auto -80px -80px auto;
-      width: 220px;
-      height: 220px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.12);
+      inset: auto -70px -70px auto;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.10);
+      pointer-events: none;
     }
 
     .brand {
       display: flex;
-      gap: 14px;
+      gap: 12px;
       align-items: center;
-      margin-bottom: 26px;
+      margin-bottom: 24px;
     }
 
     .brand-mark {
-      width: 56px;
-      height: 56px;
-      border-radius: 18px;
+      width: 48px; height: 48px;
+      border-radius: 14px;
       background: rgba(255,255,255,.18);
       display: grid;
       place-items: center;
       font-weight: 800;
-      font-size: 1.6rem;
+      font-size: 1.4rem;
+      flex-shrink: 0;
     }
 
-    .eyebrow {
-      display: inline-flex;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.16);
-      font-size: .82rem;
-      font-weight: 700;
-      margin-bottom: 12px;
+    .brand-name { font-weight: 800; font-size: 1.1rem; }
+    .brand-sub  { font-size: .8rem; opacity: .8; }
+
+    .step-nav { display: grid; gap: 6px; }
+
+    .step-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 12px;
+      transition: background .18s;
     }
 
-    .hero h1,
-    .card h2,
-    .card h3 {
-      margin: 0;
+    .step-nav-item.active  { background: rgba(255,255,255,.18); }
+    .step-nav-item.done .step-dot { background: rgba(255,255,255,.9); }
+
+    .step-dot {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.25);
+      display: grid;
+      place-items: center;
+      font-size: .72rem;
+      font-weight: 800;
+      flex-shrink: 0;
+      color: rgba(255,255,255,.9);
     }
 
-    .hero p {
-      margin: 0;
-      line-height: 1.6;
-      color: rgba(255,255,255,.88);
+    .step-nav-item.done .step-dot::before { content: "✓"; color: var(--brand-indigo); }
+    .step-nav-item.done .step-dot-num     { display: none; }
+
+    .step-nav-label {
+      font-size: .85rem;
+      font-weight: 600;
+      opacity: .8;
+      line-height: 1.3;
     }
 
-    .hero-list {
-      margin: 22px 0 0;
-      padding-left: 18px;
-      color: rgba(255,255,255,.92);
-      line-height: 1.6;
-    }
+    .step-nav-item.active .step-nav-label { opacity: 1; font-weight: 700; }
 
+    /* ── Card ── */
     .card {
-      padding: 28px;
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.7);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-lg);
+      border-radius: var(--radius-card);
+      padding: 32px 28px;
       color: var(--text);
     }
 
-    .progress {
+    /* ── Language toggle ── */
+    .lang-row {
       display: flex;
-      gap: 10px;
-      margin-bottom: 18px;
+      justify-content: flex-end;
+      margin-bottom: 14px;
     }
 
-    .progress-step {
-      flex: 1;
+    .lang-toggle {
+      display: inline-flex;
+      border: 1.5px solid rgba(79,70,229,.2);
       border-radius: 999px;
-      background: rgba(79,70,229,.10);
-      color: var(--muted);
-      font-size: .88rem;
+      overflow: hidden;
+    }
+
+    .lang-btn {
+      padding: 5px 14px;
+      font: inherit;
+      font-size: .82rem;
       font-weight: 700;
-      padding: 10px 14px;
-      text-align: center;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .15s, color .15s;
     }
 
-    .progress-step.active {
-      background: rgba(79,70,229,.14);
-      color: var(--brand-indigo);
+    .lang-btn.active {
+      background: var(--brand-indigo);
+      color: #fff;
     }
 
-    .step-panel {
-      display: none;
-      animation: fadeUp .26s ease;
+    /* ── Progress bar ── */
+    .progress-bar-track {
+      height: 4px;
+      background: rgba(79,70,229,.10);
+      border-radius: 999px;
+      margin-bottom: 28px;
+      overflow: hidden;
     }
 
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--brand-gradient);
+      border-radius: 999px;
+      transition: width .4s ease;
+    }
+
+    /* ── Steps ── */
+    .step-panel { display: none; }
     .step-panel.active {
       display: block;
+      animation: fadeUp .24s ease;
     }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    .muted {
+    .step-eyebrow {
+      display: inline-flex;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(79,70,229,.08);
+      color: var(--brand-indigo);
+      font-size: .8rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .step-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .step-desc {
       color: var(--muted);
       line-height: 1.6;
     }
 
+    /* ── Form layout ── */
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0,1fr));
       gap: 14px;
       margin-top: 22px;
     }
 
-    .field,
-    .field-full {
+    .field, .field-full {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 7px;
     }
 
-    .field-full {
-      grid-column: 1 / -1;
-    }
+    .field-full { grid-column: 1 / -1; }
 
-    label {
-      font-weight: 700;
-      font-size: .95rem;
-    }
+    label { font-weight: 700; font-size: .88rem; color: var(--text); }
 
-    input,
-    select,
-    textarea {
+    .label-hint { font-weight: 400; color: var(--muted); margin-left: 4px; }
+
+    input[type=text], input[type=email], input[type=tel],
+    input[type=number], input[type=date], input[type=url],
+    input[type=password], select, textarea {
       width: 100%;
-      border: 1px solid rgba(79,70,229,.14);
-      border-radius: 16px;
-      padding: 13px 14px;
+      border: 1px solid rgba(79,70,229,.15);
+      border-radius: var(--radius-field);
+      padding: 11px 13px;
       font: inherit;
+      font-size: .93rem;
       color: var(--text);
-      background: rgba(255,255,255,.96);
+      background: rgba(255,255,255,.97);
       outline: none;
+      transition: border-color .16s, box-shadow .16s;
     }
 
-    input:focus,
-    select:focus,
-    textarea:focus {
-      border-color: rgba(79,70,229,.4);
-      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(79,70,229,.38);
+      box-shadow: 0 0 0 3px rgba(79,70,229,.09);
     }
 
-    textarea {
-      min-height: 110px;
-      resize: vertical;
-    }
+    input[readonly] { background: rgba(79,70,229,.04); color: var(--muted); }
 
-    .checkbox-card {
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 14px 16px;
-      background: #fbfcff;
+    textarea { min-height: 96px; resize: vertical; }
+
+    /* ── Option chips ── */
+    .option-row {
       display: flex;
-      gap: 12px;
-      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
     }
 
-    .checkbox-card input {
-      width: 18px;
-      height: 18px;
-      margin-top: 3px;
-    }
-
-    .checkbox-card strong {
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    .pill-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .choice-pill {
-      border: 1px solid rgba(79,70,229,.14);
-      border-radius: 16px;
-      padding: 12px 14px;
-      text-align: center;
-      font-weight: 800;
-      color: var(--text);
-      background: rgba(255,255,255,.96);
+    .option-chip {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: rgba(255,255,255,.97);
       cursor: pointer;
-      transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+      transition: border-color .15s, background .15s, color .15s;
+      user-select: none;
     }
 
-    .choice-pill:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .choice-pill.active {
-      border-color: rgba(79,70,229,.45);
-      box-shadow: 0 0 0 4px rgba(79,70,229,.10);
-      background: rgba(79,70,229,.06);
+    .option-chip:hover { border-color: rgba(79,70,229,.3); color: var(--brand-indigo); }
+    .option-chip.active {
+      border-color: rgba(79,70,229,.5);
+      background: rgba(79,70,229,.07);
       color: var(--brand-indigo);
     }
 
-    .stacked-options {
-      display: grid;
-      gap: 10px;
-    }
-
-    .option-card {
+    /* ── Checkbox blocks ── */
+    .checkbox-block {
       border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 14px 16px;
+      border-radius: 14px;
+      padding: 13px 15px;
       background: #fbfcff;
       display: flex;
-      gap: 12px;
+      gap: 11px;
       align-items: flex-start;
+      cursor: pointer;
     }
 
-    .option-card input {
-      width: 18px;
-      height: 18px;
-      margin-top: 3px;
+    .checkbox-block input { margin-top: 2px; flex-shrink: 0; }
+    .checkbox-block strong { display: block; font-size: .9rem; margin-bottom: 3px; }
+    .checkbox-block .hint  { font-size: .82rem; color: var(--muted); line-height: 1.5; }
+
+    /* ── Tags input ── */
+    .tags-wrap {
+      border: 1px solid rgba(79,70,229,.15);
+      border-radius: var(--radius-field);
+      padding: 8px;
+      background: rgba(255,255,255,.97);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      cursor: text;
+      min-height: 46px;
+      transition: border-color .16s, box-shadow .16s;
     }
 
+    .tags-wrap:focus-within {
+      border-color: rgba(79,70,229,.38);
+      box-shadow: 0 0 0 3px rgba(79,70,229,.09);
+    }
+
+    .tag-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px 4px 11px;
+      border-radius: 999px;
+      background: rgba(79,70,229,.09);
+      color: var(--brand-indigo);
+      font-size: .82rem;
+      font-weight: 600;
+    }
+
+    .tag-remove { cursor: pointer; opacity: .6; font-size: .9rem; line-height: 1; }
+    .tag-remove:hover { opacity: 1; }
+
+    .tags-input {
+      border: none !important;
+      box-shadow: none !important;
+      outline: none !important;
+      padding: 4px 6px !important;
+      flex: 1;
+      min-width: 120px;
+      font-size: .88rem;
+      background: transparent !important;
+    }
+
+    /* ── Listing cards ── */
+    .listing-cards { display: grid; gap: 16px; margin-top: 20px; }
+
+    .listing-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #fafbff;
+    }
+
+    .listing-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      cursor: pointer;
+      background: rgba(79,70,229,.04);
+      border-bottom: 1px solid transparent;
+      transition: background .15s;
+    }
+
+    .listing-card-header:hover { background: rgba(79,70,229,.07); }
+    .listing-card.expanded .listing-card-header { border-bottom-color: var(--border); }
+
+    .listing-card-title    { font-weight: 700; font-size: .9rem; color: var(--text); }
+    .listing-card-subtitle { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+
+    .listing-card-actions { display: flex; gap: 8px; align-items: center; }
+
+    .listing-card-body { display: none; padding: 18px; }
+    .listing-card.expanded .listing-card-body { display: block; }
+
+    .chevron { transition: transform .22s; font-size: .75rem; color: var(--muted); }
+    .listing-card.expanded .chevron { transform: rotate(180deg); }
+
+    .remove-btn {
+      background: rgba(239,68,68,.08);
+      color: #dc2626;
+      border: none;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    .remove-btn:hover { background: rgba(239,68,68,.16); }
+
+    .add-listing-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border: 1.5px dashed rgba(79,70,229,.3);
+      border-radius: 14px;
+      background: transparent;
+      color: var(--brand-indigo);
+      font: inherit;
+      font-size: .9rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      justify-content: center;
+      transition: background .15s, border-color .15s;
+      margin-top: 12px;
+    }
+
+    .add-listing-btn:hover {
+      background: rgba(79,70,229,.05);
+      border-color: rgba(79,70,229,.5);
+    }
+
+    /* ── Section divider ── */
+    .section-divider {
+      grid-column: 1 / -1;
+      padding-top: 12px;
+      margin-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-divider h3 { font-size: 1rem; font-weight: 800; margin-bottom: 4px; }
+    .section-divider p  { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+
+    /* ── Actions ── */
     .actions {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
-      margin-top: 24px;
-    }
-
-    .status {
-      margin-top: 16px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      font-weight: 700;
-      display: none;
-    }
-
-    .status.show {
-      display: block;
-    }
-
-    .status.error {
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    .status.success {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .primary-btn,
-    .secondary-btn {
-      border: none;
-      border-radius: 14px;
-      padding: 12px 16px;
-      font: inherit;
-      font-weight: 800;
-      cursor: pointer;
+      margin-top: 26px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
     }
 
     .primary-btn {
       background: var(--brand-gradient);
       color: #fff;
+      border: none;
+      border-radius: 13px;
+      padding: 12px 22px;
+      font: inherit;
+      font-weight: 800;
+      font-size: .95rem;
+      cursor: pointer;
       box-shadow: var(--shadow-md);
+      transition: opacity .15s, transform .15s;
     }
+
+    .primary-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    .primary-btn:disabled { opacity: .55; cursor: not-allowed; }
 
     .secondary-btn {
       background: rgba(79,70,229,.08);
       color: var(--brand-indigo);
+      border: none;
+      border-radius: 13px;
+      padding: 12px 18px;
+      font: inherit;
+      font-weight: 700;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: background .15s;
     }
 
-    .success-state,
-    .invalid-state {
+    .secondary-btn:hover { background: rgba(79,70,229,.13); }
+
+    /* ── Status ── */
+    .status {
+      display: none;
+      padding: 11px 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: .9rem;
+      margin-top: 14px;
+    }
+
+    .status.show  { display: block; }
+    .status.error   { background: #fee2e2; color: #991b1b; }
+    .status.success { background: #dcfce7; color: #166534; }
+    .status.info    { background: rgba(79,70,229,.08); color: var(--brand-indigo); }
+
+    /* ── Success / Invalid ── */
+    .success-state, .invalid-state {
       display: none;
       text-align: center;
-      padding: 36px 10px 10px;
+      padding: 40px 16px 20px;
     }
 
-    .success-state.show,
-    .invalid-state.show {
-      display: block;
-    }
+    .success-state.show, .invalid-state.show { display: block; }
 
     .state-mark {
-      width: 72px;
-      height: 72px;
+      width: 72px; height: 72px;
       margin: 0 auto 18px;
-      border-radius: 24px;
+      border-radius: 22px;
       display: grid;
       place-items: center;
-      font-size: 1.8rem;
+      font-size: 2rem;
       font-weight: 800;
       color: #fff;
       background: var(--brand-gradient);
     }
 
-    @media (max-width: 920px) {
-      .shell {
-        grid-template-columns: 1fr;
-      }
+    .state-mark.error { background: #fee2e2; color: #991b1b; font-size: 1.4rem; }
 
-      .hero {
-        position: static;
-      }
+    .success-state h2, .invalid-state h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; }
+    .success-state p, .invalid-state p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 420px;
+      margin: 0 auto 20px;
+    }
 
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
+    /* ── Responsive ── */
+    @media (max-width: 960px) {
+      .shell { grid-template-columns: 1fr; }
+      .hero  { position: static; }
+      .step-nav { display: none; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
 
-      .pill-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+    @media (max-width: 560px) {
+      .card { padding: 22px 16px; }
     }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="shell">
+
+      <!-- ── Hero sidebar ── -->
       <aside class="hero">
         <div class="brand">
           <div class="brand-mark">F</div>
           <div>
-            <h1>FluxLocatif</h1>
-            <p>Activation client</p>
+            <div class="brand-name">FluxLocatif</div>
+            <div class="brand-sub" data-i18n="brand_sub">Activation client</div>
+          </div>
+        </div>
+        <nav class="step-nav" id="stepNav"></nav>
+      </aside>
+
+      <!-- ── Main card ── -->
+      <main class="card">
+
+        <!-- Language toggle -->
+        <div class="lang-row">
+          <div class="lang-toggle">
+            <button class="lang-btn active" id="langBtnFr" data-lang="fr">FR</button>
+            <button class="lang-btn"        id="langBtnEn" data-lang="en">EN</button>
           </div>
         </div>
 
-        <span class="eyebrow">Onboarding sécurisé</span>
-        <h2 style="margin:0 0 12px;">Configurez votre espace en quelques minutes</h2>
-        <p>Votre invitation vous permet d’activer votre accès, de définir vos préférences de contact et d’enregistrer votre premier logement dans une expérience guidée.</p>
+        <!-- Progress bar -->
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressFill" style="width:14%"></div>
+        </div>
 
-        <ul class="hero-list">
-          <li>Lien unique valable 7 jours</li>
-          <li>Création de compte et premier logement en 2 étapes</li>
-          <li>Accès direct à votre portail client une fois terminé</li>
-        </ul>
-      </aside>
-
-      <main class="card">
         <div id="onboardingContent">
-          <div class="progress">
-            <div id="progressStep1" class="progress-step active">Étape 1 de 2 · Compte client</div>
-            <div id="progressStep2" class="progress-step">Étape 2 de 2 · Premier logement</div>
-          </div>
 
+          <!-- ─── Step 1: Account ──────────────────────────────────── -->
           <section id="step1Panel" class="step-panel active">
-            <span class="eyebrow" style="background:rgba(30,144,255,.08);color:#1e90ff;">Étape 1</span>
-            <h2>Créez votre compte client</h2>
-            <p class="muted">Nous allons d’abord activer votre accès FluxLocatif avec vos informations principales.</p>
+            <span class="step-eyebrow" data-i18n="s1_eyebrow">Étape 1 sur 7</span>
+            <h2 class="step-title" data-i18n="s1_title">Créez votre compte</h2>
+            <p class="step-desc" data-i18n="s1_desc">Nous allons d'abord activer votre accès FluxLocatif avec vos informations principales.</p>
 
             <form id="accountForm">
               <div class="form-grid">
                 <div class="field">
-                  <label for="fullName">Nom complet</label>
-                  <input id="fullName" type="text" required />
+                  <label for="fullName" data-i18n="lbl_full_name">Nom complet</label>
+                  <input id="fullName" type="text" data-i18n-placeholder="ph_full_name" placeholder="Marie Tremblay" required />
                 </div>
 
                 <div class="field">
-                  <label for="companyName">Nom du client / entreprise</label>
-                  <input id="companyName" type="text" required />
+                  <label for="companyName" data-i18n="lbl_company_name">Nom du client / entreprise</label>
+                  <input id="companyName" type="text" data-i18n-placeholder="ph_company_name" placeholder="Gestion Tremblay inc." required />
                 </div>
 
                 <div class="field">
-                  <label for="accountEmail">Courriel</label>
+                  <label for="accountEmail" data-i18n="lbl_email">Courriel</label>
                   <input id="accountEmail" type="email" readonly required />
                 </div>
 
                 <div class="field">
-                  <label for="accountPhone">Téléphone</label>
-                  <input id="accountPhone" type="text" />
+                  <label for="accountPhone" data-i18n="lbl_phone">Téléphone</label>
+                  <input id="accountPhone" type="tel" placeholder="+1 (514) 000-0000" />
                 </div>
 
                 <div class="field">
-                  <label for="accountPassword">Mot de passe</label>
-                  <input id="accountPassword" type="password" required />
+                  <label for="accountPassword" data-i18n="lbl_password">Mot de passe</label>
+                  <input id="accountPassword" type="password" data-i18n-placeholder="ph_password" placeholder="Minimum 8 caractères" required />
                 </div>
 
                 <div class="field">
-                  <label for="accountPasswordConfirm">Confirmer le mot de passe</label>
+                  <label for="accountPasswordConfirm" data-i18n="lbl_confirm_password">Confirmer le mot de passe</label>
                   <input id="accountPasswordConfirm" type="password" required />
                 </div>
 
                 <div class="field-full">
-                  <label for="mainCity">Ville principale / marché</label>
-                  <input id="mainCity" type="text" list="mainCityList" required />
+                  <label for="mainCity" data-i18n="lbl_main_city">Marché principal / ville</label>
+                  <input id="mainCity" type="text" list="mainCityList" data-i18n-placeholder="ph_main_city" placeholder="Ex. Montréal" required />
                   <datalist id="mainCityList"></datalist>
                 </div>
 
-                <div class="field-full checkbox-card">
+                <label class="field-full checkbox-block">
                   <input id="emailNotifications" type="checkbox" />
                   <div>
-                    <strong>Recevoir les notifications par courriel</strong>
-                    <div class="muted">Ces courriels serviront uniquement à vous informer sur votre compte, vos candidats, vos logements et les actions importantes liées à votre utilisation de FluxLocatif.</div>
+                    <strong data-i18n="chk_email_title">Recevoir les notifications par courriel</strong>
+                    <div class="hint" data-i18n="chk_email_desc">Ces courriels vous informeront sur votre compte, vos candidats et vos logements.</div>
                   </div>
-                </div>
+                </label>
 
-                <div class="field-full checkbox-card">
+                <label class="field-full checkbox-block">
                   <input id="marketingCommunications" type="checkbox" />
                   <div>
-                    <strong>Recevoir les communications de FluxLocatif</strong>
-                    <div class="muted">J’accepte de recevoir occasionnellement des nouvelles, conseils et offres liées à la location et à l’optimisation de mes logements. Je pourrai me désabonner en tout temps.</div>
+                    <strong data-i18n="chk_mkt_title">Communications FluxLocatif</strong>
+                    <div class="hint" data-i18n="chk_mkt_desc">Recevez occasionnellement des nouvelles et conseils. Désabonnement en tout temps.</div>
                   </div>
-                </div>
+                </label>
               </div>
 
               <div id="accountStatus" class="status"></div>
 
               <div class="actions">
-                <div class="muted">Votre lien reste valide pendant 7 jours.</div>
-                <button id="submitAccountBtn" type="submit" class="primary-btn">Continuer</button>
+                <span class="hint" style="font-size:.85rem;" data-i18n="s1_invite_hint">Votre lien est valide pendant 7 jours.</span>
+                <button id="submitAccountBtn" type="submit" class="primary-btn" data-i18n="btn_continue">Continuer →</button>
               </div>
             </form>
           </section>
 
+          <!-- ─── Step 2: Client Info ──────────────────────────────── -->
           <section id="step2Panel" class="step-panel">
-            <span class="eyebrow" style="background:rgba(30,144,255,.08);color:#1e90ff;">Étape 2</span>
-            <h2>Ajoutez votre premier logement</h2>
-            <p class="muted">Ce premier logement permettra d’activer immédiatement votre espace client et de commencer la réception de candidats.</p>
+            <span class="step-eyebrow" data-i18n="s2_eyebrow">Étape 2 sur 7</span>
+            <h2 class="step-title" data-i18n="s2_title">Informations client</h2>
+            <p class="step-desc" data-i18n="s2_desc">Confirmez votre contact principal et les détails de facturation afin que nous joignions la bonne personne.</p>
 
-            <form id="listingForm">
-              <div class="form-grid">
-                <div class="field-full">
-                  <label for="listingAddress">Adresse</label>
-                  <input id="listingAddress" type="text" required />
-                </div>
-
-                <div class="field-full">
-                  <label>Type de logement</label>
-                  <input id="listingType" type="hidden" required />
-                  <div class="pill-grid" id="propertyTypeButtons">
-                    <button type="button" class="choice-pill" data-value="Studio">Studio</button>
-                    <button type="button" class="choice-pill" data-value="3 1/2">3½</button>
-                    <button type="button" class="choice-pill" data-value="4 1/2">4½</button>
-                    <button type="button" class="choice-pill" data-value="5 1/2">5½</button>
-                    <button type="button" class="choice-pill" data-value="Condo">Condo</button>
-                    <button type="button" class="choice-pill" data-value="Maison">Maison</button>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label for="listingCity">Ville</label>
-                  <input id="listingCity" type="text" placeholder="Ex. Montréal, Laval, Longueuil" required />
-                </div>
-
-                <div class="field">
-                  <label for="listingRent">Loyer</label>
-                  <input id="listingRent" type="number" min="0" list="listingRentSuggestions" required />
-                  <datalist id="listingRentSuggestions">
-                    <option value="1200"></option>
-                    <option value="1400"></option>
-                    <option value="1600"></option>
-                    <option value="1800"></option>
-                    <option value="2200"></option>
-                  </datalist>
-                </div>
-
-                <div class="field">
-                  <label for="listingAvailability">Disponibilité</label>
-                  <select id="listingAvailability" required>
-                    <option value="">Sélectionner</option>
-                    <option value="Maintenant">Maintenant</option>
-                    <option value="30 jours">30 jours</option>
-                    <option value="60 jours">60 jours</option>
-                    <option value="custom">Date personnalisée</option>
-                  </select>
-                </div>
-
-                <div class="field" id="listingAvailabilityCustomWrap" style="display:none;">
-                  <label for="listingAvailabilityCustom">Date personnalisée</label>
-                  <input id="listingAvailabilityCustom" type="date" />
-                </div>
-
-                <div class="field-full">
-                  <label>Inclusions</label>
-                  <div class="stacked-options">
-                    <label class="option-card">
-                      <input id="inclusionHeat" type="checkbox" />
-                      <div><strong>Chauffé</strong><div class="muted">Le chauffage est inclus.</div></div>
-                    </label>
-                    <label class="option-card">
-                      <input id="inclusionElectricity" type="checkbox" />
-                      <div><strong>Électricité incluse</strong><div class="muted">L’électricité est incluse au loyer.</div></div>
-                    </label>
-                    <label class="option-card">
-                      <input id="inclusionHotWater" type="checkbox" />
-                      <div><strong>Eau chaude incluse</strong><div class="muted">L’eau chaude est incluse au loyer.</div></div>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label>Animaux</label>
-                  <div class="stacked-options">
-                    <label class="option-card"><input type="radio" name="listingPets" value="oui" required /><div><strong>Acceptés</strong></div></label>
-                    <label class="option-card"><input type="radio" name="listingPets" value="non" /><div><strong>Refusés</strong></div></label>
-                    <label class="option-card"><input type="radio" name="listingPets" value="à discuter" /><div><strong>À discuter</strong></div></label>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label>Meublé</label>
-                  <div class="stacked-options">
-                    <label class="option-card"><input type="radio" name="listingFurnished" value="oui" required /><div><strong>Oui</strong></div></label>
-                    <label class="option-card"><input type="radio" name="listingFurnished" value="non" /><div><strong>Non</strong></div></label>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label for="listingParking">Stationnement</label>
-                  <select id="listingParking" required>
-                    <option value="">Sélectionner</option>
-                    <option value="Inclus">Inclus</option>
-                    <option value="Disponible ($)">Disponible ($)</option>
-                    <option value="Aucun">Aucun</option>
-                  </select>
-                </div>
-
-                <div class="field-full">
-                  <h3 style="margin-top:8px;">Critères locataires</h3>
-                  <p class="muted" style="margin:6px 0 0;">Ces critères structurés seront utilisés pour vos prochains matches candidats.</p>
-                </div>
-
-                <div class="field">
-                  <label for="criteriaMinimumIncome">Revenu minimum requis</label>
-                  <input id="criteriaMinimumIncome" type="number" min="0" placeholder="Ex. 4500" />
-                </div>
-
-                <div class="field">
-                  <label for="criteriaCreditRequirement">Crédit</label>
-                  <select id="criteriaCreditRequirement" required>
-                    <option value="">Sélectionner</option>
-                    <option value="Bon crédit requis">Bon crédit requis</option>
-                    <option value="Acceptable">Acceptable</option>
-                    <option value="Flexible">Flexible</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="criteriaTalPolicy">TAL</label>
-                  <select id="criteriaTalPolicy" required>
-                    <option value="">Sélectionner</option>
-                    <option value="Refusé">Refusé</option>
-                    <option value="Accepté cas par cas">Accepté cas par cas</option>
-                    <option value="Accepté">Accepté</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="criteriaOccupantsLimit">Occupants</label>
-                  <select id="criteriaOccupantsLimit" required>
-                    <option value="">Sélectionner</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="criteriaEmploymentRequirement">Emploi</label>
-                  <select id="criteriaEmploymentRequirement" required>
-                    <option value="">Sélectionner</option>
-                    <option value="Temps plein requis">Temps plein requis</option>
-                    <option value="Stable requis">Stable requis</option>
-                    <option value="Flexible">Flexible</option>
-                  </select>
-                </div>
-
-                <div class="field-full">
-                  <label for="listingNotes">Notes</label>
-                  <textarea id="listingNotes"></textarea>
-                </div>
+            <div class="form-grid">
+              <div class="field">
+                <label for="primaryContact" data-i18n="lbl_primary_contact">Contact principal</label>
+                <input id="primaryContact" type="text" data-i18n-placeholder="ph_full_name" placeholder="Marie Tremblay" />
               </div>
 
-              <div id="listingStatus" class="status"></div>
-
-              <div class="actions">
-                <button id="backToStep1Btn" type="button" class="secondary-btn">Retour</button>
-                <button id="submitListingBtn" type="submit" class="primary-btn">Enregistrer mon logement</button>
+              <div class="field">
+                <label for="primaryEmail" data-i18n="lbl_primary_email">Courriel principal</label>
+                <input id="primaryEmail" type="email" placeholder="marie@entreprise.com" />
               </div>
-            </form>
+
+              <div class="field">
+                <label for="primaryPhone" data-i18n="lbl_primary_phone">Téléphone principal</label>
+                <input id="primaryPhone" type="tel" placeholder="+1 (514) 000-0000" />
+              </div>
+
+              <div class="field">
+                <label for="preferredComm" data-i18n="lbl_preferred_comm">Méthode de communication préférée</label>
+                <select id="preferredComm" data-i18n-select="preferredComm">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="email" data-i18n="pref_email">Courriel</option>
+                  <option value="phone" data-i18n="pref_phone">Appel téléphonique</option>
+                  <option value="sms" data-i18n="pref_sms">SMS / Texto</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="portal" data-i18n="pref_portal">Portail client uniquement</option>
+                </select>
+              </div>
+
+              <div class="section-divider">
+                <h3 data-i18n="sec_billing_title">Contact de facturation</h3>
+                <p data-i18n="sec_billing_desc">Si différent du contact principal, qui doit recevoir les factures ?</p>
+              </div>
+
+              <div class="field">
+                <label for="billingName">
+                  <span data-i18n="lbl_billing_name">Nom du contact de facturation</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <input id="billingName" type="text" data-i18n-placeholder="ph_full_name" placeholder="Marie Tremblay" />
+              </div>
+
+              <div class="field">
+                <label for="billingEmail">
+                  <span data-i18n="lbl_billing_email">Courriel de facturation</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <input id="billingEmail" type="email" placeholder="facturation@entreprise.com" />
+              </div>
+
+              <div class="field">
+                <label for="billingPhone">
+                  <span data-i18n="lbl_billing_phone">Téléphone de facturation</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <input id="billingPhone" type="tel" placeholder="+1 (514) 000-0000" />
+              </div>
+            </div>
+
+            <div id="step2Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(1)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn" onclick="nextStep(2)" data-i18n="btn_continue">Continuer →</button>
+            </div>
           </section>
-        </div>
 
+          <!-- ─── Step 3: Portfolio ────────────────────────────────── -->
+          <section id="step3Panel" class="step-panel">
+            <span class="step-eyebrow" data-i18n="s3_eyebrow">Étape 3 sur 7</span>
+            <h2 class="step-title" data-i18n="s3_title">Portefeuille et logements</h2>
+            <p class="step-desc" data-i18n="s3_desc">Donnez-nous une vue d'ensemble de votre portefeuille pour calibrer votre forfait.</p>
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="unitsInPlan" data-i18n="lbl_units_plan">Logements inclus dans ce forfait</label>
+                <input id="unitsInPlan" type="number" min="1" data-i18n-placeholder="ph_units_plan" placeholder="ex. 5" />
+              </div>
+
+              <div class="field">
+                <label for="totalPortfolioSize">
+                  <span data-i18n="lbl_total_portfolio">Taille totale du portefeuille</span>
+                  <span class="label-hint" data-i18n="hint_all_units">(tous vos logements)</span>
+                </label>
+                <input id="totalPortfolioSize" type="number" min="1" data-i18n-placeholder="ph_total_portfolio" placeholder="ex. 20" />
+              </div>
+
+              <div class="field-full">
+                <label data-i18n="lbl_markets">Marchés / villes</label>
+                <div class="tags-wrap" id="marketsTagsWrap">
+                  <input class="tags-input" id="marketsTagInput" type="text"
+                    data-i18n-placeholder="ph_markets"
+                    placeholder="Tapez une ville et appuyez sur Entrée…"
+                    autocomplete="off" list="mainCityList2" />
+                  <datalist id="mainCityList2"></datalist>
+                </div>
+              </div>
+
+              <div class="field-full">
+                <label data-i18n="lbl_property_types">Types de propriétés</label>
+                <div class="option-row" id="propertyTypesRow">
+                  <span class="option-chip" data-value="apartment" data-i18n="pt_apartment">Appartement</span>
+                  <span class="option-chip" data-value="condo"     data-i18n="pt_condo">Condo</span>
+                  <span class="option-chip" data-value="house"     data-i18n="pt_house">Maison</span>
+                  <span class="option-chip" data-value="studio"    data-i18n="pt_studio">Studio</span>
+                  <span class="option-chip" data-value="duplex"    data-i18n="pt_duplex">Duplex / Plex</span>
+                  <span class="option-chip" data-value="townhouse" data-i18n="pt_townhouse">Maison de ville</span>
+                  <span class="option-chip" data-value="commercial" data-i18n="pt_commercial">Commercial</span>
+                  <span class="option-chip" data-value="other"     data-i18n="pt_other">Autre</span>
+                </div>
+              </div>
+            </div>
+
+            <div id="step3Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(2)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn"   onclick="nextStep(3)" data-i18n="btn_continue">Continuer →</button>
+            </div>
+          </section>
+
+          <!-- ─── Step 4: Active Listings ─────────────────────────── -->
+          <section id="step4Panel" class="step-panel">
+            <span class="step-eyebrow" data-i18n="s4_eyebrow">Étape 4 sur 7</span>
+            <h2 class="step-title" data-i18n="s4_title">Logements actifs</h2>
+            <p class="step-desc" data-i18n="s4_desc">Ajoutez les logements que FluxLocatif doit gérer. Vous pourrez en ajouter depuis votre portail.</p>
+
+            <div class="listing-cards" id="listingCards"></div>
+
+            <button type="button" class="add-listing-btn" id="addListingBtn">
+              <span data-i18n="btn_add_listing">+ Ajouter un logement</span>
+            </button>
+
+            <div id="step4Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(3)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn"   onclick="nextStep(4)" data-i18n="btn_continue">Continuer →</button>
+            </div>
+          </section>
+
+          <!-- ─── Step 5: Qualification ────────────────────────────── -->
+          <section id="step5Panel" class="step-panel">
+            <span class="step-eyebrow" data-i18n="s5_eyebrow">Étape 5 sur 7</span>
+            <h2 class="step-title" data-i18n="s5_title">Critères de qualification</h2>
+            <p class="step-desc" data-i18n="s5_desc">Ces critères s'appliquent globalement à tous vos logements, sauf indication contraire par unité.</p>
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="minIncomeReq" data-i18n="lbl_min_income">Revenu minimum requis</label>
+                <input id="minIncomeReq" type="text" data-i18n-placeholder="ph_min_income" placeholder="ex. 3× le loyer mensuel ou 4 500 $/mois" />
+              </div>
+
+              <div class="field">
+                <label for="creditScoreReq" data-i18n="lbl_credit_score">Cote de crédit requise</label>
+                <select id="creditScoreReq" data-i18n-select="creditScore">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="excellent" data-i18n="credit_excellent">Excellent (700+)</option>
+                  <option value="good"      data-i18n="credit_good">Bon (650–699)</option>
+                  <option value="fair"      data-i18n="credit_fair">Acceptable (600–649)</option>
+                  <option value="flexible"  data-i18n="credit_flexible">Flexible / Sans minimum</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="employmentReq" data-i18n="lbl_employment">Exigences d'emploi</label>
+                <select id="employmentReq" data-i18n-select="employment">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="full_time"       data-i18n="emp_fulltime">Temps plein requis</option>
+                  <option value="stable"          data-i18n="emp_stable">Emploi stable requis</option>
+                  <option value="self_employed_ok" data-i18n="emp_selfemployed">Travailleur autonome accepté</option>
+                  <option value="flexible"        data-i18n="emp_flexible">Flexible</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="guarantorPolicy" data-i18n="lbl_guarantor">Politique de garant</label>
+                <select id="guarantorPolicy" data-i18n-select="guarantor">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="accepted"     data-i18n="guar_accepted">Accepté</option>
+                  <option value="case_by_case" data-i18n="guar_case">Cas par cas</option>
+                  <option value="not_accepted" data-i18n="guar_refused">Non accepté</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="petPolicy" data-i18n="lbl_pet_policy">Politique concernant les animaux</label>
+                <select id="petPolicy" data-i18n-select="petPolicy">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="allowed"      data-i18n="pet_allowed">Acceptés</option>
+                  <option value="small_only"   data-i18n="pet_small">Petits animaux seulement</option>
+                  <option value="case_by_case" data-i18n="pet_case">Cas par cas</option>
+                  <option value="not_allowed"  data-i18n="pet_refused">Refusés</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="occupancyRules" data-i18n="lbl_occupancy">Nombre maximal d'occupants</label>
+                <select id="occupancyRules" data-i18n-select="occupancy">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="1" data-i18n="occ_1">1 personne</option>
+                  <option value="2" data-i18n="occ_2">2 personnes</option>
+                  <option value="3" data-i18n="occ_3">3 personnes</option>
+                  <option value="4" data-i18n="occ_4">4 personnes</option>
+                  <option value="5" data-i18n="occ_5">5 personnes</option>
+                  <option value="6+" data-i18n="occ_6plus">6+ personnes</option>
+                  <option value="flexible" data-i18n="emp_flexible">Flexible</option>
+                </select>
+              </div>
+
+              <div class="field-full">
+                <label for="disqualifyingFactors">
+                  <span data-i18n="lbl_disqualifying">Facteurs disqualifiants</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="disqualifyingFactors" data-i18n-placeholder="ph_disqualifying"
+                  placeholder="ex. Expulsions passées, loyers impayés, casier judiciaire pour infractions violentes…"></textarea>
+              </div>
+
+              <div class="field-full">
+                <label for="additionalScreening">
+                  <span data-i18n="lbl_add_screening">Préférences de sélection supplémentaires</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="additionalScreening" data-i18n-placeholder="ph_add_screening"
+                  placeholder="ex. Lettres de référence requises, entrevue avant visite, consentement pour vérification…"></textarea>
+              </div>
+            </div>
+
+            <div id="step5Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(4)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn"   onclick="nextStep(5)" data-i18n="btn_continue">Continuer →</button>
+            </div>
+          </section>
+
+          <!-- ─── Step 6: Workflow ──────────────────────────────────── -->
+          <section id="step6Panel" class="step-panel">
+            <span class="step-eyebrow" data-i18n="s6_eyebrow">Étape 6 sur 7</span>
+            <h2 class="step-title" data-i18n="s6_title">Préférences de processus</h2>
+            <p class="step-desc" data-i18n="s6_desc">Aidez-nous à comprendre votre façon de travailler pour s'intégrer parfaitement à votre processus.</p>
+
+            <div class="form-grid">
+              <div class="field-full">
+                <label for="escalationRules">
+                  <span data-i18n="lbl_escalation">Règles d'escalade</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="escalationRules" data-i18n-placeholder="ph_escalation"
+                  placeholder="ex. Escalader au contact principal si aucune réponse dans les 24 h. Urgences (inondation, serrure) : appel direct…"></textarea>
+              </div>
+
+              <div class="field">
+                <label for="approvalProcess" data-i18n="lbl_approval">Processus d'approbation</label>
+                <select id="approvalProcess" data-i18n-select="approval">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="owner_approves_all" data-i18n="appr_owner">J'approuve chaque demande</option>
+                  <option value="fluxlocatif_approves" data-i18n="appr_flux">FluxLocatif sélectionne et approuve</option>
+                  <option value="shortlist" data-i18n="appr_shortlist">FluxLocatif présélectionne, je choisis</option>
+                  <option value="delegated" data-i18n="appr_delegated">Entièrement délégué à FluxLocatif</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="showingProcess" data-i18n="lbl_showing">Processus de visites</label>
+                <select id="showingProcess" data-i18n-select="showing">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="self_serve"     data-i18n="show_self">Locataire prend rendez-vous lui-même</option>
+                  <option value="owner_present"  data-i18n="show_owner">Je dois être présent</option>
+                  <option value="agent_managed"  data-i18n="show_agent">Géré par un agent FluxLocatif</option>
+                  <option value="lockbox"        data-i18n="show_lockbox">Boîte à clé / sans accompagnement</option>
+                </select>
+              </div>
+
+              <div class="field-full">
+                <label for="approvalNotes">
+                  <span data-i18n="lbl_approval_notes">Notes sur le processus d'approbation</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="approvalNotes" style="min-height:80px;" data-i18n-placeholder="ph_approval_notes"
+                  placeholder="Étapes spécifiques, délais ou conditions particulières…"></textarea>
+              </div>
+
+              <div class="field-full">
+                <label for="commExpectations">
+                  <span data-i18n="lbl_comm_expect">Attentes en matière de communication</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="commExpectations" data-i18n-placeholder="ph_comm_expect"
+                  placeholder="ex. Réponse dans les 4 heures ouvrables. Résumé hebdomadaire chaque lundi. Notification pour tout loyer supérieur à 2 000 $/mois…"></textarea>
+              </div>
+            </div>
+
+            <div id="step6Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(5)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn"   onclick="nextStep(6)" data-i18n="btn_continue">Continuer →</button>
+            </div>
+          </section>
+
+          <!-- ─── Step 7: Brand ────────────────────────────────────── -->
+          <section id="step7Panel" class="step-panel">
+            <span class="step-eyebrow" data-i18n="s7_eyebrow">Étape 7 sur 7</span>
+            <h2 class="step-title" data-i18n="s7_title">Marque et communication</h2>
+            <p class="step-desc" data-i18n="s7_desc">Nous utiliserons ces paramètres lors de la représentation de vos annonces et des communications avec les locataires.</p>
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="commTone" data-i18n="lbl_comm_tone">Ton de communication</label>
+                <select id="commTone" data-i18n-select="commTone">
+                  <option value="" data-i18n="opt_select">Sélectionner</option>
+                  <option value="formal"   data-i18n="tone_formal">Formel et professionnel</option>
+                  <option value="friendly" data-i18n="tone_friendly">Amical et accessible</option>
+                  <option value="concise"  data-i18n="tone_concise">Concis et direct</option>
+                  <option value="warm"     data-i18n="tone_warm">Chaleureux et accueillant</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="brandingName" data-i18n="lbl_branding_name">Nom de marque / entreprise à utiliser</label>
+                <input id="brandingName" type="text" data-i18n-placeholder="ph_branding_name" placeholder="ex. Gestion XYZ ou nom légal" />
+              </div>
+
+              <div class="field-full">
+                <label for="signatureContact" data-i18n="lbl_signature">Signature / coordonnées pour les messages sortants</label>
+                <textarea id="signatureContact" data-i18n-placeholder="ph_signature"
+                  placeholder="ex.&#10;Gestion XYZ — Équipe location&#10;info@gestionxyz.com | (514) 555-1234&#10;www.gestionxyz.com"></textarea>
+              </div>
+
+              <div class="field-full">
+                <label for="additionalBrandNotes">
+                  <span data-i18n="lbl_brand_notes">Notes supplémentaires sur la marque</span>
+                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
+                </label>
+                <textarea id="additionalBrandNotes" style="min-height:80px;" data-i18n-placeholder="ph_brand_notes"
+                  placeholder="Formules, ton ou éléments à éviter lors de la représentation de votre marque…"></textarea>
+              </div>
+            </div>
+
+            <div id="step7Status" class="status"></div>
+
+            <div class="actions">
+              <button type="button" class="secondary-btn" onclick="goToStep(6)" data-i18n="btn_back">← Retour</button>
+              <button type="button" class="primary-btn" id="submitIntakeBtn" data-i18n="btn_submit">Soumettre le profil →</button>
+            </div>
+          </section>
+
+        </div><!-- /onboardingContent -->
+
+        <!-- ─── Success ─────────────────────────────────────────────── -->
         <section id="successState" class="success-state">
-          <div class="state-mark">F</div>
-          <h2>Félicitations, votre compte est activé.</h2>
-          <p class="muted">Votre premier logement a bien été enregistré.</p>
-          <button id="goToClientPortalBtn" type="button" class="primary-btn">Accéder à mon portail client</button>
+          <div class="state-mark">✓</div>
+          <h2 data-i18n="success_title">Profil soumis — vous êtes prêt !</h2>
+          <p data-i18n="success_desc">Votre formulaire a été reçu. Notre équipe le vérifiera et activera votre compte sous peu. Vous recevrez un courriel de confirmation.</p>
+          <button id="goToClientPortalBtn" type="button" class="primary-btn" data-i18n="btn_go_portal">Accéder à mon portail</button>
         </section>
 
+        <!-- ─── Invalid ─────────────────────────────────────────────── -->
         <section id="invalidState" class="invalid-state">
-          <div class="state-mark" style="background:#fee2e2;color:#991b1b;">!</div>
-          <h2>Lien invalide ou expiré</h2>
-          <p id="invalidStateMessage" class="muted">Cette invitation n’est plus disponible.</p>
+          <div class="state-mark error">!</div>
+          <h2 data-i18n="invalid_title">Invitation expirée ou invalide</h2>
+          <p id="invalidStateMessage" data-i18n="invalid_default">Cette invitation n'est plus disponible. Veuillez contacter votre gestionnaire de compte FluxLocatif pour obtenir un nouveau lien.</p>
         </section>
+
       </main>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="client-onboarding.js?v=1"></script>
+  <script src="client-onboarding.js?v=3"></script>
 </body>
 </html>

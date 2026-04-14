@@ -659,6 +659,7 @@ async function loadClientInvitations() {
 }
 
 function normalizeClientRecord(id, value = {}) {
+  const critSrc = value?.qualification_criteria || value?.criteres || {};
   return {
     id: String(value.id || id || ""),
     nom: String(value.nom || "").trim(),
@@ -669,23 +670,63 @@ function normalizeClientRecord(id, value = {}) {
     main_city: String(value.main_city || "").trim(),
     onboarding_user_id: value.onboarding_user_id || null,
     onboarding_completed_at: value.onboarding_completed_at || null,
+    intake_submitted_at: value.intake_submitted_at || null,
+    intake_status: value.intake_status || null,
     notification_preferences: {
       email_notifications: Boolean(value?.notification_preferences?.email_notifications),
       marketing_communications: Boolean(value?.notification_preferences?.marketing_communications)
     },
+    primary_contact: value.primary_contact || null,
+    primary_email:   value.primary_email   || null,
+    primary_phone:   value.primary_phone   || null,
+    preferred_communication: value.preferred_communication || null,
+    billing_contact: {
+      name:  value?.billing_contact?.name  || null,
+      email: value?.billing_contact?.email || null,
+      phone: value?.billing_contact?.phone || null
+    },
+    portfolio: {
+      units_in_plan:        parseNumber(value?.portfolio?.units_in_plan),
+      total_portfolio_size: parseNumber(value?.portfolio?.total_portfolio_size),
+      markets:              Array.isArray(value?.portfolio?.markets) ? value.portfolio.markets : [],
+      property_types:       Array.isArray(value?.portfolio?.property_types) ? value.portfolio.property_types : []
+    },
+    qualification_criteria: {
+      min_income_requirement:   critSrc.min_income_requirement   ?? critSrc.revenu_minimum ?? null,
+      credit_score_requirement: critSrc.credit_score_requirement ?? critSrc.credit_min     ?? null,
+      employment_requirements:  critSrc.employment_requirements  ?? critSrc.employment_requirement ?? null,
+      guarantor_policy:         critSrc.guarantor_policy   ?? null,
+      pet_policy:               critSrc.pet_policy         ?? null,
+      occupancy_rules:          critSrc.occupancy_rules    ?? critSrc.max_occupants ?? null,
+      disqualifying_factors:    critSrc.disqualifying_factors ?? null,
+      additional_screening:     critSrc.additional_screening  ?? null
+    },
     criteres: {
-      revenu_minimum: parseNumber(value?.criteres?.revenu_minimum),
-      revenu_multiple: value?.criteres?.revenu_multiple ?? null,
-      credit_min: value?.criteres?.credit_min ?? null,
-      accepte_tal: Boolean(value?.criteres?.accepte_tal),
-      tal_policy: value?.criteres?.tal_policy ?? null,
-      max_occupants: parseNumber(value?.criteres?.max_occupants),
-      animaux_acceptes: Boolean(value?.criteres?.animaux_acceptes),
-      emplois_acceptes: Array.isArray(value?.criteres?.emplois_acceptes)
-        ? value.criteres.emplois_acceptes.map((job) => String(job))
+      revenu_minimum: parseNumber(critSrc.revenu_minimum ?? critSrc.min_income_requirement),
+      revenu_multiple: critSrc.revenu_multiple ?? null,
+      credit_min: critSrc.credit_min ?? null,
+      accepte_tal: Boolean(critSrc.accepte_tal ?? true),
+      tal_policy: critSrc.tal_policy ?? null,
+      max_occupants: parseNumber(critSrc.max_occupants ?? critSrc.occupancy_rules),
+      animaux_acceptes: Boolean(critSrc.animaux_acceptes),
+      emplois_acceptes: Array.isArray(critSrc.emplois_acceptes)
+        ? critSrc.emplois_acceptes.map((job) => String(job))
         : [],
-      employment_requirement: value?.criteres?.employment_requirement ?? null,
-      anciennete_min_mois: parseNumber(value?.criteres?.anciennete_min_mois)
+      employment_requirement: critSrc.employment_requirement ?? critSrc.employment_requirements ?? null,
+      anciennete_min_mois: parseNumber(critSrc.anciennete_min_mois)
+    },
+    workflow_preferences: {
+      escalation_rules:           value?.workflow_preferences?.escalation_rules           || null,
+      approval_process:           value?.workflow_preferences?.approval_process           || null,
+      showing_process:            value?.workflow_preferences?.showing_process            || null,
+      approval_notes:             value?.workflow_preferences?.approval_notes             || null,
+      communication_expectations: value?.workflow_preferences?.communication_expectations || null
+    },
+    brand_preferences: {
+      communication_tone: value?.brand_preferences?.communication_tone || null,
+      branding_name:      value?.brand_preferences?.branding_name      || null,
+      signature_contact:  value?.brand_preferences?.signature_contact  || null,
+      additional_notes:   value?.brand_preferences?.additional_notes   || null
     }
   };
 }
@@ -4491,6 +4532,181 @@ app.post("/api/client-onboarding/listing", async (req, res) => {
     return res.status(error.status || 500).json({
       ok: false,
       error: error.message || "Impossible d’enregistrer le premier logement."
+    });
+  }
+});
+
+// ─── Client Intake Form (comprehensive onboarding) ─────────────────────────
+app.post("/api/client-onboarding/intake", async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+
+    if (!token) {
+      return res.status(400).json({ ok: false, error: "Token manquant." });
+    }
+
+    const { invitations, invitation, index, status } = await resolveInvitationByToken(token);
+    ensureInvitationUsable(status, invitation);
+
+    if (!invitation.account_created_at) {
+      return res.status(409).json({
+        ok: false,
+        error: "Le compte client doit être créé avant de soumettre le formulaire d'accueil."
+      });
+    }
+
+    const payload = req.body || {};
+
+    // ── Save listings ─────────────────────────────────────────────────────────
+    const listingsPayload = Array.isArray(payload.listings) ? payload.listings : [];
+    const createdListingRefs = [];
+
+    if (listingsPayload.length > 0) {
+      const listings = await loadListingsMap();
+
+      for (const listing of listingsPayload) {
+        const adresse = String(listing.address || "").trim();
+        if (!adresse) continue;
+
+        const ville = String(
+          listing.address?.match(/,\s*([^,]+),\s*(?:QC|Quebec|Québec)/i)?.[1] || ""
+        ).trim();
+
+        const matchedLocation = resolveClosestQuebecLocation(ville || adresse);
+        const ref = nextListingRef(listings);
+
+        listings[ref] = toListingRecord(`L-${ref}`, {
+          ref:           `L-${ref}`,
+          adresse,
+          unite:         String(listing.unit_number || "").trim(),
+          ville:         matchedLocation?.label || ville || adresse,
+          zone:          matchedLocation?.zone || "",
+          lat:           parseCoordinate(matchedLocation?.lat),
+          lng:           parseCoordinate(matchedLocation?.lng),
+          type_logement: String(listing.unit_type || "").trim(),
+          chambres:      String(listing.unit_type || "").trim(),
+          loyer:         listing.monthly_rent || null,
+          disponibilite: String(listing.availability_date || "").trim(),
+          debut_bail:    String(listing.desired_lease_start || "").trim(),
+          amenities:     String(listing.amenities || "").trim(),
+          stationnement: String(listing.parking || "").trim(),
+          animaux_acceptes: String(listing.pets_allowed || "").trim(),
+          fumeur:        String(listing.smoking_allowed || "").trim(),
+          lien_existant: String(listing.existing_listing_link || "").trim(),
+          notes:         String(listing.notes || "").trim(),
+          client_id:     invitation.client_id,
+          statut:        "actif"
+        });
+
+        createdListingRefs.push(`L-${ref}`);
+      }
+
+      await saveListingsMap(listings);
+    }
+
+    // ── Build qualification criteria ──────────────────────────────────────────
+    const qc = payload.qualification_criteria || {};
+    const employmentRaw = String(qc.employment_requirements || "").trim();
+    const creditRaw     = String(qc.credit_score_requirement || "").trim();
+    const petRaw        = String(qc.pet_policy || "").trim();
+
+    const criteres = {
+      revenu_minimum:         parseNumber(String(qc.min_income_requirement || "").replace(/[^0-9.]/g, "")),
+      revenu_multiple:        null,
+      credit_min:
+        creditRaw === "excellent" ? "haut"
+        : creditRaw === "good"    ? "moyen"
+        : creditRaw === "fair"    ? "bas"
+        : null,
+      credit_score_requirement: creditRaw || null,
+      accepte_tal:            true,
+      tal_policy:             null,
+      max_occupants:          parseNumber(qc.occupancy_rules),
+      animaux_acceptes:       petRaw !== "not_allowed",
+      pet_policy:             petRaw || null,
+      emplois_acceptes:       buildEmploymentCriteria(employmentRaw),
+      employment_requirement: employmentRaw || null,
+      guarantor_policy:       String(qc.guarantor_policy || "").trim() || null,
+      disqualifying_factors:  String(qc.disqualifying_factors || "").trim() || null,
+      additional_screening:   String(qc.additional_screening || "").trim() || null,
+      anciennete_min_mois:    null
+    };
+
+    // ── Update client record ──────────────────────────────────────────────────
+    const clientsMap = await loadClientsMap();
+    const existing   = clientsMap[invitation.client_id] || {};
+
+    const portfolioPayload = payload.portfolio || {};
+    const workflowPayload  = payload.workflow_preferences || {};
+    const brandPayload     = payload.brand_preferences || {};
+    const billingPayload   = payload.billing_contact || {};
+
+    clientsMap[invitation.client_id] = normalizeClientRecord(invitation.client_id, {
+      ...existing,
+      id:           invitation.client_id,
+      nom:          existing.nom || invitation.company_name,
+      company_name: existing.company_name || invitation.company_name,
+      contact_name: existing.contact_name || invitation.contact_name,
+      email:        existing.email || invitation.email,
+      phone:        existing.phone || invitation.phone,
+      main_city:    existing.main_city || invitation.main_city,
+      onboarding_user_id:        existing.onboarding_user_id || invitation.supabase_user_id || null,
+      onboarding_completed_at:   existing.onboarding_completed_at || new Date().toISOString(),
+      intake_submitted_at:       new Date().toISOString(),
+      intake_status:             "pending_review",
+      notification_preferences:  existing.notification_preferences || {},
+      primary_contact:           String(payload.primary_contact || "").trim() || null,
+      primary_email:             String(payload.primary_email || "").trim() || null,
+      primary_phone:             String(payload.primary_phone || "").trim() || null,
+      preferred_communication:   String(payload.preferred_communication || "").trim() || null,
+      billing_contact: {
+        name:  String(billingPayload.name  || "").trim() || null,
+        email: String(billingPayload.email || "").trim() || null,
+        phone: String(billingPayload.phone || "").trim() || null
+      },
+      portfolio: {
+        units_in_plan:        parseNumber(portfolioPayload.units_in_plan),
+        total_portfolio_size: parseNumber(portfolioPayload.total_portfolio_size),
+        markets:              Array.isArray(portfolioPayload.markets) ? portfolioPayload.markets : [],
+        property_types:       Array.isArray(portfolioPayload.property_types) ? portfolioPayload.property_types : []
+      },
+      qualification_criteria: criteres,
+      criteres,
+      workflow_preferences: {
+        escalation_rules:           String(workflowPayload.escalation_rules || "").trim() || null,
+        approval_process:           String(workflowPayload.approval_process || "").trim() || null,
+        showing_process:            String(workflowPayload.showing_process || "").trim() || null,
+        approval_notes:             String(workflowPayload.approval_notes || "").trim() || null,
+        communication_expectations: String(workflowPayload.communication_expectations || "").trim() || null
+      },
+      brand_preferences: {
+        communication_tone: String(brandPayload.communication_tone || "").trim() || null,
+        branding_name:      String(brandPayload.branding_name || "").trim() || null,
+        signature_contact:  String(brandPayload.signature_contact || "").trim() || null,
+        additional_notes:   String(brandPayload.additional_notes || "").trim() || null
+      }
+    });
+
+    await saveClientsMap(clientsMap);
+
+    // ── Mark invitation completed ─────────────────────────────────────────────
+    invitations[index] = {
+      ...invitation,
+      status:       "completed",
+      completed_at: new Date().toISOString(),
+      listing_refs: createdListingRefs
+    };
+    await saveClientInvitations(invitations);
+
+    return res.status(201).json({
+      ok:           true,
+      listing_refs: createdListingRefs,
+      invitation:   sanitizeInvitation(invitations[index])
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      ok: false,
+      error: error.message || "Impossible de soumettre le formulaire d'accueil."
     });
   }
 });
