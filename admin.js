@@ -766,30 +766,32 @@ function openInviteClientModal() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;">
         <div>
           <div style="font-size:.85rem;font-weight:800;color:#1e90ff;text-transform:uppercase;letter-spacing:.05em;">Invitation client</div>
-          <h3 style="margin:6px 0 0;color:#191d45;">Créer un lien d’onboarding</h3>
+          <h3 style="margin:6px 0 0;color:#191d45;">Envoyer un lien d’onboarding</h3>
+          <p style="margin:6px 0 0;font-size:.88rem;color:#6b7280;">Le client recevra automatiquement un courriel avec son lien d’accès personnalisé.</p>
         </div>
         <button type="button" id="closeInviteClientModal" class="secondary-btn">Fermer</button>
       </div>
 
       <form id="inviteClientForm" class="admin-form">
         <div class="form-grid">
-          <input id="inviteName" type="text" placeholder="Nom" required />
-          <input id="inviteEmail" type="email" placeholder="Courriel" required />
-          <input id="invitePhone" type="text" placeholder="Téléphone (optionnel)" />
-          <input id="inviteMainCity" type="text" placeholder="Ville principale (optionnel)" />
+          <input id="inviteName"     type="text"  placeholder="Nom complet" required />
+          <input id="inviteEmail"    type="email" placeholder="Courriel" required />
+          <input id="invitePhone"    type="text"  placeholder="Téléphone (optionnel)" />
+          <input id="inviteMainCity" type="text"  placeholder="Ville principale (optionnel)" />
         </div>
 
         <div class="form-actions">
-          <button type="submit" id="submitInviteClientBtn" class="primary-btn">Générer le lien</button>
+          <button type="submit" id="submitInviteClientBtn" class="primary-btn">✉ Envoyer l’invitation</button>
         </div>
       </form>
 
       <div id="inviteClientStatus" style="margin-top:14px;font-weight:700;"></div>
+
       <div id="inviteClientLinkWrap" style="display:none;margin-top:14px;">
-        <div style="font-size:.9rem;color:#6b7280;margin-bottom:8px;">Lien unique valable 7 jours</div>
+        <div style="font-size:.9rem;color:#6b7280;margin-bottom:8px;">Lien de secours — valable 7 jours</div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <input id="inviteClientLink" type="text" readonly style="flex:1 1 360px;border:1px solid rgba(79,70,229,.14);border-radius:14px;padding:12px 14px;font:inherit;" />
-          <button type="button" id="copyInviteClientLinkBtn" class="secondary-btn">Copy link</button>
+          <button type="button" id="copyInviteClientLinkBtn" class="secondary-btn">Copier le lien</button>
         </div>
       </div>
     </div>
@@ -835,8 +837,9 @@ function openInviteClientModal() {
     const linkWrap = document.getElementById("inviteClientLinkWrap");
     const linkInput = document.getElementById("inviteClientLink");
 
+    const emailValue = document.getElementById("inviteEmail").value.trim();
     submitBtn.disabled = true;
-    submitBtn.textContent = "Création...";
+    submitBtn.textContent = "Envoi en cours…";
     statusEl.textContent = "";
     linkWrap.style.display = "none";
 
@@ -844,22 +847,21 @@ function openInviteClientModal() {
       const result = await fetchJSON("/api/admin/client-invitations", {
         method: "POST",
         body: JSON.stringify({
-          name: document.getElementById("inviteName").value.trim(),
-          email: document.getElementById("inviteEmail").value.trim(),
-          phone: document.getElementById("invitePhone").value.trim(),
+          name:      document.getElementById("inviteName").value.trim(),
+          email:     emailValue,
+          phone:     document.getElementById("invitePhone").value.trim(),
           main_city: document.getElementById("inviteMainCity").value.trim()
         })
       });
 
-      statusEl.textContent = "Invitation créée avec succès.";
-      statusEl.style.color = "#166534";
       linkInput.value = result.onboarding_link || "";
       linkWrap.style.display = "block";
-      linkInput.select();
-      if (!result.invitation_email_sent) {
-        statusEl.textContent = result.invitation_email_error
-          ? `Invitation créée. Erreur d’envoi email: ${result.invitation_email_error}.`
-          : "Invitation créée. Erreur d’envoi email.";
+
+      if (result.invitation_email_sent) {
+        statusEl.innerHTML = `✅ Invitation envoyée à <strong>${emailValue}</strong>. Le client recevra son lien d’accès par courriel.`;
+        statusEl.style.color = "#166534";
+      } else {
+        statusEl.innerHTML = `⚠️ Invitation créée mais l’envoi du courriel a échoué${result.invitation_email_error ? ` : ${result.invitation_email_error}` : ""}.<br>Copiez le lien ci-dessous et envoyez-le manuellement.`;
         statusEl.style.color = "#b45309";
       }
     } catch (error) {
@@ -867,7 +869,7 @@ function openInviteClientModal() {
       statusEl.style.color = "#991b1b";
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = "Générer le lien";
+      submitBtn.textContent = "✉ Envoyer l’invitation";
     }
   });
 }
@@ -1022,6 +1024,9 @@ function renderClientsTable(rows) {
       <td>${countLinkedApartments(client.id)}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" class="secondary-btn edit-client-btn" data-id="${client.id}">Modifier</button>
+        ${!client.portal_user_id && (client.invitation_status === "pending" || client.invitation_status === "expired" || !client.invitation_status)
+          ? `<button type="button" class="secondary-btn resend-invite-btn" data-client-id="${client.id}" data-email="${client.portal_email || client.email || ""}" style="background:rgba(30,144,255,.08);color:#1e90ff;">✉ ${client.invitation_status === "expired" ? "Regénérer et renvoyer" : "Renvoyer l'invitation"}</button>`
+          : ""}
         ${client.onboarding_link ? `<button type="button" class="secondary-btn copy-client-link-btn" data-link="${client.onboarding_link}">Copier le lien</button>` : ""}
         ${client.portal_user_id && client.portal_access_status !== "deactivated"
           ? `<button type="button" class="secondary-btn deactivate-client-access-btn" data-user-id="${client.portal_user_id}" data-email="${client.portal_email || client.email || ""}">Désactiver accès</button>`
@@ -1051,6 +1056,38 @@ function renderClientsTable(rows) {
       } catch {
         clientFormStatus.textContent = "Impossible de copier le lien.";
         clientFormStatus.style.color = "red";
+      }
+    });
+  });
+
+  document.querySelectorAll(".resend-invite-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const clientId = btn.dataset.clientId;
+      const email    = btn.dataset.email;
+      const original = btn.textContent;
+      btn.disabled    = true;
+      btn.textContent = "Envoi…";
+      try {
+        const result = await fetchJSON("/api/admin/client-invitations/resend", {
+          method: "POST",
+          body: JSON.stringify({ client_id: clientId })
+        });
+        if (result.invitation_email_sent) {
+          clientFormStatus.innerHTML = `✅ Invitation renvoyée à <strong>${email}</strong>.`;
+          clientFormStatus.style.color = "#166534";
+          btn.textContent = "✓ Envoyé";
+          setTimeout(() => loadClients(), 1500);
+        } else {
+          clientFormStatus.textContent = `⚠️ Lien regénéré, mais l'envoi email a échoué${result.invitation_email_error ? ` : ${result.invitation_email_error}` : ""}. Rechargez et copiez le lien manuellement.`;
+          clientFormStatus.style.color = "#b45309";
+          btn.disabled    = false;
+          btn.textContent = original;
+        }
+      } catch (err) {
+        clientFormStatus.textContent = err.message || "Impossible de renvoyer l'invitation.";
+        clientFormStatus.style.color = "#991b1b";
+        btn.disabled    = false;
+        btn.textContent = original;
       }
     });
   });

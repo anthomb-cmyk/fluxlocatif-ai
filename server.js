@@ -4161,6 +4161,63 @@ app.post("/api/admin/client-invitations", async (req, res) => {
   }
 });
 
+// Resend invitation email (or regenerate token if expired)
+app.post("/api/admin/client-invitations/resend", async (req, res) => {
+  try {
+    const clientId = String(req.body?.client_id || "").trim();
+    if (!clientId) {
+      return res.status(400).json({ ok: false, error: "client_id est obligatoire." });
+    }
+
+    const invitations = await loadClientInvitations();
+    // Find the most recent invitation for this client
+    const matches = invitations
+      .map((inv, idx) => ({ inv, idx }))
+      .filter(({ inv }) => inv.client_id === clientId)
+      .sort((a, b) => new Date(b.inv.created_at) - new Date(a.inv.created_at));
+
+    if (!matches.length) {
+      return res.status(404).json({ ok: false, error: "Aucune invitation trouvée pour ce client." });
+    }
+
+    const { inv: invitation, idx: index } = matches[0];
+
+    if (invitation.status === "completed") {
+      return res.status(409).json({ ok: false, error: "Ce client a déjà complété son onboarding." });
+    }
+
+    // If expired or pending — refresh the token and expiry
+    const now      = new Date();
+    const newToken  = createSecureToken();
+    const newExpiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    invitations[index] = {
+      ...invitation,
+      token:      newToken,
+      status:     "pending",
+      expires_at: newExpiry,
+      resent_at:  now.toISOString()
+    };
+
+    await saveClientInvitations(invitations);
+
+    const onboardingLink  = buildOnboardingLink(req, newToken);
+    const emailDelivery   = await sendClientInvitationEmail(invitations[index], onboardingLink);
+
+    return res.json({
+      ok:                     true,
+      onboarding_link:        onboardingLink,
+      invitation_email_sent:  emailDelivery.sent,
+      invitation_email_error: emailDelivery.sent ? null : emailDelivery.error
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message || "Impossible de renvoyer l'invitation."
+    });
+  }
+});
+
 app.get("/api/client-onboarding/invitation", async (req, res) => {
   try {
     const token = String(req.query.token || "").trim();
