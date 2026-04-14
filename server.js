@@ -1088,6 +1088,36 @@ function extractEmailAddress(value) {
   return String(match?.[1] || rawValue).trim().toLowerCase();
 }
 
+// Resend rejects non-ASCII characters in the `from` display name.
+// This normalises accented/special chars to their ASCII equivalents.
+function sanitizeFromField(value) {
+  const raw = String(value || "").trim();
+  const withBrackets = raw.match(/^"?([^"<]*)"?\s*<([^>]+)>$/);
+  if (!withBrackets) return raw; // plain email — return as-is
+
+  const accentMap = {
+    À:"A",Á:"A",Â:"A",Ã:"A",Ä:"A",Å:"A",
+    È:"E",É:"E",Ê:"E",Ë:"E",
+    Ì:"I",Í:"I",Î:"I",Ï:"I",
+    Ò:"O",Ó:"O",Ô:"O",Õ:"O",Ö:"O",
+    Ù:"U",Ú:"U",Û:"U",Ü:"U",
+    Ý:"Y",Ç:"C",Ñ:"N",
+    à:"a",á:"a",â:"a",ã:"a",ä:"a",å:"a",
+    è:"e",é:"e",ê:"e",ë:"e",
+    ì:"i",í:"i",î:"i",ï:"i",
+    ò:"o",ó:"o",ô:"o",õ:"o",ö:"o",
+    ù:"u",ú:"u",û:"u",ü:"u",
+    ý:"y",ÿ:"y",ç:"c",ñ:"n"
+  };
+
+  const displayName = withBrackets[1]
+    .trim()
+    .replace(/[^\x00-\x7F]/g, (ch) => accentMap[ch] ?? "");
+  const email = withBrackets[2].trim();
+
+  return displayName ? `${displayName} <${email}>` : email;
+}
+
 function isValidInvitationSenderEmail(value) {
   const email = extractEmailAddress(value);
   if (!email || !email.includes("@")) {
@@ -1181,7 +1211,7 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
 
   try {
     const response = await resendClient.emails.send({
-      from: INVITATION_FROM_EMAIL,
+      from: sanitizeFromField(INVITATION_FROM_EMAIL),
       to: invitation.email,
       subject,
       html,
