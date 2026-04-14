@@ -5105,6 +5105,10 @@ app.put("/api/admin/candidates/:id", async (req, res) => {
   }
 });
 
+// CRM — proxy to Next.js service
+app.get("/crm", (req, res) => res.redirect(302, "https://fluxlocatifwebsite-production.up.railway.app/crm"));
+app.get("/crm/*", (req, res) => res.redirect(302, "https://fluxlocatifwebsite-production.up.railway.app" + req.path));
+
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api/")) {
     return next();
