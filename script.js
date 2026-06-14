@@ -1384,13 +1384,53 @@ async function sendEmployeeWorkspaceMessage(event) {
 
   if (!content) return;
 
-  await fetchEmployeeJSON("/api/employee/workspace/messages", {
-    method: "POST",
-    body: JSON.stringify({ content })
-  });
+  const submitBtn = employeeMessageForm?.querySelector('[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  if (employeeMessageInput) employeeMessageInput.disabled = true;
 
-  employeeMessageInput.value = "";
-  await loadEmployeeWorkspace();
+  // BUG-2: render the message immediately so "Envoyer" never looks like it did nothing,
+  // even if the server round-trip lags.
+  const optimisticId = `local-${Date.now()}`;
+  chatState.workspaceMessages = [
+    ...(chatState.workspaceMessages || []),
+    {
+      id: optimisticId,
+      from_user_id: chatState.currentUser?.id,
+      to_user_id: "admin",
+      content,
+      created_at: new Date().toISOString()
+    }
+  ];
+  renderEmployeeMessageThread();
+  if (employeeMessageInput) employeeMessageInput.value = "";
+
+  try {
+    await fetchEmployeeJSON("/api/employee/workspace/messages", {
+      method: "POST",
+      body: JSON.stringify({ content })
+    });
+    await loadEmployeeWorkspace();
+  } catch (error) {
+    // BUG-2: surface the failure instead of failing silently; roll back and restore the text.
+    chatState.workspaceMessages = (chatState.workspaceMessages || []).filter(
+      (message) => message.id !== optimisticId
+    );
+    renderEmployeeMessageThread();
+    if (employeeMessageInput) employeeMessageInput.value = content;
+    if (employeeMessageThread) {
+      const errorRow = document.createElement("div");
+      errorRow.className = "workspace-list-empty";
+      errorRow.style.color = "#991b1b";
+      errorRow.textContent = `Échec de l'envoi: ${error?.message || "réessayez."}`;
+      employeeMessageThread.appendChild(errorRow);
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+    if (employeeMessageInput) {
+      employeeMessageInput.disabled = false;
+      employeeMessageInput.focus();
+    }
+  }
 }
 
 async function checkServer() {
@@ -1462,10 +1502,17 @@ async function sendToAI(input, ref = "") {
   const controller = new AbortController();
   chatState.abortController = controller;
 
+  // SEC-1: /api/chat now requires an authenticated staff session, so send the bearer token.
+  const session = chatState.currentSession || await waitForActiveSession(1, 0);
+  if (!session?.access_token) {
+    throw new Error("Session employé introuvable. Reconnectez-vous.");
+  }
+
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`
     },
     signal: controller.signal,
     body: JSON.stringify({

@@ -19,6 +19,7 @@ function buildProgressiveChunks(text) {
 
 export function createChatRouter({
   chatLimiter,
+  resolveEmployeeContext,
   listingsService,
   openaiService,
   normalizeRef,
@@ -32,9 +33,22 @@ export function createChatRouter({
   const router = Router();
 
   router.post("/", chatLimiter, async (req, res) => {
+    // SEC-1: /api/chat invokes the LLM and must require an authenticated staff session.
+    // Authenticate before streaming so failures return a normal JSON status, not an NDJSON body.
+    let authContext;
+    try {
+      authContext = await resolveEmployeeContext(req);
+    } catch (error) {
+      return res.status(error.status || 401).json({
+        ok: false,
+        error: error.message || "Authentification requise."
+      });
+    }
+
     const mode = String(req.body?.mode || "").trim();
     const message = String(req.body?.message || "").trim();
-    const userId = String(req.body?.user_id || "employee-manuel");
+    // Bind the session to the authenticated user rather than a spoofable body field.
+    const userId = String(authContext.user?.id || req.body?.user_id || "employee-manuel");
     const listingRef = normalizeRef(req.body?.listing_ref || "");
     const resolvedListingRef = listingRef ? `L-${listingRef}` : "";
     const translatorThreadKey = String(req.body?.translator_thread_key || "").trim();
@@ -128,13 +142,25 @@ export function createChatRouter({
 
       if (mode === "listing") {
         const listings = await listingsService.loadListingsMap();
-        const reference = extractListingReference(message);
-        const listing = listings[reference];
+        // BUG-3: the dropdown selection (listing_ref) is the source of truth for which
+        // apartment the employee is asking about. Only fall back to parsing the message
+        // text when no structured ref was sent (older clients).
+        const reference = listingRef || extractListingReference(message);
 
-        if (!reference || !listing) {
+        if (!reference) {
           writeStreamEvent(res, {
             type: "error",
-            error: "Référence d'appartement introuvable dans le message."
+            error: "Sélectionnez un appartement avant de poser votre question."
+          });
+          return res.end();
+        }
+
+        const listing = listings[reference];
+
+        if (!listing) {
+          writeStreamEvent(res, {
+            type: "error",
+            error: `Appartement L-${reference} introuvable. Vérifiez la sélection.`
           });
           return res.end();
         }
@@ -172,7 +198,14 @@ export function createChatRouter({
       });
       return res.end();
     } catch (error) {
-      const errorMessage = error?.name === "AbortError"
+      const aborted = error?.name === "AbortError";
+      if (!aborted) {
+        // Surface the real cause in the server logs instead of swallowing it behind
+        // the generic message the user sees.
+        console.error("[/api/chat] handler error:", error);
+      }
+
+      const errorMessage = aborted
         ? "Requête annulée."
         : "Impossible de traiter la demande.";
 
