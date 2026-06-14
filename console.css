@@ -1,0 +1,470 @@
+/* ============================================================
+   console.css — FluxLocatif OS redesign overlay
+   Loaded AFTER admin.css. Adds the premium Linear/Stripe-style
+   shell on top of the existing admin markup WITHOUT changing any
+   id, class hook, data-attribute or table column the JS depends on.
+   Only visual rules live here; the DOM contract is untouched.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* FluxLocatif OS exact tokens */
+  --fl-bg: #f5f7fb;
+  --fl-card: #ffffff;
+  --fl-card-soft: rgba(255, 255, 255, 0.9);
+  --fl-border: #e5e7eb;
+  --fl-border-soft: #eceef3;
+  --fl-text: #1f2350;
+  --fl-heading: #191d45;
+  --fl-muted: #6b7280;
+  --fl-muted-2: #9aa1b2;
+  --fl-blue: #1e90ff;
+  --fl-indigo: #4f46e5;
+  --fl-purple: #9333ea;
+  --fl-primary-grad: linear-gradient(135deg, #1e90ff, #4f46e5 48%, #9333ea);
+  --fl-success-fg: #166534;
+  --fl-success-bg: #dcfce7;
+  --fl-danger-fg: #991b1b;
+  --fl-danger-bg: #fee2e2;
+  --fl-shadow: 0 1px 2px rgba(79, 70, 229, .04), 0 10px 28px rgba(79, 70, 229, .06);
+  --fl-shadow-lg: 0 24px 60px rgba(79, 70, 229, .14);
+  --fl-radius: 20px;
+}
+
+/* ---------- base / shell ---------- */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  color: var(--fl-text);
+  background: var(--fl-bg) !important;
+  -webkit-font-smoothing: antialiased;
+}
+.page-bg { display: none; } /* drop the old radial wash for the flat OS bg */
+
+.admin-shell {
+  grid-template-columns: 248px 1fr;
+  gap: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  background: var(--fl-card) !important;
+  border: 0 !important;
+  border-right: 1px solid var(--fl-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 22px 16px 18px !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.brand { margin-bottom: 6px; padding: 0 6px; gap: 11px; }
+.brand-mark {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  font-size: 15px;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, .28);
+  background: var(--fl-primary-grad);
+}
+.brand h1 { font-size: 15px; font-weight: 700; color: var(--fl-heading); letter-spacing: -.01em; }
+.brand p { font-size: 11px; font-weight: 500; color: var(--fl-muted-2); letter-spacing: .04em; }
+
+/* nav section label injected via ::before on .menu */
+.menu { gap: 3px; margin-top: 16px; position: relative; }
+.menu::before {
+  content: "Navigation";
+  font-size: 10.5px; font-weight: 600; letter-spacing: .13em;
+  color: #aeb4c2; text-transform: uppercase;
+  padding: 6px 10px 8px;
+}
+
+.menu-btn {
+  display: flex !important;
+  align-items: center;
+  gap: 11px;
+  height: 42px;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: #5b6172 !important;
+  font-weight: 500 !important;
+  font-size: 14px !important;
+  letter-spacing: -.005em;
+  transition: background .14s ease, color .14s ease;
+}
+.menu-btn svg { width: 19px; height: 19px; flex-shrink: 0; }
+.menu-btn:hover { background: #f5f6fa !important; color: var(--fl-heading) !important; }
+.menu-btn.active {
+  background: #eef0ff !important;
+  color: var(--fl-indigo) !important;
+  font-weight: 600 !important;
+}
+
+/* user card pinned to sidebar bottom */
+.sidebar-user {
+  margin-top: auto;
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px;
+  border: 1px solid #e9ebf1; border-radius: 16px;
+  background: #fafbfe;
+}
+.sidebar-user .avatar {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: linear-gradient(135deg, #4f46e5, #9333ea);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 600; font-size: 14px; flex-shrink: 0;
+}
+.sidebar-user .who { line-height: 1.25; min-width: 0; flex: 1; }
+.sidebar-user .who .name { font-size: 13.5px; font-weight: 600; color: var(--fl-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-user .who .role { font-size: 11.5px; color: #8b91a3; display: flex; align-items: center; gap: 5px; }
+.sidebar-user .who .role .dot { width: 6px; height: 6px; border-radius: 9999px; background: #22c55e; display: inline-block; }
+
+/* ---------- main column ---------- */
+.main { gap: 0; }
+
+/* topbar */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  height: 66px; padding: 0 30px !important;
+  background: rgba(255, 255, 255, .82) !important;
+  backdrop-filter: blur(14px) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--fl-border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: flex; align-items: center; gap: 18px;
+}
+.topbar .eyebrow {
+  margin-bottom: 2px; padding: 0; background: none; color: var(--fl-muted-2);
+  font-size: 12.5px; font-weight: 500; text-transform: none; letter-spacing: 0;
+}
+.topbar h2 { font-size: 17px; font-weight: 700; color: var(--fl-heading); letter-spacing: -.01em; }
+.topbar-spacer { flex: 1; }
+
+.topbar-search { position: relative; width: 280px; max-width: 34vw; }
+.topbar-search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.topbar-search input {
+  width: 100%; height: 40px; padding: 0 14px 0 38px;
+  border: 1px solid var(--fl-border); border-radius: 12px;
+  background: #f7f8fc; font-family: inherit; font-size: 13.5px; color: var(--fl-text);
+}
+.topbar-search input:focus { outline: none; border-color: var(--fl-indigo); background: #fff; box-shadow: 0 0 0 3px rgba(79, 70, 229, .12); }
+
+.topbar-bell {
+  position: relative; width: 40px; height: 40px;
+  border-radius: 12px; border: 1px solid var(--fl-border);
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #5b6172;
+}
+.topbar-bell:hover { background: #f7f8fc; color: var(--fl-indigo); }
+.topbar-bell .ping { position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 9999px; background: var(--fl-purple); border: 1.5px solid #fff; }
+.topbar-avatar {
+  width: 36px; height: 36px; border-radius: 11px;
+  background: linear-gradient(135deg, #4f46e5, #9333ea);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 600; font-size: 13px;
+  padding-left: 0; margin-left: 6px;
+}
+
+/* the Rafraîchir button in the topbar becomes a subtle ghost button */
+#refreshBtn {
+  background: #fff !important;
+  color: #5b6172 !important;
+  border: 1px solid var(--fl-border) !important;
+  font-weight: 500 !important;
+  height: 40px;
+}
+#refreshBtn:hover { background: #f7f8fc !important; color: var(--fl-indigo) !important; }
+
+/* content scroll area */
+.main > section.card {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  border-radius: 0 !important;
+  padding: 26px 30px 40px !important;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ---------- KPI stat row (dashboard strip, optional static markup) ---------- */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px;
+}
+.kpi {
+  background: #fff; border: 1px solid var(--fl-border); border-radius: var(--fl-radius);
+  padding: 19px 20px; box-shadow: var(--fl-shadow);
+}
+.kpi-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+.kpi-head .lbl { font-size: 12.5px; font-weight: 500; color: var(--fl-muted); }
+.kpi-head .ic { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.kpi-head .ic.indigo { background: #eef0ff; color: var(--fl-indigo); }
+.kpi-head .ic.blue { background: #e6f2ff; color: var(--fl-blue); }
+.kpi-head .ic.purple { background: #f6ebff; color: var(--fl-purple); }
+.kpi-head .ic.green { background: #dcfce7; color: #16a34a; }
+.kpi-val { font-size: 32px; font-weight: 700; color: var(--fl-heading); letter-spacing: -.03em; line-height: 1; }
+.kpi-foot { display: flex; align-items: center; gap: 8px; margin-top: 11px; }
+.kpi-trend { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--fl-success-fg); background: var(--fl-success-bg); padding: 2px 7px; border-radius: 9999px; }
+.kpi-trend.flat { color: var(--fl-muted); background: #eef1f6; }
+.kpi-foot .sub { font-size: 11.5px; color: var(--fl-muted-2); }
+
+/* ---------- cards / surfaces (form-card, table-wrap) ---------- */
+.form-card {
+  background: #fff !important;
+  border: 1px solid var(--fl-border) !important;
+  border-radius: var(--fl-radius) !important;
+  box-shadow: var(--fl-shadow) !important;
+  padding: 22px 24px !important;
+}
+.form-card h3 { color: var(--fl-heading); font-size: 15px; font-weight: 600; }
+
+.table-wrap {
+  background: #fff;
+  border: 1px solid var(--fl-border);
+  border-radius: var(--fl-radius);
+  box-shadow: var(--fl-shadow);
+  padding: 6px 4px;
+  overflow: auto;
+}
+.table-wrap > h3 { padding: 14px 18px 0; color: var(--fl-heading); font-size: 15px; font-weight: 600; }
+
+table { min-width: 760px; }
+thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: #f7f8fc;
+  color: var(--fl-muted);
+  font-size: 11.5px; font-weight: 600; letter-spacing: .02em;
+  text-transform: uppercase;
+  padding: 12px 12px !important;
+  border-bottom: 1px solid var(--fl-border) !important;
+  white-space: nowrap;
+}
+tbody td {
+  padding: 13px 12px !important;
+  border-bottom: 1px solid var(--fl-border-soft) !important;
+  color: var(--fl-text);
+  font-size: 13.5px;
+}
+tbody tr:hover td { background: #fafbfe; }
+tbody tr:last-child td { border-bottom: 0 !important; }
+
+/* sticky first column on the dense tables (candidats / appartements) */
+#candidatesBody tr td:first-child,
+#apartmentsBody tr td:first-child,
+#candidatesTab thead th:first-child,
+#apartmentsTab thead th:first-child {
+  position: sticky; left: 0; z-index: 1;
+  background: #fff;
+  box-shadow: 1px 0 0 var(--fl-border-soft);
+}
+#candidatesTab thead th:first-child,
+#apartmentsTab thead th:first-child { z-index: 3; background: #f7f8fc; }
+#candidatesBody tr:hover td:first-child,
+#apartmentsBody tr:hover td:first-child { background: #fafbfe; }
+
+/* ---------- filter bars ---------- */
+.filters {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  background: #fff; border: 1px solid var(--fl-border); border-radius: 16px;
+  box-shadow: var(--fl-shadow); padding: 12px 14px; margin-bottom: 18px;
+}
+.filters input,
+.filters select {
+  border: 1px solid var(--fl-border) !important;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  font: inherit; font-size: 13.5px; color: var(--fl-text);
+  background: #f7f8fc;
+}
+.filters input:focus,
+.filters select:focus { outline: none; border-color: var(--fl-indigo); background: #fff; box-shadow: 0 0 0 3px rgba(79, 70, 229, .12); }
+
+/* ---------- form controls ---------- */
+.admin-form input,
+.admin-form textarea,
+.admin-form select {
+  border: 1px solid var(--fl-border) !important;
+  border-radius: 12px !important;
+  padding: 11px 13px !important;
+  background: #f7f8fc !important;
+  color: var(--fl-text);
+  font-size: 13.5px;
+  transition: border-color .14s, box-shadow .14s, background .14s;
+}
+.admin-form input:focus,
+.admin-form textarea:focus,
+.admin-form select:focus {
+  outline: none;
+  border-color: var(--fl-indigo) !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .12);
+}
+
+/* field label helper (label-above pattern) */
+.field-label {
+  display: block;
+  font-size: 11.5px; font-weight: 600; letter-spacing: .02em;
+  color: var(--fl-muted); margin-bottom: 6px;
+}
+
+/* ---------- buttons ---------- */
+.primary-btn {
+  background: var(--fl-primary-grad) !important;
+  color: #fff !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  font-size: 13.5px !important;
+  padding: 11px 18px !important;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, .22);
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+}
+.primary-btn:hover { filter: brightness(1.04); box-shadow: 0 10px 26px rgba(79, 70, 229, .28); }
+.primary-btn:active { transform: translateY(1px); }
+
+.secondary-btn {
+  background: #fff !important;
+  color: #5b6172 !important;
+  border: 1px solid var(--fl-border) !important;
+  border-radius: 12px !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  padding: 10px 16px !important;
+}
+.secondary-btn:hover { background: #f7f8fc !important; color: var(--fl-indigo) !important; }
+
+/* ---------- row action buttons (admin.js-generated) ---------- */
+.approve-candidate-btn,
+.reject-candidate-btn,
+.evaluate-candidate-btn,
+.reassign-candidate-btn,
+.alternatives-candidate-btn,
+.edit-apartment-btn,
+.delete-apartment-btn,
+.edit-client-btn,
+.deactivate-client-access-btn,
+.delete-client-access-btn,
+.copy-client-link-btn,
+.resend-invite-btn,
+.deactivate-user-btn,
+.delete-user-btn,
+.translator-report-status-btn {
+  border: 1px solid var(--fl-border);
+  background: #fff;
+  color: #5b6172;
+  border-radius: 9px;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.approve-candidate-btn:hover,
+.evaluate-candidate-btn:hover,
+.reassign-candidate-btn:hover,
+.alternatives-candidate-btn:hover,
+.edit-apartment-btn:hover,
+.edit-client-btn:hover,
+.copy-client-link-btn:hover,
+.resend-invite-btn:hover,
+.translator-report-status-btn:hover {
+  border-color: var(--fl-indigo);
+  color: var(--fl-indigo);
+  background: #f5f6ff;
+}
+/* positive / negative intents */
+.approve-candidate-btn { border-color: #d6f0df; background: #f0fbf4; color: #16a34a; }
+.approve-candidate-btn:hover { background: var(--fl-success-bg); color: var(--fl-success-fg); border-color: #bbe6c8; }
+.reject-candidate-btn,
+.delete-apartment-btn,
+.delete-client-access-btn,
+.deactivate-client-access-btn,
+.deactivate-user-btn,
+.delete-user-btn {
+  border-color: #f6d6d6; background: #fdf2f2; color: #dc2626;
+}
+.reject-candidate-btn:hover,
+.delete-apartment-btn:hover,
+.delete-client-access-btn:hover,
+.deactivate-client-access-btn:hover,
+.deactivate-user-btn:hover,
+.delete-user-btn:hover {
+  background: var(--fl-danger-bg); color: var(--fl-danger-fg); border-color: #f0bcbc;
+}
+
+/* group action buttons that JS lays out as a grid keep working; just tidy spacing */
+td .approve-candidate-btn,
+td .reject-candidate-btn,
+td button { margin: 2px; }
+
+/* ---------- pills / badges ---------- */
+.match-badge { border-radius: 9999px; font-size: .8rem; font-weight: 600; padding: 4px 11px; }
+.match-badge.accepted { background: var(--fl-success-bg); color: var(--fl-success-fg); }
+.match-badge.review { background: #fef3c7; color: #92400e; }
+.match-badge.refused { background: var(--fl-danger-bg); color: var(--fl-danger-fg); }
+
+/* score pill helper (if used in generated cells via inline color it still renders) */
+.score-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; padding: 3px 9px; border-radius: 9999px;
+  font-weight: 700; font-size: 13px; font-family: 'Geist Mono', ui-monospace, monospace;
+}
+
+/* ---------- messagerie two-pane ---------- */
+#workspaceConversationList { display: grid; gap: 8px; }
+#workspaceMessageThread {
+  background: #f7f8fc; border: 1px solid var(--fl-border-soft); border-radius: 16px; padding: 14px;
+}
+#workspaceMessageInput {
+  min-height: 70px;
+}
+
+/* ---------- translator report cards ---------- */
+.translator-report-card {
+  border: 1px solid var(--fl-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--fl-shadow);
+}
+.workspace-section-head .eyebrow {
+  background: rgba(147, 51, 234, .10); color: var(--fl-purple);
+}
+
+/* ---------- dynamically injected modals (userActionModal / inviteClientModal /
+   alternativeListingsModal). JS sets the overlay style inline; we style the inner
+   panel + its controls so they match the OS look. The inner panel is the overlay's
+   first element child. ---------- */
+#userActionModal > *,
+#inviteClientModal > *,
+#alternativeListingsModal > * {
+  background: #fff;
+  border-radius: 22px !important;
+  box-shadow: var(--fl-shadow-lg) !important;
+  border: 1px solid var(--fl-border);
+  animation: flpop .18s ease;
+}
+@keyframes flpop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+
+#userActionModal h3,
+#inviteClientModal h3,
+#alternativeListingsModal h3 { color: var(--fl-heading); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 980px) {
+  .admin-shell { grid-template-columns: 1fr; }
+  .sidebar { position: relative; height: auto; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .topbar-search { display: none; }
+  .kpi-row { grid-template-columns: 1fr; }
+  .main > section.card { padding: 20px 16px 32px !important; }
+}
