@@ -4,246 +4,290 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FluxLocatif — Espace IA employés</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css?v=19" />
+  <link rel="stylesheet" href="/workspace.css?v=19" />
 </head>
 <body>
   <div class="page-bg"></div>
 
-  <div class="app-shell workspace-shell">
-    <main class="main-panel workspace-main" id="mainContent" role="main" aria-label="Espace employé FluxLocatif">
-      <header class="workspace-topbar glass-card">
-        <div class="brand-block">
-          <div class="brand-mark">F</div>
+  <div class="flx-shell">
+    <div class="flx-layout">
+      <!-- ===================== SIDEBAR ===================== -->
+      <aside class="flx-sidebar">
+        <div class="flx-brand">
+          <div class="flx-brand-mark">FL</div>
           <div>
-            <h1>FluxLocatif</h1>
-            <p>Assistant interne pour l’équipe locative</p>
+            <div class="flx-brand-name">FluxLocatif</div>
+            <div class="flx-brand-sub">Espace employé</div>
           </div>
         </div>
 
-        <div class="workspace-nav workspace-nav-inline">
-          <button type="button" class="workspace-nav-btn active" data-workspace-tab="dashboard">Dashboard</button>
-          <button type="button" class="workspace-nav-btn" data-workspace-tab="messages">
-            Messages
-            <span id="workspaceMessagesBadge" class="workspace-nav-badge hidden">0</span>
-          </button>
-          <button type="button" class="workspace-nav-btn" data-workspace-tab="listings">
-            Listings
-            <span id="workspaceListingsBadge" class="workspace-nav-badge hidden">0</span>
-          </button>
-        </div>
-      </header>
+        <div class="flx-sidebar-divider"></div>
+        <div class="flx-nav-label">Navigation</div>
 
-      <div id="employeeNotificationBanner" class="workspace-alert-stack"></div>
+        <button type="button" class="workspace-nav-btn active" data-workspace-tab="dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span class="flx-nav-btn-label">Tableau de bord</span>
+        </button>
 
-      <section id="dashboardWorkspaceTab" class="workspace-page active">
-        <header class="topbar glass-card">
+        <button type="button" class="workspace-nav-btn" data-workspace-tab="messages">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="flx-nav-btn-label">Messages</span>
+          <span id="workspaceMessagesBadge" class="workspace-nav-badge hidden">0</span>
+        </button>
+
+        <button type="button" class="workspace-nav-btn" data-workspace-tab="listings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
+          <span class="flx-nav-btn-label">Listings</span>
+          <span id="workspaceListingsBadge" class="workspace-nav-badge hidden">0</span>
+        </button>
+
+        <div class="flx-identity">
+          <div class="flx-identity-avatar">CL</div>
           <div>
-            <span class="eyebrow">Espace de travail</span>
-            <h2>Assistant locatif interne</h2>
-            <p>Assistant d’immeubles et traducteur regroupés au centre de votre espace opérationnel.</p>
+            <div class="flx-identity-name">Camille Lavoie</div>
+            <div class="flx-identity-role">Conseillère location</div>
           </div>
+        </div>
+      </aside>
 
-          <div class="mode-switch" role="tablist" aria-label="Changement de mode">
+      <!-- ===================== MAIN ===================== -->
+      <main class="flx-main" id="mainContent" role="main" aria-label="Espace employé FluxLocatif">
+
+        <!-- ===================== DASHBOARD ===================== -->
+        <section id="dashboardWorkspaceTab" class="workspace-page flx-page active">
+          <div id="employeeNotificationBanner" class="workspace-alert-stack"></div>
+
+          <div class="flx-eyebrow">Assistant</div>
+          <h1 class="flx-h1">Bonjour Camille, voici votre poste de travail</h1>
+          <p class="flx-lede">Interrogez vos immeubles, traduisez les messages reçus et préqualifiez les dossiers — sans quitter cet écran.</p>
+
+          <div class="flx-segment" role="tablist" aria-label="Changement de mode">
             <button type="button" class="mode-btn active" id="listingModeBtn" data-mode="listing">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.94 14.06A2 2 0 0 0 8.5 12.62l-5.7-1.47a.5.5 0 0 1 0-.97L8.5 8.71a2 2 0 0 0 1.44-1.44l1.47-5.7a.5.5 0 0 1 .97 0l1.47 5.7a2 2 0 0 0 1.44 1.44l5.7 1.47a.5.5 0 0 1 0 .97l-5.7 1.47a2 2 0 0 0-1.44 1.44l-1.47 5.7a.5.5 0 0 1-.97 0z"/></svg>
               Assistant des immeubles
             </button>
             <button type="button" class="mode-btn" id="translatorModeBtn" data-mode="translator">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
               Traducteur
             </button>
           </div>
-        </header>
 
-        <section class="status-row">
-          <div class="status-wrapper">
-            <div class="status-card" id="modeStatus">
-              Le mode Assistant des immeubles est actif. Sélectionnez un appartement puis posez votre question.
-            </div>
+          <!-- Status + listing selector -->
+          <section class="flx-card">
+            <div class="flx-card-body">
+              <div class="status-card flx-status-card" id="modeStatus">
+                Le mode Assistant des immeubles est actif. Sélectionnez un appartement puis posez votre question.
+              </div>
 
-            <div id="listingSelectorCard" class="listing-selector-card">
-              <div class="listing-selector-title">Sélectionnez votre appartement</div>
-              <div class="listing-selector-subtitle">Choisissez d’abord un logement avant d’écrire votre question.</div>
+              <div id="listingSelectorCard" class="listing-selector-card">
+                <div class="listing-selector-title">Sélectionnez votre appartement</div>
+                <div class="listing-selector-subtitle">Choisissez d’abord un logement avant d’écrire votre question.</div>
 
-              <select id="listingSelect" class="listing-select">
-                <option value="">Sélectionnez un appartement</option>
-              </select>
-              <button type="button" id="loadListingsBtn" class="secondary-btn listing-load-btn">
-                Charger les appartements
-              </button>
-            </div>
-          </div>
-
-          <div class="server-pill" id="serverStatus">Connexion serveur en cours…</div>
-        </section>
-
-        <section class="chat-card glass-card">
-          <div class="chat-card-header">
-            <div>
-              <span class="eyebrow">Console</span>
-              <h3>Conversation</h3>
-            </div>
-            <div class="chat-card-header-actions">
-              <div class="mode-pill" id="modePill">Mode actif : Assistant des immeubles</div>
-              <div id="translatorContextBar" class="translator-context hidden">
-                <div class="translator-context-details">
-                  <div class="translator-context-copy">
-                    <div class="translator-context-label">Conversation active</div>
-                    <div id="translatorContextValue" class="translator-context-value">Aucune conversation active</div>
-                  </div>
-                  <div class="translator-context-copy">
-                    <div class="translator-context-label">Appartement sélectionné</div>
-                    <div id="translatorListingValue" class="translator-context-value">Aucun appartement sélectionné</div>
-                  </div>
-                </div>
-                <button type="button" id="newTranslatorConversationBtn" class="secondary-btn translator-reset-btn">
-                  Nouvelle conversation
+                <select id="listingSelect" class="listing-select">
+                  <option value="">Sélectionnez un appartement</option>
+                </select>
+                <button type="button" id="loadListingsBtn" class="secondary-btn listing-load-btn">
+                  Charger les appartements
                 </button>
               </div>
+
+              <div><span class="server-pill" id="serverStatus">Connexion serveur en cours…</span></div>
             </div>
-          </div>
+          </section>
 
-          <div id="chatErrorBanner" class="chat-error-banner hidden" role="alert"></div>
-          <div id="translatorQualificationPanel" class="translator-qualification-panel hidden" aria-live="polite"></div>
-
-          <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
-
-          <form class="chat-form" id="chatForm">
-            <textarea
-              id="chatInput"
-              placeholder="Entrez votre question ici..."
-              rows="3"
-              aria-label="Message à envoyer à l’assistant"
-            ></textarea>
-
-            <div class="chat-form-help" id="chatFormHelp">
-              Entrée pour envoyer. Maj+Entrée ajoute une nouvelle ligne.
+          <!-- Chat console -->
+          <section class="chat-card flx-card">
+            <div class="chat-card-header">
+              <div class="flx-card-head-left">
+                <div class="flx-card-icon">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.94 14.06A2 2 0 0 0 8.5 12.62l-5.7-1.47a.5.5 0 0 1 0-.97L8.5 8.71a2 2 0 0 0 1.44-1.44l1.47-5.7a.5.5 0 0 1 .97 0l1.47 5.7a2 2 0 0 0 1.44 1.44l5.7 1.47a.5.5 0 0 1 0 .97l-5.7 1.47a2 2 0 0 0-1.44 1.44l-1.47 5.7a.5.5 0 0 1-.97 0z"/></svg>
+                </div>
+                <div>
+                  <div class="flx-card-title">Conversation</div>
+                  <div class="flx-card-sub">Réponses fondées sur la fiche du logement sélectionné</div>
+                </div>
+              </div>
+              <div class="chat-card-header-actions">
+                <div class="mode-pill" id="modePill">Mode actif : Assistant des immeubles</div>
+                <div id="translatorContextBar" class="translator-context hidden">
+                  <div class="translator-context-details">
+                    <div class="translator-context-copy">
+                      <div class="translator-context-label">Conversation active</div>
+                      <div id="translatorContextValue" class="translator-context-value">Aucune conversation active</div>
+                    </div>
+                    <div class="translator-context-copy">
+                      <div class="translator-context-label">Contexte : appartement sélectionné</div>
+                      <div id="translatorListingValue" class="translator-context-value">Aucun appartement sélectionné</div>
+                    </div>
+                  </div>
+                  <button type="button" id="newTranslatorConversationBtn" class="secondary-btn translator-reset-btn">
+                    Nouvelle conversation
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div class="chat-actions">
-              <button type="button" class="secondary-btn" id="clearChatBtn" aria-label="Effacer la conversation visible">Effacer</button>
-              <button type="button" class="secondary-btn hidden" id="cancelRequestBtn" aria-label="Annuler la requête en cours">Annuler</button>
-              <button type="submit" class="primary-btn" id="sendBtn" aria-label="Envoyer le message">Envoyer</button>
-            </div>
-          </form>
-        </section>
+            <div id="chatErrorBanner" class="chat-error-banner hidden" role="alert"></div>
+            <div id="translatorQualificationPanel" class="translator-qualification-panel hidden" aria-live="polite"></div>
 
-        <section class="panel compact dashboard-prequalification-panel">
-          <div class="workspace-section-head">
-            <span class="eyebrow">Préqualification</span>
-            <h3>Workflow employé</h3>
-            <p>Complétez la fiche de préqualification et transmettez-la à l’administration pour traitement.</p>
-          </div>
+            <div class="chat-messages flx-scroll" id="chatMessages" aria-live="polite"></div>
 
-          <form id="candidateForm" class="candidate-form">
-            <input id="aptRef" type="text" placeholder="Appartement visé (ex: 1001)" required />
-            <input id="preferredLocationInput" type="text" list="preferredLocationList" placeholder="Ville ou secteur recherché" required />
-            <datalist id="preferredLocationList"></datalist>
-            <div id="preferredLocationHint" class="candidate-helper">Sélectionnez la ville ou le secteur recherché dans la liste.</div>
-            <input id="preferredLocationLabel" type="hidden" />
-            <input id="preferredLocationZone" type="hidden" />
-            <input id="preferredLocationLat" type="hidden" />
-            <input id="preferredLocationLng" type="hidden" />
+            <form class="chat-form" id="chatForm">
+              <textarea
+                id="chatInput"
+                placeholder="Entrez votre question ici..."
+                rows="3"
+                aria-label="Message à envoyer à l’assistant"
+              ></textarea>
 
-            <select id="locationFlexible" required>
-              <option value="">Secteurs voisins acceptés ?</option>
-              <option value="non">Non, ville précise seulement</option>
-              <option value="oui">Oui, des secteurs voisins peuvent convenir</option>
-            </select>
+              <div class="chat-form-help" id="chatFormHelp">
+                Entrée pour envoyer. Maj+Entrée ajoute une nouvelle ligne.
+              </div>
 
-            <input id="name" type="text" placeholder="Nom complet" />
-            <input id="phone" type="text" placeholder="Téléphone" />
-            <input id="email" type="email" placeholder="Email" />
-
-            <input id="job" type="text" placeholder="Emploi" />
-            <input id="employer" type="text" placeholder="Employeur" />
-            <input id="employmentLength" type="text" placeholder="Travaille là depuis combien de temps" />
-
-            <select id="employmentStatus">
-              <option value="">Statut emploi</option>
-              <option value="temps plein">Temps plein</option>
-              <option value="temps partiel">Temps partiel</option>
-              <option value="autonome">Autonome</option>
-              <option value="étudiant">Étudiant</option>
-              <option value="sans emploi">Sans emploi</option>
-              <option value="retraité">Retraité</option>
-            </select>
-
-            <input id="income" type="number" placeholder="Revenu mensuel" />
-
-            <select id="credit">
-              <option value="">Crédit</option>
-              <option value="basse">Basse</option>
-              <option value="moyenne">Moyenne</option>
-              <option value="haute">Haute</option>
-            </select>
-
-            <select id="tal">
-              <option value="">Dossier au TAL</option>
-              <option value="oui">Oui</option>
-              <option value="non">Non</option>
-            </select>
-
-            <input id="occupants" type="number" placeholder="Nombre de personnes dans l'appartement" />
-
-            <select id="pets">
-              <option value="">Animaux</option>
-              <option value="oui">Oui</option>
-              <option value="non">Non</option>
-            </select>
-
-            <textarea id="notes" placeholder="Notes employé"></textarea>
-
-            <div id="candidateStatus" class="candidate-status"></div>
-
-            <button type="submit" class="primary-btn candidate-submit-btn">Envoyer la fiche</button>
-          </form>
-        </section>
-
-        <section class="dashboard-grid dashboard-grid-single">
-          <div class="panel compact">
-            <span class="eyebrow">Références</span>
-            <h2>Références d’exemple</h2>
-            <div class="sample-list" id="sampleRefs"></div>
-          </div>
-        </section>
-      </section>
-
-      <section id="messagesWorkspaceTab" class="workspace-page hidden">
-        <div class="workspace-layout">
-          <div class="workspace-sidebar-card glass-card">
-            <div class="workspace-section-head">
-              <span class="eyebrow">Messages</span>
-              <h3>Administration</h3>
-            </div>
-            <div id="employeeConversationList" class="workspace-conversation-list"></div>
-          </div>
-
-          <div class="workspace-content-card glass-card">
-            <div class="workspace-section-head">
-              <span class="eyebrow">Conversation</span>
-              <h3 id="employeeConversationTitle">Messagerie interne</h3>
-              <p id="employeeConversationMeta">Échange direct avec l’administration.</p>
-            </div>
-            <div id="employeeMessageThread" class="workspace-message-thread"></div>
-            <form id="employeeMessageForm" class="chat-form workspace-compose">
-              <textarea id="employeeMessageInput" placeholder="Écrire un message à l’administration" rows="3"></textarea>
               <div class="chat-actions">
-                <button type="submit" class="primary-btn">Envoyer</button>
+                <button type="button" class="secondary-btn" id="clearChatBtn" aria-label="Effacer la conversation visible">Effacer</button>
+                <button type="button" class="secondary-btn hidden" id="cancelRequestBtn" aria-label="Annuler la requête en cours">Annuler</button>
+                <button type="submit" class="primary-btn" id="sendBtn" aria-label="Envoyer le message">Envoyer</button>
               </div>
             </form>
+          </section>
+
+          <!-- Préqualification -->
+          <section class="flx-card">
+            <div class="flx-card-head">
+              <div class="flx-card-head-left">
+                <div class="flx-card-icon flx-card-icon-soft">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+                </div>
+                <div>
+                  <div class="flx-card-title">Préqualification d’un locataire</div>
+                  <div class="flx-card-sub">Complétez la fiche et transmettez-la à l’administration</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flx-card-body">
+              <form id="candidateForm" class="candidate-form">
+                <input id="aptRef" type="text" placeholder="Appartement visé (ex: 1001)" required />
+                <input id="preferredLocationInput" type="text" list="preferredLocationList" placeholder="Ville ou secteur recherché" required />
+                <datalist id="preferredLocationList"></datalist>
+                <div id="preferredLocationHint" class="candidate-helper">Sélectionnez la ville ou le secteur recherché dans la liste.</div>
+                <input id="preferredLocationLabel" type="hidden" />
+                <input id="preferredLocationZone" type="hidden" />
+                <input id="preferredLocationLat" type="hidden" />
+                <input id="preferredLocationLng" type="hidden" />
+
+                <select id="locationFlexible" required>
+                  <option value="">Secteurs voisins acceptés ?</option>
+                  <option value="non">Non, ville précise seulement</option>
+                  <option value="oui">Oui, des secteurs voisins peuvent convenir</option>
+                </select>
+
+                <input id="name" type="text" placeholder="Nom complet" />
+                <input id="phone" type="text" placeholder="Téléphone" />
+                <input id="email" type="email" placeholder="Email" />
+
+                <input id="job" type="text" placeholder="Emploi" />
+                <input id="employer" type="text" placeholder="Employeur" />
+                <input id="employmentLength" type="text" placeholder="Travaille là depuis combien de temps" />
+
+                <select id="employmentStatus">
+                  <option value="">Statut emploi</option>
+                  <option value="temps plein">Temps plein</option>
+                  <option value="temps partiel">Temps partiel</option>
+                  <option value="autonome">Autonome</option>
+                  <option value="étudiant">Étudiant</option>
+                  <option value="sans emploi">Sans emploi</option>
+                  <option value="retraité">Retraité</option>
+                </select>
+
+                <input id="income" type="number" placeholder="Revenu mensuel" />
+
+                <select id="credit">
+                  <option value="">Crédit</option>
+                  <option value="basse">Basse</option>
+                  <option value="moyenne">Moyenne</option>
+                  <option value="haute">Haute</option>
+                </select>
+
+                <select id="tal">
+                  <option value="">Dossier au TAL</option>
+                  <option value="oui">Oui</option>
+                  <option value="non">Non</option>
+                </select>
+
+                <input id="occupants" type="number" placeholder="Nombre de personnes dans l'appartement" />
+
+                <select id="pets">
+                  <option value="">Animaux</option>
+                  <option value="oui">Oui</option>
+                  <option value="non">Non</option>
+                </select>
+
+                <textarea id="notes" placeholder="Notes employé"></textarea>
+
+                <div id="candidateStatus" class="candidate-status"></div>
+
+                <button type="submit" class="primary-btn candidate-submit-btn">Envoyer la fiche</button>
+              </form>
+            </div>
+          </section>
+
+          <!-- Références d'exemple -->
+          <section class="flx-card">
+            <div class="flx-card-body">
+              <div class="flx-eyebrow">Références</div>
+              <h2 class="flx-h1 flx-h1-sm" style="margin-bottom:12px;">Références d’exemple</h2>
+              <div class="sample-list" id="sampleRefs"></div>
+            </div>
+          </section>
+        </section>
+
+        <!-- ===================== MESSAGES ===================== -->
+        <section id="messagesWorkspaceTab" class="workspace-page flx-page flx-page-narrow hidden">
+          <div class="flx-eyebrow">Messages</div>
+          <h1 class="flx-h1 flx-h1-sm">Administration</h1>
+          <p class="flx-lede">Fil de coordination interne avec l’équipe FluxLocatif.</p>
+
+          <div class="workspace-layout">
+            <div class="workspace-sidebar-card">
+              <div class="workspace-section-head">
+                <span class="eyebrow">Messages</span>
+                <h3>Administration</h3>
+              </div>
+              <div id="employeeConversationList" class="workspace-conversation-list"></div>
+            </div>
+
+            <div class="workspace-content-card">
+              <div class="workspace-section-head">
+                <span class="eyebrow">Conversation</span>
+                <h3 id="employeeConversationTitle">Messagerie interne</h3>
+                <p id="employeeConversationMeta">Échange direct avec l’administration.</p>
+              </div>
+              <div id="employeeMessageThread" class="workspace-message-thread"></div>
+              <form id="employeeMessageForm" class="chat-form workspace-compose">
+                <textarea id="employeeMessageInput" placeholder="Écrire un message à l’administration" rows="3"></textarea>
+                <div class="chat-actions">
+                  <button type="submit" class="primary-btn">Envoyer</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="listingsWorkspaceTab" class="workspace-page hidden">
-        <div class="workspace-section-head">
-          <span class="eyebrow">Listings</span>
-          <h3>Mandats assignés</h3>
-          <p>Copiez le texte, signalez vos questions à l’administration et mettez vos mandats à jour.</p>
-        </div>
-        <div id="employeeListingTasks" class="workspace-task-list"></div>
-      </section>
+        <!-- ===================== LISTINGS ===================== -->
+        <section id="listingsWorkspaceTab" class="workspace-page flx-page hidden">
+          <div class="flx-eyebrow">Listings</div>
+          <h1 class="flx-h1 flx-h1-sm">Mes mandats</h1>
+          <p class="flx-lede">Copiez le texte, signalez vos questions à l’administration et mettez vos mandats à jour.</p>
+          <div id="employeeListingTasks" class="workspace-task-list"></div>
+        </section>
 
-    </main>
+      </main>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
