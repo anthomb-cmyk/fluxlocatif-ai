@@ -965,10 +965,46 @@ async function loadLegacyAdminUserIds() {
 }
 
 async function loadWorkspaceMessages() {
+  // Durable store: Supabase (survives Railway redeploys + shared across instances).
+  // Falls back to the legacy JSON file if Supabase is unavailable, so the app never breaks.
+  if (supabaseServerClient) {
+    try {
+      const { data, error } = await supabaseServerClient
+        .from("workspace_messages")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("[workspace_messages] load failed, falling back to file:", error.message);
+    }
+  }
   return readJsonFile(WORKSPACE_MESSAGES_PATH, []);
 }
 
 async function saveWorkspaceMessages(messages) {
+  if (supabaseServerClient) {
+    try {
+      const rows = (messages || []).map((message) => ({
+        id: message.id,
+        employee_user_id: message.employee_user_id ?? null,
+        from_user_id: message.from_user_id ?? null,
+        to_user_id: message.to_user_id ?? null,
+        content: message.content ?? "",
+        read: Boolean(message.read),
+        created_at: message.created_at || new Date().toISOString()
+      }));
+      if (rows.length) {
+        const { error } = await supabaseServerClient
+          .from("workspace_messages")
+          .upsert(rows, { onConflict: "id" });
+        if (error) throw error;
+      }
+      return;
+    } catch (error) {
+      console.error("[workspace_messages] save failed, falling back to file:", error.message);
+    }
+  }
   await writeJsonFile(WORKSPACE_MESSAGES_PATH, messages);
 }
 
@@ -981,10 +1017,44 @@ async function saveListingTasks(tasks) {
 }
 
 async function loadNotifications() {
+  // Durable store: Supabase, with legacy JSON-file fallback (see loadWorkspaceMessages).
+  if (supabaseServerClient) {
+    try {
+      const { data, error } = await supabaseServerClient
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("[notifications] load failed, falling back to file:", error.message);
+    }
+  }
   return readJsonFile(NOTIFICATIONS_PATH, []);
 }
 
 async function saveNotifications(notifications) {
+  if (supabaseServerClient) {
+    try {
+      const rows = (notifications || []).map((notification) => ({
+        id: notification.id,
+        user_id: notification.user_id ?? null,
+        type: notification.type ?? null,
+        reference_id: notification.reference_id ?? null,
+        read: Boolean(notification.read),
+        created_at: notification.created_at || new Date().toISOString()
+      }));
+      if (rows.length) {
+        const { error } = await supabaseServerClient
+          .from("notifications")
+          .upsert(rows, { onConflict: "id" });
+        if (error) throw error;
+      }
+      return;
+    } catch (error) {
+      console.error("[notifications] save failed, falling back to file:", error.message);
+    }
+  }
   await writeJsonFile(NOTIFICATIONS_PATH, notifications);
 }
 
