@@ -3750,6 +3750,7 @@ app.use("/api/listings", createListingsRouter({
 
 app.use("/api/chat", createChatRouter({
   chatLimiter,
+  resolveEmployeeContext,
   listingsService,
   openaiService,
   normalizeRef,
