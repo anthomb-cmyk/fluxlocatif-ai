@@ -7,20 +7,21 @@
     "bedrooms": "3 1/2",
     "availability": "Disponible maintenant",
     "status": "Actif",
-    "client_id": "client_test_001",
+    "client_id": "client_demo",
     "notes": "Chauffage non inclus. Stationnement disponible.",
-    "description": "Logement lumineux de 3 1/2 près des services locaux."
+    "description": "Logement lumineux de 3 1/2 près des services locaux. Plancher de bois, cuisine rénovée."
   },
   "L-1002": {
     "ref": "L-1002",
-    "address": "123 Rue King Ouest, Sherbrooke",
+    "address": "230 Rue Wellington Sud, Sherbrooke",
     "city": "Sherbrooke",
     "rent": "1 395 $",
     "bedrooms": "4 1/2",
-    "availability": "2026-04-01",
+    "availability": "2026-08-01",
     "status": "Actif",
-    "notes": "Entrées laveuse-sécheuse. Non-fumeur.",
-    "description": "4 1/2 rénové dans un secteur central."
+    "client_id": "client_demo",
+    "notes": "Entrées laveuse-sécheuse. Non-fumeur. Chauffage et eau chaude inclus.",
+    "description": "4 1/2 rénové dans un secteur central, proche du centre-ville et de l'Université de Sherbrooke."
   },
   "L-1003": {
     "ref": "L-1003",
@@ -28,9 +29,58 @@
     "city": "Longueuil",
     "rent": "1 650 $",
     "bedrooms": "5 1/2",
-    "availability": "2026-05-01",
+    "availability": "2026-09-01",
+    "status": "Actif",
+    "client_id": "client_demo",
+    "notes": "Animaux acceptés sous conditions. Deux stationnements inclus.",
+    "description": "Grand logement familial à deux pas du métro Longueuil et du transport en commun."
+  },
+  "L-1004": {
+    "ref": "L-1004",
+    "address": "1475 Avenue du Mont-Royal Est, Montréal",
+    "city": "Montréal",
+    "rent": "1 850 $",
+    "bedrooms": "4 1/2",
+    "availability": "Disponible maintenant",
+    "status": "Actif",
+    "client_id": "client_demo",
+    "notes": "Climatisation murale. Non-fumeur. Chauffage inclus.",
+    "description": "4 1/2 sur le Plateau, fenestration abondante, balcon avant, à distance de marche des commerces."
+  },
+  "L-1005": {
+    "ref": "L-1005",
+    "address": "92 Rue Saint-Joseph Est, Québec",
+    "city": "Québec",
+    "rent": "1 320 $",
+    "bedrooms": "3 1/2",
+    "availability": "2026-07-15",
+    "status": "Actif",
+    "client_id": "client_riviere",
+    "notes": "Idéal jeune professionnel. Buanderie commune. Chauffage non inclus.",
+    "description": "Cachet du Vieux-Québec dans le quartier Saint-Roch, rénové avec goût."
+  },
+  "L-1006": {
+    "ref": "L-1006",
+    "address": "3050 Boulevard de la Concorde Est, Laval",
+    "city": "Laval",
+    "rent": "1 575 $",
+    "bedrooms": "4 1/2",
+    "availability": "2026-08-15",
     "status": "En attente",
-    "notes": "Restrictions pour les animaux.",
-    "description": "Grand logement familial près du transport en commun."
+    "client_id": "client_riviere",
+    "notes": "Stationnement payant 50 $/mois. Non-fumeur. Sans animaux.",
+    "description": "Immeuble récent avec ascenseur, près de l'autoroute 25 et des services."
+  },
+  "L-1007": {
+    "ref": "L-1007",
+    "address": "415 Rue Notre-Dame, Trois-Rivières",
+    "city": "Trois-Rivières",
+    "rent": "995 $",
+    "bedrooms": "2 1/2",
+    "availability": "Disponible maintenant",
+    "status": "Loué",
+    "client_id": "client_riviere",
+    "notes": "Chauffage et eau chaude inclus. Non-fumeur.",
+    "description": "2 1/2 abordable au centre-ville, parfait pour étudiant ou personne seule."
   }
 }

@@ -1,15 +1,28 @@
 {
-  "client_test_001": {
-    "id": "client_test_001",
-    "nom": "Client Test",
+  "client_demo": {
+    "id": "client_demo",
+    "nom": "Gestion Immobilière Beauchemin",
     "criteres": {
-      "revenu_minimum": null,
-      "credit_min": null,
+      "revenu_minimum": 40000,
+      "credit_min": 680,
       "accepte_tal": false,
-      "max_occupants": null,
+      "max_occupants": 4,
       "animaux_acceptes": false,
-      "emplois_acceptes": [],
-      "anciennete_min_mois": null
+      "emplois_acceptes": ["Permanent temps plein", "Travailleur autonome"],
+      "anciennete_min_mois": 12
+    }
+  },
+  "client_riviere": {
+    "id": "client_riviere",
+    "nom": "Les Appartements Rivière",
+    "criteres": {
+      "revenu_minimum": 36000,
+      "credit_min": 650,
+      "accepte_tal": true,
+      "max_occupants": 3,
+      "animaux_acceptes": true,
+      "emplois_acceptes": ["Permanent temps plein", "Temps partiel", "Étudiant"],
+      "anciennete_min_mois": 6
     }
   }
 }
