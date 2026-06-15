@@ -217,6 +217,20 @@ async function ensureDataFile(filePath, fallbackValue) {
 }
 
 async function readJsonFile(filePath, fallbackValue) {
+  // Durable store for runtime .data/* files: Supabase kv_store (survives Railway
+  // redeploys + shared across instances). Repo-committed JSON stays on disk.
+  if (supabaseServerClient && filePath.startsWith(DATA_DIR)) {
+    try {
+      const key = path.basename(filePath);
+      const { data, error } = await supabaseServerClient
+        .from("kv_store").select("value").eq("key", key).maybeSingle();
+      if (error) throw error;
+      return data ? data.value : structuredClone(fallbackValue);
+    } catch (error) {
+      console.error(`[kv_store] read ${path.basename(filePath)} failed, falling back to file:`, error.message);
+    }
+  }
+
   await ensureDataFile(filePath, fallbackValue);
   const raw = await fs.readFile(filePath, "utf8");
 
@@ -232,6 +246,19 @@ async function readJsonFile(filePath, fallbackValue) {
 }
 
 async function writeJsonFile(filePath, value) {
+  if (supabaseServerClient && filePath.startsWith(DATA_DIR)) {
+    try {
+      const key = path.basename(filePath);
+      const { error } = await supabaseServerClient
+        .from("kv_store")
+        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      if (error) throw error;
+      return;
+    } catch (error) {
+      console.error(`[kv_store] write ${path.basename(filePath)} failed, falling back to file:`, error.message);
+    }
+  }
+
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(value, null, 2));
 }
