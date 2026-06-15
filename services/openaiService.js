@@ -355,9 +355,8 @@ export function createOpenAIService({
           role: "user",
           content: `Appartement : ${JSON.stringify(listing, null, 2)}\n\nQuestion : ${message}`
         }
-      ],
-      signal
-    });
+      ]
+    }, { signal });
 
     let reply = "";
     for await (const chunk of stream) {
