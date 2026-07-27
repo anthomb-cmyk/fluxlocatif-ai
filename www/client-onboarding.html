@@ -531,7 +531,10 @@
     /* ── Responsive ── */
     @media (max-width: 960px) {
       .shell { grid-template-columns: 1fr; }
-      .hero  { position: static; }
+      /* position: static retirait le repere de positionnement du cercle
+         decoratif .hero::after, place a inset -70px. Le cercle s'echappait du
+         overflow:hidden et poussait toute la page de 70px vers la droite. */
+      .hero  { position: relative; }
       .step-nav { display: none; }
       .form-grid { grid-template-columns: 1fr; }
     }
