@@ -527,14 +527,15 @@ function getCandidateTableSortIndicator(tableState, key) {
   return tableState.sortDirection === "asc" ? "↑" : "↓";
 }
 
-// Le badge de tendance affichait un pourcentage calcule a partir de la valeur
-// courante (valeur x 7), pas d'un historique: c'etait de la donnee fabriquee.
-// Tant qu'aucune valeur de periode precedente n'est stockee, on n'affiche rien.
-function setStatTrend(element) {
+// Le badge affichait autrefois un pourcentage calcule a partir de la valeur
+// courante, donc fabrique. Il a ete vide, puis il ne restait qu'un tiret sans
+// signification sur les quatre tuiles. Il porte maintenant une information
+// reelle et verifiable, tiree des memes donnees que le chiffre principal.
+function setStatTrend(element, texte) {
   if (!element) return;
 
-  element.className = "stat-trend neutral";
-  element.innerHTML = "—";
+  element.className = "stat-context";
+  element.innerHTML = texte || "";
 }
 
 function getCandidateTableRows(candidates = [], tableState, limit = null) {
@@ -553,6 +554,27 @@ function closeCandidateActionMenus() {
   document.querySelectorAll("[data-candidate-action-menu]").forEach((menu) => {
     menu.classList.add("hidden");
   });
+}
+
+// Le sous-titre affichait "Dossier structure" sur toutes les lignes, identique
+// partout et sans information. On indique plutot ce que le dossier contient
+// vraiment, pour que le proprietaire sache s'il est complet avant de l'ouvrir.
+function resumeDossier(candidate) {
+  const champs = [
+    candidate?.candidate_name,
+    candidate?.phone,
+    candidate?.email,
+    candidate?.monthly_income ?? candidate?.revenu_mensuel,
+    candidate?.credit_level ?? candidate?.credit,
+    candidate?.employment_status ?? candidate?.statut_emploi,
+    candidate?.occupants_total ?? candidate?.nombre_personnes
+  ];
+
+  const fournis = champs.filter((v) => v !== null && v !== undefined && String(v).trim() !== "").length;
+
+  if (fournis === champs.length) return "Dossier complet";
+  if (fournis === 0) return "Dossier vide";
+  return `${fournis} renseignements sur ${champs.length}`;
 }
 
 function renderCandidateViews() {
@@ -767,7 +789,7 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                             <div class="candidate-initials">${getCandidateInitials(candidate.candidate_name)}</div>
                             <div class="candidate-identity-copy">
                               <div class="candidate-identity-name">${escapeHtml(candidate.candidate_name || "Nom non fourni")}</div>
-                              <div class="candidate-identity-subtitle">Dossier structuré</div>
+                              <div class="candidate-identity-subtitle">${escapeHtml(resumeDossier(candidate))}</div>
                             </div>
                           </div>
                         </td>
@@ -1669,10 +1691,28 @@ function renderDashboard() {
   statCandidates.textContent = String(totalCandidates);
   statDecisionSplit.textContent = `${approvedCount} / ${refusedCount}`;
 
-  setStatTrend(statTotalApartmentsTrend, totalApartments);
-  setStatTrend(statAvailableApartmentsTrend, availableApartments);
-  setStatTrend(statCandidatesTrend, totalCandidates);
-  setStatTrend(statDecisionSplitTrend, approvedCount + refusedCount, approvedCount || refusedCount ? 12 : 0);
+  const loues = totalApartments - availableApartments;
+  const aRevoir = state.candidates.filter(
+    (item) => deriveCandidateResponsibility(item) === RESPONSIBILITY_LABELS.CLIENT
+  ).length;
+  const enAttente = totalCandidates - approvedCount - refusedCount;
+
+  setStatTrend(
+    statTotalApartmentsTrend,
+    totalApartments ? `dont <strong>${loues}</strong> loué${loues > 1 ? "s" : ""}` : ""
+  );
+  setStatTrend(
+    statAvailableApartmentsTrend,
+    totalApartments ? `sur ${totalApartments} au portefeuille` : ""
+  );
+  setStatTrend(
+    statCandidatesTrend,
+    totalCandidates ? `<strong>${aRevoir}</strong> attend${aRevoir > 1 ? "ent" : ""} votre décision` : ""
+  );
+  setStatTrend(
+    statDecisionSplitTrend,
+    totalCandidates ? `${enAttente} sans décision` : ""
+  );
 
   renderDashboardDecisionQueue();
   renderDashboardApartmentOverview();
@@ -1703,7 +1743,9 @@ function renderDashboardApartmentOverview() {
   if (!state.apartments.length) {
     dashboardApartmentOverview.innerHTML = `
       <div class="dashboard-empty-state">
-        Aucun logement actif pour le moment.
+        <div class="dashboard-empty-state-title">Aucun logement actif</div>
+        <div>Ajoutez un logement pour que notre équipe commence à recevoir des candidatures.</div>
+        <button type="button" class="secondary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="apartments">Voir mes appartements</button>
       </div>
     `;
     return;
@@ -1774,7 +1816,9 @@ function renderDashboardCriteriaSummary() {
   if (!state.client) {
     dashboardCriteriaSummary.innerHTML = `
       <div class="dashboard-empty-state">
-        Vos critères actifs apparaîtront ici.
+        <div class="dashboard-empty-state-title">Aucun critère défini</div>
+        <div>Sans critères, nous ne pouvons pas trier les candidats pour vous. C’est l’étape qui fait le plus de différence.</div>
+        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
       </div>
     `;
     return;
@@ -1828,7 +1872,8 @@ function renderDashboardWatchlist() {
   if (!watchlistItems.length) {
     dashboardWatchlist.innerHTML = `
       <div class="dashboard-empty-state">
-        Aucun point de vigilance pour le moment.
+        <div class="dashboard-empty-state-title">Rien à surveiller</div>
+        <div>Aucun de vos logements ne demande votre attention en ce moment.</div>
       </div>
     `;
     return;
@@ -1913,7 +1958,9 @@ function renderApartments() {
   if (!state.apartments.length) {
     apartmentsBody.innerHTML = `
       <div class="dashboard-empty-state">
-        Aucun appartement lié à ce client.
+        <div class="dashboard-empty-state-title">Aucun logement enregistré</div>
+        <div>Ajoutez votre premier logement pour lancer la recherche de locataires.</div>
+        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" id="emptyAddApartmentBtn">Ajouter un logement</button>
       </div>
     `;
     return;
@@ -2005,6 +2052,11 @@ function renderApartments() {
 
   document.querySelectorAll(".apartment-review-btn").forEach((button) => {
     button.addEventListener("click", () => switchTab("candidates"));
+  });
+
+  document.getElementById("emptyAddApartmentBtn")?.addEventListener("click", () => {
+    document.getElementById("addApartmentForm")?.classList.remove("hidden");
+    document.getElementById("newApartmentAddress")?.focus();
   });
 
   brancherEditeursLogement();
