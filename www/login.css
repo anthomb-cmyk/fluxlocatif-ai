@@ -124,3 +124,16 @@ body {
   background: var(--danger-bg);
   color: var(--danger-text);
 }
+
+/* ── Confort tactile et lisibilité ────────────────────────────────────────── */
+@media (max-width: 760px) {
+  input, select, textarea { font-size: 16px !important; }
+  button, [role="button"], .option-chip, .lang-btn, .menu-btn,
+  .candidate-filter-pill, .candidate-action-btn,
+  .primary-btn, .secondary-btn, .client-auth-link,
+  .dashboard-panel-link, .candidate-table-filter-btn { min-height: 44px !important; }
+}
+
+@media (pointer: coarse) {
+  button, [role="button"] { min-height: 44px; }
+}
