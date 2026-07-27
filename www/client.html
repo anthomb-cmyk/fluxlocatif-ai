@@ -246,6 +246,35 @@
               <p>Statut et prochaine étape par unité.</p>
             </div>
 
+            <button type="button" id="toggleAddApartmentBtn" class="primary-btn" style="margin-bottom:16px;">+ Ajouter un logement</button>
+
+            <form id="addApartmentForm" class="admin-form hidden" style="margin-bottom:22px;">
+              <div class="form-grid">
+                <input id="newApartmentAddress" type="text" placeholder="Adresse *" required />
+                <input id="newApartmentCity" type="text" placeholder="Ville" />
+                <input id="newApartmentType" type="text" placeholder="Type (ex. 4½)" />
+                <input id="newApartmentRent" type="number" min="0" placeholder="Loyer mensuel ($)" />
+                <select id="newApartmentAvailability">
+                  <option value="">Disponibilité</option>
+                  <option value="Now">Disponible maintenant</option>
+                  <option value="30 days">Dans 30 jours</option>
+                  <option value="60 days">Dans 60 jours</option>
+                </select>
+                <select id="newApartmentParking">
+                  <option value="">Stationnement</option>
+                  <option value="Included">Inclus dans le loyer</option>
+                  <option value="Available ($)">Disponible, frais en sus</option>
+                  <option value="Street only">Rue seulement</option>
+                  <option value="None">Aucun</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px;">
+                <button type="submit" class="primary-btn">Enregistrer le logement</button>
+                <button type="button" id="cancelAddApartmentBtn" class="secondary-btn">Annuler</button>
+              </div>
+              <div id="addApartmentStatus" class="client-auth-status"></div>
+            </form>
+
             <div class="apartments-supervision-shell">
               <div id="apartmentsSupervisionSummary" class="apartments-supervision-summary"></div>
               <div id="apartmentsBody" class="apartment-pipeline-list"></div>

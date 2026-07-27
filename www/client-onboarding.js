@@ -576,6 +576,98 @@ function goToStep(n) {
 
 window.goToStep = goToStep;
 
+// ─── Brouillon local ────────────────────────────────────────────────────────
+// Rien n'etait persiste entre l'etape 1 et la soumission finale. Fermer
+// l'onglet a l'etape 5 faisait tout recommencer: contact, facturation,
+// portefeuille, TOUS les logements et leurs 13 champs, criteres et processus.
+// Le brouillon est garde localement, par jeton d'invitation, et efface une fois
+// le profil soumis.
+
+function cleBrouillon() {
+  return `fl_onboarding_draft_${state.token || "sans-jeton"}`;
+}
+
+const CHAMPS_BROUILLON = [
+  "primaryContact", "primaryEmail", "primaryPhone", "preferredComm",
+  "billingName", "billingEmail", "billingPhone",
+  "unitsInPlan", "totalPortfolioSize",
+  "minIncomeReq", "creditScoreReq", "employmentReq", "guarantorPolicy",
+  "petPolicy", "occupancyRules", "disqualifyingFactors", "additionalScreening",
+  "escalationRules", "approvalProcess", "showingProcess", "approvalNotes",
+  "commExpectations"
+];
+
+function sauvegarderBrouillon() {
+  try {
+    const champs = {};
+    CHAMPS_BROUILLON.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && el.value) champs[id] = el.value;
+    });
+
+    localStorage.setItem(cleBrouillon(), JSON.stringify({
+      etape: state.currentStep,
+      champs,
+      markets: state.markets,
+      propertyTypes: state.propertyTypes,
+      listings: collectListings(),
+      enregistre_le: new Date().toISOString()
+    }));
+  } catch {
+    // quota plein ou stockage refuse: le brouillon est un confort, pas un du
+  }
+}
+
+function effacerBrouillon() {
+  try { localStorage.removeItem(cleBrouillon()); } catch {}
+}
+
+function restaurerBrouillon() {
+  let brouillon = null;
+  try {
+    brouillon = JSON.parse(localStorage.getItem(cleBrouillon()) || "null");
+  } catch { return false; }
+
+  if (!brouillon || !brouillon.champs) return false;
+
+  Object.entries(brouillon.champs).forEach(([id, valeur]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = valeur;
+  });
+
+  if (Array.isArray(brouillon.markets)) {
+    state.markets = brouillon.markets;
+    renderMarketTags();
+  }
+
+  if (Array.isArray(brouillon.propertyTypes)) {
+    state.propertyTypes = brouillon.propertyTypes;
+    document.getElementById("propertyTypesRow")?.querySelectorAll(".option-chip").forEach((chip) => {
+      chip.classList.toggle("active", state.propertyTypes.includes(chip.dataset.value));
+    });
+  }
+
+  if (Array.isArray(brouillon.listings) && brouillon.listings.length) {
+    state.listings = [];
+    if (listingCardsEl) listingCardsEl.innerHTML = "";
+    state.listingCount = 0;
+    brouillon.listings.forEach((logement) => addListingCard({
+      address: logement.address,
+      unit: logement.unit_number,
+      unit_type: logement.unit_type,
+      monthly_rent: logement.monthly_rent,
+      availability_date: logement.availability_date,
+      amenities: logement.amenities,
+      parking: logement.parking,
+      pets_allowed: logement.pets_allowed,
+      smoking_allowed: logement.smoking_allowed,
+      notes: logement.notes
+    }));
+  }
+
+  return true;
+}
+
 function nextStep(from) {
   clearStatus(`step${from}Status`);
 
@@ -590,6 +682,7 @@ function nextStep(from) {
     }
   }
 
+  sauvegarderBrouillon();
   goToStep(from + 1);
 }
 
@@ -1124,6 +1217,7 @@ async function submitIntake() {
       body: JSON.stringify(payload)
     });
 
+    effacerBrouillon();
     showSuccess();
   } catch (err) {
     setStatus("step6Status", err.message || t("err_submit"), "error");
@@ -1141,7 +1235,15 @@ async function validateInvitation() {
     state.invitation = result.invitation || null;
     prefillFromInvitation();
     configureAccountStep();
-    goToStep(result.current_step === 2 ? 2 : 1);
+
+    const etapeDepart = result.current_step === 2 ? 2 : 1;
+    const brouillonRestaure = etapeDepart === 2 && restaurerBrouillon();
+
+    goToStep(etapeDepart);
+
+    if (brouillonRestaure) {
+      setStatus("step2Status", "Nous avons retrouvé vos réponses précédentes.", "info");
+    }
   } catch (err) {
     showInvalid(err.message || t("invalid_default"));
   }
