@@ -44,8 +44,8 @@ function getRoleDestination(role) {
 
 function resolveClientId(user) {
   return String(
-    user?.user_metadata?.client_id ||
-    user?.user_metadata?.clientId ||
+    // app_metadata seulement, comme le serveur depuis le correctif 1.3:
+    // user_metadata est modifiable par l'utilisateur et peut etre perime.
     user?.app_metadata?.client_id ||
     user?.app_metadata?.clientId ||
     ""
@@ -54,7 +54,6 @@ function resolveClientId(user) {
 
 function resolveUserRole(user) {
   return String(
-    user?.user_metadata?.role ||
     user?.app_metadata?.role ||
     ""
   ).trim().toLowerCase();

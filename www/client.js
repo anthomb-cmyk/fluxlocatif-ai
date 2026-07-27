@@ -1372,8 +1372,8 @@ function formatApartmentLabel(apartmentRef) {
 
 function resolveClientId(user) {
   return String(
-    user?.user_metadata?.client_id ||
-    user?.user_metadata?.clientId ||
+    // app_metadata seulement, comme le serveur depuis le correctif 1.3:
+    // user_metadata est modifiable par l'utilisateur et peut etre perime.
     user?.app_metadata?.client_id ||
     user?.app_metadata?.clientId ||
     ""
@@ -1382,7 +1382,6 @@ function resolveClientId(user) {
 
 function resolveUserRole(user) {
   return String(
-    user?.user_metadata?.role ||
     user?.app_metadata?.role ||
     ""
   ).trim().toLowerCase();
@@ -2305,7 +2304,12 @@ async function loadClientData() {
   state.apartments = apartmentsData.apartments || [];
   state.candidates = candidatesData.candidates || [];
 
-  clientMeta.textContent = `${state.client.nom || state.clientId} · client_id: ${state.clientId}`;
+  // L'identifiant technique du client n'a aucun sens pour lui et faisait du
+  // bruit dans l'en-tete de son propre portail.
+  const nb = state.apartments.length;
+  clientMeta.textContent = nb
+    ? `${state.client.nom || "Votre portefeuille"} · ${nb} logement${nb > 1 ? "s" : ""}`
+    : (state.client.nom || "Votre portefeuille");
   renderDashboard();
   renderApartments();
   renderCandidates();
