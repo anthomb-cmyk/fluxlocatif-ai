@@ -26,7 +26,7 @@ const T = {
     opt_optional: "(facultatif)",
 
     // Step 1
-    s1_eyebrow: "Étape 1 sur 7",
+    s1_eyebrow: "Étape 1 sur 6",
     s1_title:   "Créez votre compte",
     s1_desc:    "Nous allons d'abord activer votre accès FluxLocatif avec vos informations principales.",
     lbl_full_name:          "Nom complet",
@@ -49,7 +49,7 @@ const T = {
     linking_account:  "Liaison du compte…",
 
     // Step 2
-    s2_eyebrow: "Étape 2 sur 7",
+    s2_eyebrow: "Étape 2 sur 6",
     s2_title:   "Informations client",
     s2_desc:    "Confirmez votre contact principal et les détails de facturation afin que nous joignions la bonne personne.",
     lbl_primary_contact: "Contact principal",
@@ -67,7 +67,7 @@ const T = {
     pref_portal:  "Portail client uniquement",
 
     // Step 3
-    s3_eyebrow: "Étape 3 sur 7",
+    s3_eyebrow: "Étape 3 sur 6",
     s3_title:   "Portefeuille et logements",
     s3_desc:    "Donnez-nous une vue d'ensemble de votre portefeuille pour calibrer votre forfait.",
     lbl_units_plan:      "Logements inclus dans ce forfait",
@@ -88,7 +88,7 @@ const T = {
     pt_other:      "Autre",
 
     // Step 4
-    s4_eyebrow: "Étape 4 sur 7",
+    s4_eyebrow: "Étape 4 sur 6",
     s4_title:   "Logements actifs",
     s4_desc:    "Ajoutez les logements que FluxLocatif doit gérer. Vous pourrez en ajouter depuis votre portail.",
     listing_default_title: "Logement #",
@@ -130,7 +130,7 @@ const T = {
     err_listing_address: "Le logement #{{n}} n'a pas d'adresse.",
 
     // Step 5
-    s5_eyebrow: "Étape 5 sur 7",
+    s5_eyebrow: "Étape 5 sur 6",
     s5_title:   "Critères de qualification",
     s5_desc:    "Ces critères s'appliquent globalement à tous vos logements, sauf indication contraire par unité.",
     lbl_min_income:     "Revenu minimum requis",
@@ -163,7 +163,7 @@ const T = {
     occ_4: "4 personnes", occ_5: "5 personnes", occ_6plus: "6+ personnes",
 
     // Step 6
-    s6_eyebrow: "Étape 6 sur 7",
+    s6_eyebrow: "Étape 6 sur 6",
     s6_title:   "Préférences de processus",
     s6_desc:    "Aidez-nous à comprendre votre façon de travailler pour s'intégrer parfaitement à votre processus.",
     lbl_escalation:    "Règles d'escalade",
@@ -184,7 +184,6 @@ const T = {
     show_lockbox: "Boîte à clé / sans accompagnement",
 
     // Step 7
-    s7_eyebrow: "Étape 7 sur 7",
     s7_title:   "Marque et communication",
     s7_desc:    "Nous utiliserons ces paramètres lors de la représentation de vos annonces et des communications avec les locataires.",
     lbl_comm_tone:    "Ton de communication",
@@ -231,7 +230,7 @@ const T = {
     opt_select:   "Select one",
     opt_optional: "(optional)",
 
-    s1_eyebrow: "Step 1 of 7",
+    s1_eyebrow: "Step 1 of 6",
     s1_title:   "Create your account",
     s1_desc:    "Activate your FluxLocatif access with your main contact details.",
     lbl_full_name:        "Full Name",
@@ -253,7 +252,7 @@ const T = {
     creating_account: "Creating account…",
     linking_account:  "Linking…",
 
-    s2_eyebrow: "Step 2 of 7",
+    s2_eyebrow: "Step 2 of 6",
     s2_title:   "Client information",
     s2_desc:    "Confirm your primary contact and billing details so we reach the right person.",
     lbl_primary_contact: "Primary Contact",
@@ -270,7 +269,7 @@ const T = {
     pref_sms:     "SMS / Text",
     pref_portal:  "Client portal only",
 
-    s3_eyebrow: "Step 3 of 7",
+    s3_eyebrow: "Step 3 of 6",
     s3_title:   "Portfolio & units",
     s3_desc:    "Tell us about the scope of your rental portfolio so we can calibrate your plan.",
     lbl_units_plan:      "Units Included in This Plan",
@@ -290,7 +289,7 @@ const T = {
     pt_commercial: "Commercial",
     pt_other:      "Other",
 
-    s4_eyebrow: "Step 4 of 7",
+    s4_eyebrow: "Step 4 of 6",
     s4_title:   "Active listings",
     s4_desc:    "Add the units you want FluxLocatif to manage. You can add more from your portal later.",
     listing_default_title: "Listing #",
@@ -331,7 +330,7 @@ const T = {
     smoking_yes:       "Yes",
     err_listing_address: "Listing #{{n}} is missing a property address.",
 
-    s5_eyebrow: "Step 5 of 7",
+    s5_eyebrow: "Step 5 of 6",
     s5_title:   "Tenant qualification criteria",
     s5_desc:    "These criteria apply globally to all your listings unless overridden per unit.",
     lbl_min_income:    "Minimum Income Requirement",
@@ -363,7 +362,7 @@ const T = {
     occ_1: "1 person", occ_2: "2 people", occ_3: "3 people",
     occ_4: "4 people", occ_5: "5 people", occ_6plus: "6+ people",
 
-    s6_eyebrow: "Step 6 of 7",
+    s6_eyebrow: "Step 6 of 6",
     s6_title:   "Workflow preferences",
     s6_desc:    "Help us understand how you like to operate so we can work seamlessly with your process.",
     lbl_escalation:     "Escalation Rules",
@@ -383,7 +382,6 @@ const T = {
     show_agent:   "Managed by FluxLocatif agent",
     show_lockbox: "Lockbox / unaccompanied",
 
-    s7_eyebrow: "Step 7 of 7",
     s7_title:   "Brand & communication style",
     s7_desc:    "We'll use these settings when representing your listings and communicating with tenants on your behalf.",
     lbl_comm_tone:     "Communication Tone",
@@ -427,7 +425,7 @@ const state = {
   listingCount: 0
 };
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -541,7 +539,7 @@ function escapeHtml(str) {
 
 function buildStepNav() {
   if (!stepNavEl) return;
-  const navKeys = ["nav_1","nav_2","nav_3","nav_4","nav_5","nav_6","nav_7"];
+  const navKeys = ["nav_1","nav_2","nav_3","nav_4","nav_5","nav_6"];
   stepNavEl.innerHTML = navKeys.map((key, i) => {
     const n = i + 1;
     return `
@@ -1065,7 +1063,7 @@ function collectListings() {
 // ─── Intake submit ────────────────────────────────────────────────────────────
 
 async function submitIntake() {
-  clearStatus("step7Status");
+  clearStatus("step6Status");
   const btn = submitIntakeBtn;
   if (btn) { btn.disabled = true; btn.textContent = t("btn_submitting"); }
 
@@ -1108,11 +1106,15 @@ async function submitIntake() {
         approval_notes:             val("approvalNotes"),
         communication_expectations: val("commExpectations")
       },
+      // L'etape "Marque et communication" a ete retiree du wizard: aucun de ses
+      // champs n'etait obligatoire et le client n'a pas d'opinion utile la-dessus
+      // avant d'avoir vu un premier message partir. Valeurs par defaut ici,
+      // ajustables ensuite depuis les reglages du portail.
       brand_preferences: {
-        communication_tone: val("commTone"),
-        branding_name:      val("brandingName"),
-        signature_contact:  val("signatureContact"),
-        additional_notes:   val("additionalBrandNotes")
+        communication_tone: "friendly",
+        branding_name:      val("companyName"),
+        signature_contact:  "",
+        additional_notes:   ""
       }
     };
 
@@ -1124,7 +1126,7 @@ async function submitIntake() {
 
     showSuccess();
   } catch (err) {
-    setStatus("step7Status", err.message || t("err_submit"), "error");
+    setStatus("step6Status", err.message || t("err_submit"), "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = t("btn_submit"); }
   }

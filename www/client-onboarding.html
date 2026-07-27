@@ -577,7 +577,7 @@
 
           <!-- ─── Step 1: Account ──────────────────────────────────── -->
           <section id="step1Panel" class="step-panel active">
-            <span class="step-eyebrow" data-i18n="s1_eyebrow">Étape 1 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s1_eyebrow">Étape 1 sur 6</span>
             <h2 class="step-title" data-i18n="s1_title">Créez votre compte</h2>
             <p class="step-desc" data-i18n="s1_desc">Nous allons d'abord activer votre accès FluxLocatif avec vos informations principales.</p>
 
@@ -647,7 +647,7 @@
 
           <!-- ─── Step 2: Client Info ──────────────────────────────── -->
           <section id="step2Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s2_eyebrow">Étape 2 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s2_eyebrow">Étape 2 sur 6</span>
             <h2 class="step-title" data-i18n="s2_title">Informations client</h2>
             <p class="step-desc" data-i18n="s2_desc">Confirmez votre contact principal et les détails de facturation afin que nous joignions la bonne personne.</p>
 
@@ -719,7 +719,7 @@
 
           <!-- ─── Step 3: Portfolio ────────────────────────────────── -->
           <section id="step3Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s3_eyebrow">Étape 3 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s3_eyebrow">Étape 3 sur 6</span>
             <h2 class="step-title" data-i18n="s3_title">Portefeuille et logements</h2>
             <p class="step-desc" data-i18n="s3_desc">Donnez-nous une vue d'ensemble de votre portefeuille pour calibrer votre forfait.</p>
 
@@ -773,7 +773,7 @@
 
           <!-- ─── Step 4: Active Listings ─────────────────────────── -->
           <section id="step4Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s4_eyebrow">Étape 4 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s4_eyebrow">Étape 4 sur 6</span>
             <h2 class="step-title" data-i18n="s4_title">Logements actifs</h2>
             <p class="step-desc" data-i18n="s4_desc">Ajoutez les logements que FluxLocatif doit gérer. Vous pourrez en ajouter depuis votre portail.</p>
 
@@ -793,7 +793,7 @@
 
           <!-- ─── Step 5: Qualification ────────────────────────────── -->
           <section id="step5Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s5_eyebrow">Étape 5 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s5_eyebrow">Étape 5 sur 6</span>
             <h2 class="step-title" data-i18n="s5_title">Critères de qualification</h2>
             <p class="step-desc" data-i18n="s5_desc">Ces critères s'appliquent globalement à tous vos logements, sauf indication contraire par unité.</p>
 
@@ -889,7 +889,7 @@
 
           <!-- ─── Step 6: Workflow ──────────────────────────────────── -->
           <section id="step6Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s6_eyebrow">Étape 6 sur 7</span>
+            <span class="step-eyebrow" data-i18n="s6_eyebrow">Étape 6 sur 6</span>
             <h2 class="step-title" data-i18n="s6_title">Préférences de processus</h2>
             <p class="step-desc" data-i18n="s6_desc">Aidez-nous à comprendre votre façon de travailler pour s'intégrer parfaitement à votre processus.</p>
 
@@ -948,56 +948,10 @@
 
             <div class="actions">
               <button type="button" class="secondary-btn" onclick="goToStep(5)" data-i18n="btn_back">← Retour</button>
-              <button type="button" class="primary-btn"   onclick="nextStep(6)" data-i18n="btn_continue">Continuer →</button>
-            </div>
-          </section>
-
-          <!-- ─── Step 7: Brand ────────────────────────────────────── -->
-          <section id="step7Panel" class="step-panel">
-            <span class="step-eyebrow" data-i18n="s7_eyebrow">Étape 7 sur 7</span>
-            <h2 class="step-title" data-i18n="s7_title">Marque et communication</h2>
-            <p class="step-desc" data-i18n="s7_desc">Nous utiliserons ces paramètres lors de la représentation de vos annonces et des communications avec les locataires.</p>
-
-            <div class="form-grid">
-              <div class="field">
-                <label for="commTone" data-i18n="lbl_comm_tone">Ton de communication</label>
-                <select id="commTone" data-i18n-select="commTone">
-                  <option value="" data-i18n="opt_select">Sélectionner</option>
-                  <option value="formal"   data-i18n="tone_formal">Formel et professionnel</option>
-                  <option value="friendly" data-i18n="tone_friendly">Amical et accessible</option>
-                  <option value="concise"  data-i18n="tone_concise">Concis et direct</option>
-                  <option value="warm"     data-i18n="tone_warm">Chaleureux et accueillant</option>
-                </select>
-              </div>
-
-              <div class="field">
-                <label for="brandingName" data-i18n="lbl_branding_name">Nom de marque / entreprise à utiliser</label>
-                <input id="brandingName" type="text" data-i18n-placeholder="ph_branding_name" placeholder="ex. Gestion XYZ ou nom légal" />
-              </div>
-
-              <div class="field-full">
-                <label for="signatureContact" data-i18n="lbl_signature">Signature / coordonnées pour les messages sortants</label>
-                <textarea id="signatureContact" data-i18n-placeholder="ph_signature"
-                  placeholder="ex.&#10;Gestion XYZ — Équipe location&#10;info@gestionxyz.com | (514) 555-1234&#10;www.gestionxyz.com"></textarea>
-              </div>
-
-              <div class="field-full">
-                <label for="additionalBrandNotes">
-                  <span data-i18n="lbl_brand_notes">Notes supplémentaires sur la marque</span>
-                  <span class="label-hint" data-i18n="opt_optional">(facultatif)</span>
-                </label>
-                <textarea id="additionalBrandNotes" style="min-height:80px;" data-i18n-placeholder="ph_brand_notes"
-                  placeholder="Formules, ton ou éléments à éviter lors de la représentation de votre marque…"></textarea>
-              </div>
-            </div>
-
-            <div id="step7Status" class="status"></div>
-
-            <div class="actions">
-              <button type="button" class="secondary-btn" onclick="goToStep(6)" data-i18n="btn_back">← Retour</button>
               <button type="button" class="primary-btn" id="submitIntakeBtn" data-i18n="btn_submit">Soumettre le profil →</button>
             </div>
           </section>
+
 
         </div><!-- /onboardingContent -->
 
