@@ -2010,6 +2010,25 @@
      demande pas. Elles occupaient deux rangées avant le premier dossier. */
   .candidate-table-search-row { flex-wrap: wrap; }
   .candidate-table-search { flex: 1 1 100%; }
+  /* Les trois compteurs empilaient trois cartes pleine largeur: il fallait
+     defiler sur ~750px pour lire trois chiffres avant d'atteindre le premier
+     dossier. Sur telephone ils tiennent sur une rangee, sans les notes. */
+  .candidates-review-summary {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .candidates-review-metric {
+    padding: 12px 10px;
+    gap: 2px;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .candidates-review-metric .candidates-review-note { display: none; }
+  .candidates-review-metric .candidates-review-label { font-size: 10px; letter-spacing: 0.04em; }
+  .candidates-review-metric .candidates-review-value { font-size: 26px; }
+
   /* Repliees par defaut sur petit ecran: elles occupaient deux rangees avant
      le premier dossier. Le bouton Filtrer les deplie. */
   .candidate-status-filters { display: none; }
