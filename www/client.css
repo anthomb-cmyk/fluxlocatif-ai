@@ -1523,6 +1523,14 @@
   outline: none;
 }
 
+/* Ces champs n'ont pas d'etiquette visible: le placeholder EST l'etiquette,
+   il doit donc passer 4.5:1. Le gris par defaut du navigateur tombait a
+   3.62:1 sur la surface sombre. */
+.client-auth-form input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
 .client-auth-form input:focus {
   border-color: var(--line-accent-strong);
   box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.08);
@@ -1751,7 +1759,7 @@
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--accent, #4f46e5);
+  color: var(--indigo);
   cursor: pointer;
   text-decoration: underline;
   min-height: 44px;
@@ -1807,7 +1815,7 @@
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--indigo, #4f46e5);
+  color: var(--indigo);
 }
 
 .apartment-own-rule-note { color: var(--muted-strong); font-size: 13px; }
@@ -1840,7 +1848,7 @@
 /* Focus clavier. Il n'existait aucun style de focus: un utilisateur au clavier
    ne savait jamais où il se trouvait dans la page. */
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--indigo, #4f46e5);
+  outline: 2px solid var(--indigo);
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -1889,7 +1897,7 @@
   margin-top: 2px;
 }
 
-.stat-context strong { color: var(--text, #1f2350); font-weight: 700; }
+.stat-context strong { color: var(--text); font-weight: 700; }
 
 /* États vides: une phrase et une action, plutôt qu'un blanc. */
 .dashboard-empty-state {
@@ -1905,7 +1913,7 @@
 .dashboard-empty-state-title {
   font-weight: 800;
   font-size: 15px;
-  color: var(--text, #1f2350);
+  color: var(--text);
 }
 
 .dashboard-empty-state-action { margin-top: 4px; }
