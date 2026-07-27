@@ -753,6 +753,20 @@ function renderCandidateTable(container, candidates = [], options = {}) {
 
       <div class="candidate-table-wrap">
         <table class="candidate-table">
+          <!-- Les largeurs sont declarees ici et le tableau est en
+               table-layout: fixed (client.css). Sans ca, l'algorithme "auto"
+               redistribuait les colonnes selon le contenu de chaque rendu:
+               en dessous d'environ 1100px la somme des largeurs minimales
+               depassait le min-width du tableau et les en-tetes STATUT et
+               SCORE se chevauchaient. -->
+          <colgroup>
+            <col class="col-candidat" />
+            <col class="col-propriete" />
+            <col class="col-revenu" />
+            <col class="col-statut" />
+            <col class="col-score" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th>Candidat</th>
