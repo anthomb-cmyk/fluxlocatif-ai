@@ -1545,3 +1545,46 @@
   .candidate-filter-pill,
   .candidate-action-btn { min-height: 44px; }
 }
+
+/* ── Règle propre à un logement et édition en ligne ───────────────────────── */
+.apartment-own-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(79, 70, 229, .05);
+  border: 1px solid rgba(79, 70, 229, .15);
+  font-size: 14px;
+}
+
+.apartment-own-rule-tag {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--indigo, #4f46e5);
+}
+
+.apartment-own-rule-note { color: #6b7280; font-size: 13px; }
+
+.apartment-edit-form {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(79, 70, 229, .18);
+  background: rgba(255, 255, 255, .8);
+}
+
+.apartment-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.apartment-edit-status { font-size: 14px; color: #6b7280; }
+.apartment-edit-status.error { color: #991b1b; font-weight: 600; }

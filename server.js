@@ -4451,6 +4451,59 @@ app.get("/api/client/apartments", async (req, res) =>
 // L'onboarding promet "Vous pourrez en ajouter depuis votre portail", et il
 // n'existait ni bouton ni route pour le faire. Le client_id vient du jeton, pas
 // du corps de la requete, comme toutes les routes /api/client.
+// Modification d'un logement par son proprietaire. Le client ne pouvait
+// qu'ajouter, jamais corriger: une erreur de saisie l'obligeait a nous appeler.
+// Liste blanche stricte des champs, et le logement doit lui appartenir.
+const CHAMPS_LOGEMENT_MODIFIABLES = [
+  "adresse", "ville", "type_logement", "loyer", "disponibilite",
+  "stationnement", "animaux_acceptes", "inclusions", "notes", "statut"
+];
+
+app.put("/api/client/apartments/:ref", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const ref = normalizeRef(req.params.ref);
+    let modifie = null;
+
+    await mutateJsonFile(LISTINGS_PATH, {}, (listings) => {
+      const existant = listings[ref];
+
+      if (!existant || String(existant.client_id) !== String(clientId)) {
+        throw createHttpError(404, "Logement introuvable.");
+      }
+
+      const patch = {};
+      for (const champ of CHAMPS_LOGEMENT_MODIFIABLES) {
+        if (!Object.prototype.hasOwnProperty.call(req.body || {}, champ)) continue;
+        patch[champ] = req.body[champ];
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, "disponibilite")) {
+        patch.disponibilite = canonicalAvailability(patch.disponibilite);
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "stationnement")) {
+        patch.stationnement = canonicalParking(patch.stationnement);
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, "animaux_acceptes")) {
+        patch.animaux_acceptes = canonicalPets(patch.animaux_acceptes);
+      }
+
+      // Si la ville change, les coordonnees heritees ne valent plus rien: on les
+      // retire pour laisser toListingRecord les recalculer.
+      const base = { ...existant, ...patch };
+      if (patch.ville && String(patch.ville).trim() !== String(existant.ville || "").trim()) {
+        delete base.lat; delete base.lng; delete base.zone;
+        delete base.city; delete base.address;
+      }
+
+      modifie = toListingRecord(ref, { ...base, ref, client_id: clientId });
+      listings[ref] = modifie;
+      return listings;
+    });
+
+    return res.json({ ok: true, apartment: modifie });
+  })
+);
+
 app.post("/api/client/apartments", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
     const adresse = String(req.body?.adresse || "").trim();

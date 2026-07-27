@@ -1800,7 +1800,10 @@ function renderDashboardCriteriaSummary() {
     {
       label: "Animaux / TAL",
       value: `${criteria.animaux_acceptes === true ? "Animaux oui" : criteria.animaux_acceptes === false ? "Animaux non" : "Animaux n.c."} · ${criteria.accepte_tal === true ? "TAL oui" : criteria.accepte_tal === false ? "TAL non" : "TAL n.c."}`,
-      note: "Règles"
+      // Annoncer une regle globale sans dire qu'elle souffre des exceptions
+      // serait mentir a l'ecran: certains logements ont leur propre politique,
+      // et c'est elle qui s'applique.
+      note: noteExceptionsAnimaux()
     },
     {
       label: "Occupants / emplois",
@@ -1857,6 +1860,24 @@ function renderDashboardWatchlist() {
       </div>
     `;
   }).join("");
+}
+
+// Compte les logements qui declarent leur propre politique animaux. Le
+// resultat est affiche sous la regle globale, pour que le client sache
+// exactement a combien de ses logements elle s'applique.
+function logementsAvecReglePropre() {
+  return state.apartments.filter((a) => String(a.animaux_acceptes || "").trim());
+}
+
+function noteExceptionsAnimaux() {
+  const exceptions = logementsAvecReglePropre();
+  const total = state.apartments.length;
+
+  if (!total) return "Règles";
+  if (!exceptions.length) return `S’applique à vos ${total} logements`;
+
+  const restants = total - exceptions.length;
+  return `S’applique à ${restants} logement${restants > 1 ? "s" : ""} · ${exceptions.length} ${exceptions.length > 1 ? "ont" : "a"} leur propre règle`;
 }
 
 function renderApartments() {
@@ -1972,14 +1993,118 @@ function renderApartments() {
         </div>
       </div>
 
+      ${renderReglePropre(item.apartment)}
+
       <div class="apartment-pipeline-actions">
         <button type="button" class="secondary-btn compact-action apartment-review-btn">Voir les dossiers liés</button>
+        <button type="button" class="secondary-btn compact-action apartment-edit-btn" data-ref="${escapeHtml(item.apartment.ref)}">Modifier</button>
       </div>
+
+      ${renderEditeurLogement(item.apartment)}
     </article>
   `).join("");
 
   document.querySelectorAll(".apartment-review-btn").forEach((button) => {
     button.addEventListener("click", () => switchTab("candidates"));
+  });
+
+  brancherEditeursLogement();
+}
+
+// Ce que le logement applique reellement, affiche sur sa fiche. Sans cela, le
+// client lisait sa regle globale dans l'onglet Criteres et ignorait qu'un
+// immeuble avait la sienne, qui prend le dessus.
+function renderReglePropre(apartment) {
+  const politique = String(apartment.animaux_acceptes || "").trim();
+  if (!politique) return "";
+
+  return `
+    <div class="apartment-own-rule">
+      <span class="apartment-own-rule-tag">Règle propre à ce logement</span>
+      <span>Animaux&nbsp;: ${escapeHtml(politique)}</span>
+      <span class="apartment-own-rule-note">Prend le dessus sur vos critères généraux.</span>
+    </div>`;
+}
+
+function renderEditeurLogement(apartment) {
+  const ref = escapeHtml(apartment.ref);
+  const opt = (valeur, courant, libelle) =>
+    `<option value="${escapeHtml(valeur)}"${String(courant).trim() === valeur ? " selected" : ""}>${escapeHtml(libelle)}</option>`;
+
+  const politiqueGlobale = state.client?.criteres?.animaux_acceptes;
+  const libelleGlobal = politiqueGlobale === true ? "acceptés"
+    : politiqueGlobale === false ? "refusés"
+    : "non précisé";
+
+  return `
+    <form class="apartment-edit-form hidden" data-edit-ref="${ref}">
+      <div class="form-grid">
+        <input name="adresse" type="text" placeholder="Adresse" value="${escapeHtml(apartment.adresse || "")}" required />
+        <input name="ville" type="text" placeholder="Ville" value="${escapeHtml(apartment.ville || "")}" />
+        <input name="type_logement" type="text" placeholder="Type (ex. 4½)" value="${escapeHtml(apartment.type_logement || apartment.chambres || "")}" />
+        <input name="loyer" type="text" placeholder="Loyer" value="${escapeHtml(apartment.loyer || "")}" />
+        <select name="disponibilite">
+          ${opt("", apartment.disponibilite, "Disponibilité")}
+          ${opt("Disponible maintenant", apartment.disponibilite, "Disponible maintenant")}
+          ${opt("Disponible dans 30 jours", apartment.disponibilite, "Dans 30 jours")}
+          ${opt("Disponible dans 60 jours", apartment.disponibilite, "Dans 60 jours")}
+          ${opt("Loué", apartment.disponibilite, "Loué")}
+        </select>
+        <select name="animaux_acceptes">
+          <option value=""${!String(apartment.animaux_acceptes || "").trim() ? " selected" : ""}>Suivre mes critères généraux (${escapeHtml(libelleGlobal)})</option>
+          ${opt("Oui, animaux acceptes", apartment.animaux_acceptes, "Animaux acceptés pour ce logement")}
+          ${opt("Oui, petits animaux seulement", apartment.animaux_acceptes, "Petits animaux seulement")}
+          ${opt("Non, animaux refuses", apartment.animaux_acceptes, "Animaux refusés pour ce logement")}
+        </select>
+      </div>
+      <div class="apartment-edit-actions">
+        <button type="submit" class="primary-btn compact-action">Enregistrer</button>
+        <button type="button" class="secondary-btn compact-action apartment-edit-cancel">Annuler</button>
+        <span class="apartment-edit-status"></span>
+      </div>
+    </form>`;
+}
+
+function brancherEditeursLogement() {
+  document.querySelectorAll(".apartment-edit-btn").forEach((bouton) => {
+    bouton.addEventListener("click", () => {
+      const form = document.querySelector(`[data-edit-ref="${bouton.dataset.ref}"]`);
+      if (!form) return;
+      form.classList.toggle("hidden");
+      if (!form.classList.contains("hidden")) form.querySelector("input")?.focus();
+    });
+  });
+
+  document.querySelectorAll(".apartment-edit-cancel").forEach((bouton) => {
+    bouton.addEventListener("click", () => bouton.closest(".apartment-edit-form")?.classList.add("hidden"));
+  });
+
+  document.querySelectorAll(".apartment-edit-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const statut = form.querySelector(".apartment-edit-status");
+      const submit = form.querySelector("button[type=submit]");
+      if (statut) { statut.textContent = ""; statut.className = "apartment-edit-status"; }
+      if (submit) submit.disabled = true;
+
+      const corps = {};
+      new FormData(form).forEach((valeur, cle) => { corps[cle] = valeur; });
+
+      try {
+        await fetchClientJSON(`/api/client/apartments/${encodeURIComponent(form.dataset.editRef)}`, {
+          method: "PUT",
+          body: JSON.stringify(corps)
+        });
+        await loadClientData();
+      } catch (error) {
+        if (statut) {
+          statut.textContent = error.message || "Modification impossible.";
+          statut.className = "apartment-edit-status error";
+        }
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
   });
 }
 
