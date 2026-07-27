@@ -1,7 +1,11 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
 const EMPLOYEE_APP_URL = "https://fluxlocatif.up.railway.app";
-const CLIENT_APP_URL = "https://client.fluxlocatif.com";
+// Meme origine que la page courante. L'admin, l'app employe et le portail
+// client sont servis par le meme serveur, donc un chemin relatif marche
+// partout. Le domaine etait code en dur ici, et son certificat expire
+// renvoyait les clients sur une page blanche des la connexion.
+const CLIENT_APP_URL = "";
 const CHAT_STORAGE_KEY = "fluxlocatif.employee.chat.v1";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
