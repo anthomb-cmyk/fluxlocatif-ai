@@ -488,21 +488,14 @@ function getCandidateTableSortIndicator(tableState, key) {
   return tableState.sortDirection === "asc" ? "↑" : "↓";
 }
 
-function setStatTrend(element, value, percentHint = null) {
+// Le badge de tendance affichait un pourcentage calcule a partir de la valeur
+// courante (valeur x 7), pas d'un historique: c'etait de la donnee fabriquee.
+// Tant qu'aucune valeur de periode precedente n'est stockee, on n'affiche rien.
+function setStatTrend(element) {
   if (!element) return;
 
-  if (!value) {
-    element.className = "stat-trend neutral";
-    element.innerHTML = "—";
-    return;
-  }
-
-  const percent = Number.isFinite(percentHint)
-    ? percentHint
-    : Math.min(48, Math.max(8, Math.round(Math.abs(value) * 7)));
-
-  element.className = "stat-trend positive";
-  element.innerHTML = `<span class="stat-trend-arrow">↑</span><span>+${percent}%</span>`;
+  element.className = "stat-trend neutral";
+  element.innerHTML = "—";
 }
 
 function getCandidateTableRows(candidates = [], tableState, limit = null) {
@@ -523,7 +516,13 @@ function closeCandidateActionMenus() {
   });
 }
 
-function handleCandidateTableAction(action, candidateId, rerender) {
+function renderCandidateViews() {
+  renderDashboard();
+  renderApartments();
+  renderCandidates();
+}
+
+async function handleCandidateTableAction(action, candidateId, rerender) {
   const candidate = state.candidates.find((item) => item.id === candidateId);
   if (!candidate) return;
 
@@ -533,19 +532,34 @@ function handleCandidateTableAction(action, candidateId, rerender) {
     return;
   }
 
-  if (action === "approve") {
-    candidate.status = "approuvé";
-  }
+  const nextStatus = action === "approve" ? "approuvé" : action === "reject" ? "refusé" : "";
+  if (!nextStatus) return;
 
-  if (action === "reject") {
-    candidate.status = "refusé";
-  }
+  const previousStatus = candidate.status;
 
+  // Affichage optimiste, puis persistance. En cas d'echec on remet l'ancien
+  // statut et on recharge, pour ne jamais laisser une decision non enregistree
+  // a l'ecran.
+  candidate.status = nextStatus;
   closeCandidateActionMenus();
+  renderCandidateViews();
 
-  renderDashboard();
-  renderApartments();
-  renderCandidates();
+  try {
+    const result = await fetchClientJSON(`/api/client/candidates/${encodeURIComponent(candidateId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: nextStatus })
+    });
+
+    if (result?.candidate?.status) {
+      candidate.status = result.candidate.status;
+      renderCandidateViews();
+    }
+  } catch (error) {
+    candidate.status = previousStatus;
+    renderCandidateViews();
+    window.alert(error?.message || "Impossible d’enregistrer la décision. Réessayez.");
+    await loadClientData().catch(() => {});
+  }
 }
 
 function bindCandidateTableInteractions(container, stateKey, rerender) {
