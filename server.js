@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createChatRouter } from "./routes/chat.js";
 import { createListingsRouter } from "./routes/listings.js";
+import { renderEmailLayout } from "./services/emailLayout.js";
 import { createOpenAIService } from "./services/openaiService.js";
 import { createListingsService } from "./services/listingsService.js";
 import { createQualificationService } from "./services/qualificationService.js";
@@ -1413,27 +1414,17 @@ async function sendIntakeConfirmationEmail(email, nomClient, nombreLogements) {
     ? "1 logement a été enregistré."
     : `${nombreLogements} logements ont été enregistrés.`;
 
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
-      <h2 style="color:#111;">Votre profil est bien reçu</h2>
-      <p>${salutation}</p>
-      <p>Merci, votre profil FluxLocatif est complet. ${ligneLogements}</p>
-      <p>Notre équipe le vérifie et active votre compte sous peu. Vous pouvez déjà consulter votre portail.</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0;">
-        <tr>
-          <td align="center" bgcolor="#4f46e5" style="border-radius:10px;">
-            <a href="${portail}" style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:700;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
-              Accéder à mon portail
-            </a>
-          </td>
-        </tr>
-      </table>
-      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
-        Si le bouton ne fonctionne pas&nbsp;: ${portail}
-      </p>
-      <p style="margin-top:30px;">—<br>FluxLocatif</p>
-    </div>
-  `;
+  const html = renderEmailLayout({
+    titre: "Votre profil est bien reçu",
+    preheader: "Notre équipe vérifie votre profil et active votre compte sous peu.",
+    paragraphes: [
+      escapeHtmlServeur(salutation),
+      `Merci, votre profil FluxLocatif est complet. ${ligneLogements}`,
+      "Notre équipe le vérifie et active votre compte sous peu. Vous pouvez déjà consulter votre portail."
+    ],
+    boutonTexte: "Accéder à mon portail",
+    boutonLien: portail
+  });
 
   const text = [
     salutation,
@@ -1507,35 +1498,17 @@ async function sendPasswordResetEmail(email, lienRecuperation) {
   }
 
   const subject = "FluxLocatif — Réinitialiser votre mot de passe";
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
-      <h2 style="color: #111;">Réinitialiser votre mot de passe</h2>
-      <p>Bonjour,</p>
-      <p>Vous avez demandé à réinitialiser le mot de passe de votre espace FluxLocatif.</p>
-      <!-- Bouton en tableau: un <a> inline avec du padding se brise en deux
-           boites des que le texte passe a la ligne, ce qui arrive sur telephone.
-           Le tableau garde le fond solidaire du texte. -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 26px 0;">
-        <tr>
-          <td align="center" bgcolor="#4f46e5" style="border-radius:10px;">
-            <a href="${lienRecuperation}"
-               style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:700;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
-              Choisir un nouveau mot de passe
-            </a>
-          </td>
-        </tr>
-      </table>
-      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur&nbsp;:<br>
-        ${lienRecuperation}
-      </p>
-      <p style="color:#6b7280;font-size:13px;">
-        Ce lien est valide une heure. Si vous n’êtes pas à l’origine de cette demande,
-        ignorez ce message: votre mot de passe reste inchangé.
-      </p>
-      <p style="margin-top: 30px;">—<br>FluxLocatif</p>
-    </div>
-  `;
+  const html = renderEmailLayout({
+    titre: "Réinitialiser votre mot de passe",
+    preheader: "Choisissez un nouveau mot de passe pour votre espace FluxLocatif.",
+    paragraphes: [
+      "Bonjour,",
+      "Vous avez demandé à réinitialiser le mot de passe de votre espace FluxLocatif."
+    ],
+    boutonTexte: "Choisir un nouveau mot de passe",
+    boutonLien: lienRecuperation,
+    note: "Ce lien est valide une heure. Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : votre mot de passe reste inchangé."
+  });
   const text = [
     "Bonjour,",
     "",
@@ -1592,49 +1565,18 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
 
   const clientName = String(invitation.name || invitation.contact_name || "Client").trim();
   const subject = "Bienvenue sur FluxLocatif — Accédez à votre espace";
-  const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
-      <h2 style="color: #111;">Bienvenue sur FluxLocatif</h2>
-
-      <p>Bonjour ${clientName},</p>
-
-      <p>
-        Votre accès à votre espace client FluxLocatif est prêt.
-        Vous pourrez suivre vos logements, vos candidats et gérer vos critères en temps réel.
-      </p>
-
-      <!-- Meme correction que le courriel de reinitialisation: un <a> inline
-           avec du padding se brise en deux boites quand le texte passe a la
-           ligne sur telephone. -->
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 30px auto;">
-        <tr>
-          <td align="center" bgcolor="#000000" style="border-radius:6px;">
-            <a href="${onboardingLink}"
-               style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
-              Accéder à mon espace
-            </a>
-          </td>
-        </tr>
-      </table>
-      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
-        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur&nbsp;:<br>
-        ${onboardingLink}
-      </p>
-
-      <p style="font-size: 14px; color: #555;">
-        Ce lien est sécurisé et valide pendant 7 jours.
-      </p>
-
-      <p style="font-size: 14px; color: #555;">
-        Si vous avez des questions, vous pouvez répondre directement à ce courriel.
-      </p>
-
-      <p style="margin-top: 30px;">
-        —<br>
-        FluxLocatif
-      </p>
-    </div>
-  `;
+  const html = renderEmailLayout({
+    titre: "Bienvenue sur FluxLocatif",
+    preheader: "Votre accès est prêt, activez votre espace en quelques minutes.",
+    paragraphes: [
+      `Bonjour ${escapeHtmlServeur(clientName)},`,
+      "Votre accès FluxLocatif est prêt. Activez votre espace et ajoutez vos logements, cela prend quelques minutes.",
+      "Une fois votre profil soumis, notre équipe le vérifie et vous confirme l’activation."
+    ],
+    boutonTexte: "Activer mon espace",
+    boutonLien: onboardingLink,
+    note: "Ce lien est valide pendant 7 jours."
+  });
   const text = [
     `Bonjour ${clientName},`,
     "",
