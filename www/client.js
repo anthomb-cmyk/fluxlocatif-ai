@@ -702,12 +702,12 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                           <div class="candidate-identity">
                             <div class="candidate-initials">${getCandidateInitials(candidate.candidate_name)}</div>
                             <div class="candidate-identity-copy">
-                              <div class="candidate-identity-name">${candidate.candidate_name || "Dossier candidat"}</div>
+                              <div class="candidate-identity-name">${escapeHtml(candidate.candidate_name || "Nom non fourni")}</div>
                               <div class="candidate-identity-subtitle">Dossier structuré</div>
                             </div>
                           </div>
                         </td>
-                        <td class="candidate-property-cell">${apartmentLabel}</td>
+                        <td class="candidate-property-cell">${escapeHtml(apartmentLabel)}</td>
                         <td class="candidate-income-cell">${formatCandidateRevenue(candidate)}</td>
                         <td><span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span></td>
                         <td class="candidate-score-cell">
@@ -1583,8 +1583,8 @@ function renderDashboardApartmentOverview() {
     <div class="dashboard-item">
       <div class="dashboard-item-top">
         <div class="dashboard-item-main">
-          <div class="dashboard-item-title">${item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`}</div>
-          <div class="dashboard-item-meta">${item.apartment.ville || "Ville à confirmer"} · ${formatCurrency(item.apartment.loyer)}</div>
+          <div class="dashboard-item-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
+          <div class="dashboard-item-meta">${escapeHtml(item.apartment.ville || "Ville à confirmer")} · ${escapeHtml(formatCurrency(item.apartment.loyer))}</div>
         </div>
         <span class="responsibility-pill ${item.responsibility.className}">${item.responsibility.label}</span>
       </div>
@@ -1674,7 +1674,7 @@ function renderDashboardWatchlist() {
       <div class="dashboard-item">
         <div class="dashboard-item-top">
           <div class="dashboard-item-main">
-            <div class="dashboard-item-title">${item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`}</div>
+            <div class="dashboard-item-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
             <div class="dashboard-item-meta">${item.apartment.ville || "Ville à confirmer"}</div>
           </div>
           <span class="responsibility-pill ${responsibility.className}">${responsibility.label}</span>
