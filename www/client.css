@@ -1499,3 +1499,26 @@
   .client-topbar-side .topbar-search { display: none; }
   .modal-card { padding: 18px 16px; border-radius: 18px; }
 }
+
+/* ── Récupération de mot de passe ─────────────────────────────────────────── */
+.client-auth-link {
+  background: none;
+  border: 0;
+  padding: 10px 4px;
+  margin-top: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #4f46e5);
+  cursor: pointer;
+  text-decoration: underline;
+  min-height: 44px;
+}
+
+.client-auth-link:hover { opacity: .8; }
+
+.client-auth-hint {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #6b7280;
+}

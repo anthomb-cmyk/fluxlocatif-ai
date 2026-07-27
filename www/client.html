@@ -26,6 +26,15 @@
         <button id="clientLoginSubmit" type="submit" class="primary-btn">Se connecter</button>
       </form>
 
+      <button type="button" id="forgotPasswordBtn" class="client-auth-link">Mot de passe oublié&nbsp;?</button>
+
+      <form id="resetPasswordForm" class="client-auth-form hidden">
+        <p class="client-auth-hint">Choisissez un nouveau mot de passe.</p>
+        <input id="resetPasswordValue" type="password" placeholder="Nouveau mot de passe (8 caractères minimum)" minlength="8" required />
+        <input id="resetPasswordConfirm" type="password" placeholder="Confirmer le mot de passe" minlength="8" required />
+        <button type="submit" class="primary-btn">Enregistrer le mot de passe</button>
+      </form>
+
       <div id="clientLoginStatus" class="client-auth-status"></div>
     </div>
   </div>
