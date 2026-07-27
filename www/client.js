@@ -657,8 +657,11 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
     filterBtn.addEventListener("click", () => {
       const pills = container.querySelector(".candidate-status-filters");
       if (pills) {
-        pills.classList.toggle("hidden");
-        filterBtn.setAttribute("aria-expanded", String(!pills.classList.contains("hidden")));
+        // On bascule une classe "deplie" plutot que "hidden": le repli par
+        // defaut est decide par le CSS selon la largeur, donc passer du
+        // telephone a l'ordinateur reaffiche les pastilles tout seul.
+        pills.classList.toggle("deplie");
+        filterBtn.setAttribute("aria-expanded", String(pills.classList.contains("deplie")));
       }
     });
   }
@@ -753,6 +756,20 @@ function renderCandidateTable(container, candidates = [], options = {}) {
 
       <div class="candidate-table-wrap">
         <table class="candidate-table">
+          <!-- Les largeurs sont declarees ici et le tableau est en
+               table-layout: fixed (client.css). Sans ca, l'algorithme "auto"
+               redistribuait les colonnes selon le contenu de chaque rendu:
+               en dessous d'environ 1100px la somme des largeurs minimales
+               depassait le min-width du tableau et les en-tetes STATUT et
+               SCORE se chevauchaient. -->
+          <colgroup>
+            <col class="col-candidat" />
+            <col class="col-propriete" />
+            <col class="col-revenu" />
+            <col class="col-statut" />
+            <col class="col-score" />
+            <col class="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               <th>Candidat</th>
@@ -793,10 +810,10 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                             </div>
                           </div>
                         </td>
-                        <td class="candidate-property-cell">${escapeHtml(apartmentLabel)}</td>
-                        <td class="candidate-income-cell">${formatCandidateRevenue(candidate)}</td>
-                        <td><span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span></td>
-                        <td class="candidate-score-cell">
+                        <td class="candidate-property-cell" data-colonne="Propriété">${escapeHtml(apartmentLabel)}</td>
+                        <td class="candidate-income-cell" data-colonne="Revenu">${formatCandidateRevenue(candidate)}</td>
+                        <td data-colonne="Statut"><span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span></td>
+                        <td class="candidate-score-cell" data-colonne="Compatibilité">
                           <div class="candidate-score-display">
                             <div class="candidate-score-track">
                               <div class="candidate-score-fill ${scoreMeta.className}" style="width:${scoreMeta.value}%"></div>
@@ -1639,10 +1656,15 @@ async function signInClient(event) {
       throw new Error("Session client introuvable.");
     }
 
-    await loadClientData();
+    // La coquille et ses squelettes s'affichent AVANT l'appel reseau, sinon
+    // le client reste sur un ecran vide le temps des trois requetes.
     showClientPortalScreen();
     switchTab("dashboard");
+    renderLoadingSkeletons();
+
+    await loadClientData();
   } catch (error) {
+    setBusy(false);
     showClientLoginScreen(error.message || "Impossible de se connecter.", "error");
   } finally {
     clientLoginSubmit.disabled = false;
@@ -1671,6 +1693,133 @@ function switchTab(tabName) {
   };
 
   pageTitle.textContent = titles[tabName] || "Client";
+}
+
+// ===================== ÉTATS DE CHARGEMENT =====================
+// Le portail attendait la fin des trois appels reseau avant d'afficher quoi
+// que ce soit: le client voyait une page blanche, puis tout d'un coup. On
+// montre desormais la coquille tout de suite, remplie de blocs gris de la
+// meme taille que le contenu attendu, pour qu'aucune ligne ne saute quand
+// les vraies donnees arrivent.
+
+function skeletonLines(count, options = {}) {
+  const { widths = [], height = "" } = options;
+
+  return Array.from({ length: count }, (_, index) => {
+    const width = widths[index] || `${90 - index * 12}%`;
+    return `<span class="flx-skeleton flx-skeleton-line ${height}" style="width:${width}"></span>`;
+  }).join("");
+}
+
+function skeletonListBlocks(count, linesPerBlock = 3) {
+  return Array.from({ length: count }, () => `
+    <div class="flx-skeleton-block">
+      ${skeletonLines(1, { widths: ["62%"], height: "tall" })}
+      ${skeletonLines(linesPerBlock - 1, { widths: ["38%", "80%"] })}
+      <div class="flx-skeleton-row">
+        <span class="flx-skeleton flx-skeleton-pill" style="width:96px;flex:0 0 96px"></span>
+        <span class="flx-skeleton flx-skeleton-pill" style="width:74px;flex:0 0 74px"></span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderLoadingSkeletons() {
+  if (clientMeta && !clientMeta.textContent) {
+    clientMeta.innerHTML = `<span class="flx-skeleton flx-skeleton-line" style="width:230px"></span>`;
+  }
+
+  [statTotalApartments, statAvailableApartments, statCandidates, statDecisionSplit].forEach((node) => {
+    if (node) {
+      node.innerHTML = `<span class="flx-skeleton flx-skeleton-line value" style="width:58px"></span>`;
+    }
+  });
+
+  [statTotalApartmentsTrend, statAvailableApartmentsTrend, statCandidatesTrend, statDecisionSplitTrend]
+    .forEach((node) => {
+      if (node) {
+        node.innerHTML = `<span class="flx-skeleton flx-skeleton-line" style="width:104px"></span>`;
+      }
+    });
+
+  if (dashboardDecisionQueue) {
+    dashboardDecisionQueue.innerHTML = `
+      <div class="flx-skeleton-stack" style="padding:8px 0 14px">
+        <div class="flx-skeleton-row">
+          <span class="flx-skeleton flx-skeleton-line tall"></span>
+          <span class="flx-skeleton flx-skeleton-pill" style="width:88px;flex:0 0 88px"></span>
+        </div>
+        ${skeletonListBlocks(3, 2)}
+      </div>
+    `;
+  }
+
+  [dashboardApartmentOverview, dashboardWatchlist].forEach((node) => {
+    if (node) node.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3)}</div>`;
+  });
+
+  if (dashboardCriteriaSummary) {
+    dashboardCriteriaSummary.innerHTML = `
+      <div class="flx-skeleton-stack" style="padding:12px 0">
+        ${skeletonLines(4, { widths: ["72%", "54%", "66%", "44%"] })}
+      </div>
+    `;
+  }
+
+  if (apartmentsSupervisionSummary) {
+    apartmentsSupervisionSummary.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3, 2)}</div>`;
+  }
+
+  if (apartmentsBody) {
+    apartmentsBody.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(4)}</div>`;
+  }
+
+  if (candidatesReviewSummary) {
+    candidatesReviewSummary.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3, 2)}</div>`;
+  }
+
+  if (candidatesBody) {
+    candidatesBody.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(4)}</div>`;
+  }
+
+  setBusy(true, "Chargement de votre portefeuille…");
+}
+
+// aria-busy + message dans une region live: un lecteur d'ecran ne voit pas
+// les blocs gris, il faut lui dire que la page travaille.
+function setBusy(isBusy, message = "", options = {}) {
+  const { dim = false } = options;
+  const scroll = document.querySelector(".client-scroll");
+
+  if (scroll) {
+    if (isBusy) {
+      scroll.setAttribute("aria-busy", "true");
+    } else {
+      scroll.removeAttribute("aria-busy");
+    }
+
+    // Estomper n'a de sens qu'a l'actualisation, quand il y a deja quelque
+    // chose a l'ecran. Au premier chargement, ce sont les squelettes.
+    if (isBusy && dim) {
+      scroll.setAttribute("data-refreshing", "true");
+    } else {
+      scroll.removeAttribute("data-refreshing");
+    }
+  }
+
+  const live = document.getElementById("clientLoadingStatus");
+
+  if (live) {
+    live.textContent = isBusy ? message || "Chargement en cours." : message;
+  }
+
+  if (refreshBtn) {
+    if (isBusy) {
+      refreshBtn.setAttribute("aria-busy", "true");
+    } else {
+      refreshBtn.removeAttribute("aria-busy");
+    }
+  }
 }
 
 function renderDashboard() {
@@ -2391,6 +2540,7 @@ async function loadClientData() {
   renderApartments();
   renderCandidates();
   populateCriteriaForm();
+  setBusy(false, "Portefeuille chargé.");
 }
 
 async function saveCriteria(event) {
@@ -2525,13 +2675,23 @@ if (refreshBtn) {
   // laissait des donnees perimees a l'ecran sans que le client le sache.
   refreshBtn.addEventListener("click", async () => {
     refreshBtn.disabled = true;
+    // A l'actualisation on ne vide pas l'ecran: les donnees deja affichees
+    // restent lisibles, simplement estompees, et le bouton tourne.
+    setBusy(true, "Actualisation en cours…", { dim: true });
     try {
       await loadClientData();
     } catch (error) {
       console.error("Actualisation echouee:", error);
+      setBusy(false, "L’actualisation a échoué.");
       window.alert(error?.message || "L’actualisation a échoué. Les données affichées datent d’avant.");
     } finally {
       refreshBtn.disabled = false;
+      // Pas de setBusy(false) ici: loadClientData l'a deja fait avec son
+      // message de fin, et l'ecraser aussitot par une chaine vide priverait
+      // un lecteur d'ecran de l'annonce.
+      if (refreshBtn.getAttribute("aria-busy")) {
+        setBusy(false);
+      }
     }
   });
 }
@@ -2588,10 +2748,16 @@ supabaseClient.auth.onAuthStateChange((event) => {
       return;
     }
 
-    await loadClientData();
+    // Idem au chargement direct du portail (lien de session, retour sur la
+    // page): on montre la structure tout de suite, puis on la remplit.
     showClientPortalScreen();
     switchTab("dashboard");
+    renderLoadingSkeletons();
+
+    await loadClientData();
   } catch (error) {
+    setBusy(false);
+
     if (state.currentUser) {
       handleClientRouteFailure(error);
       return;

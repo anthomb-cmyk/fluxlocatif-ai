@@ -2326,6 +2326,27 @@ function candidateNeedsMatch(candidate) {
   );
 }
 
+// Le stock de candidats a accumule quatre facons d'ecrire le nom selon l'epoque
+// du formulaire: nom, name, full_name, ou prenom + nom_famille. Les consoles,
+// elles, ne lisent que candidate_name, que rien ne produisait: chaque dossier
+// s'affichait donc "Nom non fourni", et la recherche comme le tri par nom
+// portaient sur du vide. On calcule le nom une fois, au moment de servir.
+function nomDuCandidat(candidate) {
+  const direct = [candidate?.candidate_name, candidate?.full_name, candidate?.nom, candidate?.name]
+    .map((valeur) => String(valeur || "").trim())
+    .find((valeur) => valeur.length > 0);
+  if (direct) return direct;
+
+  const compose = [candidate?.prenom, candidate?.first_name, candidate?.nom_famille, candidate?.last_name]
+    .map((valeur) => String(valeur || "").trim())
+    .filter((valeur) => valeur.length > 0);
+  return compose.length ? compose.join(" ") : "";
+}
+
+function exposerCandidat(candidate) {
+  return { ...candidate, candidate_name: nomDuCandidat(candidate) };
+}
+
 async function ensureCandidatesMatchFields(candidates, persist = false) {
   let changed = false;
   const listings = await loadListingsMap();
@@ -4708,7 +4729,7 @@ app.get("/api/client/candidates", async (req, res) =>
 
     return res.json({
       ok: true,
-      candidates: filtered
+      candidates: filtered.map(exposerCandidat)
     });
   })
 );
@@ -6223,7 +6244,7 @@ app.get("/api/admin/candidates", async (req, res) => handleAdminRoute(req, res, 
       ? candidates.filter((candidate) => candidate.status === requestedStatus)
       : candidates;
 
-    res.json({ ok: true, candidates: filtered });
+    res.json({ ok: true, candidates: filtered.map(exposerCandidat) });
   } catch (error) {
     res.status(500).json({
       ok: false,
