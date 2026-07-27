@@ -26,7 +26,7 @@
   --heading: #191d45;
   --muted: #6b7280;
   --muted-soft: #8086a0;
-  --muted-faint: #9098ad;
+  --muted-faint: #6b7280;
 
   --blue: #1e90ff;
   --indigo: #4f46e5;
@@ -155,7 +155,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: #aab0c2;
+  color: #6b7280;
   text-transform: uppercase;
   padding: 0 12px 9px;
 }
@@ -276,7 +276,7 @@
 
 .client-sidebar-user-role {
   font-size: 11px;
-  color: #9098ad;
+  color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1521,4 +1521,27 @@
   margin: 0 0 4px;
   font-size: 14px;
   color: #6b7280;
+}
+
+/* ── Confort tactile et lisibilité ────────────────────────────────────────── */
+/* Sous 16px, iOS Safari zoome automatiquement a la mise au point d'un champ,
+   ce qui decale toute la mise en page. Et sur ecran tactile, une cible sous
+   44px se rate une fois sur trois. */
+@media (max-width: 760px) {
+  input, select, textarea { font-size: 16px !important; }
+  tbody td { font-size: 15px; }
+  button, [role="button"], .option-chip, .lang-btn, .menu-btn,
+  .candidate-filter-pill, .candidate-action-btn,
+  .primary-btn, .secondary-btn, .client-auth-link,
+  .dashboard-panel-link, .candidate-table-filter-btn { min-height: 44px !important; }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  .option-chip,
+  .lang-btn,
+  .menu-btn,
+  .candidate-filter-pill,
+  .candidate-action-btn { min-height: 44px; }
 }

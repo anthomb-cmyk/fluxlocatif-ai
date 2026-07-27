@@ -427,3 +427,26 @@ td.long {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Confort tactile et lisibilité ────────────────────────────────────────── */
+/* Sous 16px, iOS Safari zoome automatiquement a la mise au point d'un champ,
+   ce qui decale toute la mise en page. Et sur ecran tactile, une cible sous
+   44px se rate une fois sur trois. */
+@media (max-width: 760px) {
+  input, select, textarea { font-size: 16px !important; }
+  tbody td { font-size: 15px; }
+  button, [role="button"], .option-chip, .lang-btn, .menu-btn,
+  .candidate-filter-pill, .candidate-action-btn,
+  .primary-btn, .secondary-btn, .client-auth-link,
+  .dashboard-panel-link, .candidate-table-filter-btn { min-height: 44px !important; }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  .option-chip,
+  .lang-btn,
+  .menu-btn,
+  .candidate-filter-pill,
+  .candidate-action-btn { min-height: 44px; }
+}
