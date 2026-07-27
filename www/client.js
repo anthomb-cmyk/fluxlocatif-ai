@@ -2683,7 +2683,12 @@ if (refreshBtn) {
       window.alert(error?.message || "L’actualisation a échoué. Les données affichées datent d’avant.");
     } finally {
       refreshBtn.disabled = false;
-      setBusy(false);
+      // Pas de setBusy(false) ici: loadClientData l'a deja fait avec son
+      // message de fin, et l'ecraser aussitot par une chaine vide priverait
+      // un lecteur d'ecran de l'annonce.
+      if (refreshBtn.getAttribute("aria-busy")) {
+        setBusy(false);
+      }
     }
   });
 }
