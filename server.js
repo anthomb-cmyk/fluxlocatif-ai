@@ -1417,11 +1417,22 @@ async function sendPasswordResetEmail(email, lienRecuperation) {
       <h2 style="color: #111;">Réinitialiser votre mot de passe</h2>
       <p>Bonjour,</p>
       <p>Vous avez demandé à réinitialiser le mot de passe de votre espace FluxLocatif.</p>
-      <p style="margin: 26px 0;">
-        <a href="${lienRecuperation}"
-           style="background:#4f46e5;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;">
-          Choisir un nouveau mot de passe
-        </a>
+      <!-- Bouton en tableau: un <a> inline avec du padding se brise en deux
+           boites des que le texte passe a la ligne, ce qui arrive sur telephone.
+           Le tableau garde le fond solidaire du texte. -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 26px 0;">
+        <tr>
+          <td align="center" bgcolor="#4f46e5" style="border-radius:10px;">
+            <a href="${lienRecuperation}"
+               style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:700;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
+              Choisir un nouveau mot de passe
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
+        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur&nbsp;:<br>
+        ${lienRecuperation}
       </p>
       <p style="color:#6b7280;font-size:13px;">
         Ce lien est valide une heure. Si vous n’êtes pas à l’origine de cette demande,
@@ -1497,12 +1508,23 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
         Vous pourrez suivre vos logements, vos candidats et gérer vos critères en temps réel.
       </p>
 
-      <div style="margin: 30px 0; text-align: center;">
-        <a href="${onboardingLink}" 
-           style="background-color: #000; color: #fff; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-           Accéder à mon espace
-        </a>
-      </div>
+      <!-- Meme correction que le courriel de reinitialisation: un <a> inline
+           avec du padding se brise en deux boites quand le texte passe a la
+           ligne sur telephone. -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 30px auto;">
+        <tr>
+          <td align="center" bgcolor="#000000" style="border-radius:6px;">
+            <a href="${onboardingLink}"
+               style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
+              Accéder à mon espace
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
+        Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur&nbsp;:<br>
+        ${onboardingLink}
+      </p>
 
       <p style="font-size: 14px; color: #555;">
         Ce lien est sécurisé et valide pendant 7 jours.
