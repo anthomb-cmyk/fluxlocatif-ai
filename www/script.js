@@ -1830,7 +1830,12 @@ async function handleCandidateSubmit(event) {
       "success"
     );
 
-    runCandidateEvaluation(String(displayRef), chatState.activeTranslatorThreadKey || "");
+    // L'appel a runCandidateEvaluation a ete retire ici: il evaluait l'etat du
+    // fil traducteur, pas la fiche qui vient d'etre soumise, et affichait sous
+    // le formulaire un verdict "Locataire eligible" ou "Profil non conforme"
+    // calcule sur une conversation potentiellement vide ou concernant un autre
+    // locataire. Le score du candidat est deja calcule cote serveur par
+    // buildCandidateMatchFields a la creation de la fiche.
 
     candidateForm.reset();
     clearSelectedPreferredLocation();

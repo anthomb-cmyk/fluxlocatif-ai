@@ -79,6 +79,7 @@ let allApartments = [];
 let allCandidates = [];
 let allTranslatorReports = [];
 let lastPendingCandidatesCount = 0;
+let pendingCandidatesBaselineSet = false;
 let allClients = [];
 let workspaceEmployees = [];
 let workspaceConversations = [];
@@ -1819,11 +1820,16 @@ async function checkNewCandidates() {
     const data = await fetchJSON("/api/admin/candidates?status=en attente");
     const pendingCount = (data.candidates || []).length;
 
-    if (lastPendingCandidatesCount !== 0 && pendingCount > lastPendingCandidatesCount) {
+    // Le garde-fou etait `lastPendingCandidatesCount !== 0`, cense ignorer le
+    // premier chargement. Il s'appliquait en permanence: des que la file
+    // retombait a zero, cas normal apres traitement, le candidat suivant
+    // n'alertait plus jamais. On utilise un drapeau d'initialisation dedie.
+    if (pendingCandidatesBaselineSet && pendingCount > lastPendingCandidatesCount) {
       alert("Nouveau candidat reçu");
     }
 
     lastPendingCandidatesCount = pendingCount;
+    pendingCandidatesBaselineSet = true;
   } catch (error) {
     console.error("Erreur notification candidats:", error);
   }
