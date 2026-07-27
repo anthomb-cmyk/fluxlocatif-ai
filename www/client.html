@@ -125,7 +125,31 @@
 
           <!-- ============ DASHBOARD ============ -->
           <section id="dashboardTab">
-            <div class="stats-grid">
+            <!-- 1. CE QUI ATTEND UNE DÉCISION.
+                 Le proprietaire ouvre le portail pour savoir quoi faire, pas
+                 pour lire des compteurs: la file passe en tete et en pleine
+                 largeur, ce qui lui rend aussi la place d'afficher ses six
+                 colonnes sans defilement horizontal. -->
+            <div class="dashboard-row">
+              <div class="dashboard-panel is-primary">
+                <div class="dashboard-panel-header">
+                  <div class="dashboard-panel-header-main">
+                    <span class="dashboard-panel-icon">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    </span>
+                    <h4>File de décisions</h4>
+                    <span class="dashboard-panel-hint">À traiter en premier</span>
+                  </div>
+                  <button type="button" class="dashboard-panel-link" data-dashboard-tab="candidates">Voir les dossiers</button>
+                </div>
+                <div class="dashboard-panel-body">
+                  <div id="dashboardDecisionQueue"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. ÉTAT DU PORTEFEUILLE (contexte, pas action) -->
+            <div class="stats-grid dashboard-row">
               <div class="stat-card">
                 <div class="stat-card-head">
                   <div class="stat-card-glyph">
@@ -171,23 +195,8 @@
               </div>
             </div>
 
-            <!-- ROW: décisions + logements -->
-            <div class="dashboard-grid" style="margin-top:20px;">
-              <div class="dashboard-panel">
-                <div class="dashboard-panel-header">
-                  <div class="dashboard-panel-header-main">
-                    <span class="dashboard-panel-icon">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                    </span>
-                    <h4>File de décisions</h4>
-                  </div>
-                  <button type="button" class="dashboard-panel-link" data-dashboard-tab="candidates">Voir les dossiers</button>
-                </div>
-                <div class="dashboard-panel-body">
-                  <div id="dashboardDecisionQueue"></div>
-                </div>
-              </div>
-
+            <!-- 3. LE DÉTAIL PAR LOGEMENT -->
+            <div class="dashboard-grid dashboard-row">
               <div class="dashboard-panel">
                 <div class="dashboard-panel-header">
                   <div class="dashboard-panel-header-main">
@@ -200,24 +209,6 @@
                 </div>
                 <div class="dashboard-panel-body">
                   <div id="dashboardApartmentOverview"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- ROW: critères + watchlist -->
-            <div class="dashboard-grid" style="margin-top:20px;">
-              <div class="dashboard-panel">
-                <div class="dashboard-panel-header">
-                  <div class="dashboard-panel-header-main">
-                    <span class="dashboard-panel-icon">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
-                    </span>
-                    <h4>Résumé des critères</h4>
-                  </div>
-                  <button type="button" class="dashboard-panel-link" data-dashboard-tab="criteria">Modifier</button>
-                </div>
-                <div class="dashboard-panel-body">
-                  <div id="dashboardCriteriaSummary"></div>
                 </div>
               </div>
 
@@ -233,6 +224,24 @@
                 </div>
                 <div class="dashboard-panel-body">
                   <div id="dashboardWatchlist"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. RÉGLAGES: on les consulte rarement, ils ferment la page -->
+            <div class="dashboard-row">
+              <div class="dashboard-panel is-quiet">
+                <div class="dashboard-panel-header">
+                  <div class="dashboard-panel-header-main">
+                    <span class="dashboard-panel-icon">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
+                    </span>
+                    <h4>Résumé des critères</h4>
+                  </div>
+                  <button type="button" class="dashboard-panel-link" data-dashboard-tab="criteria">Modifier</button>
+                </div>
+                <div class="dashboard-panel-body">
+                  <div id="dashboardCriteriaSummary"></div>
                 </div>
               </div>
             </div>

@@ -555,6 +555,11 @@
 
 /* ===================== DASHBOARD GRID / PANELS ===================== */
 
+/* Rythme vertical du tableau de bord. L'espacement etait pose en style
+   inline sur chaque rangee; il est ici pour rester coherent si l'ordre
+   des rangees change encore. */
+.dashboard-row + .dashboard-row { margin-top: 20px; }
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(384px, 1fr));
@@ -585,6 +590,8 @@
   align-items: center;
   gap: 11px;
   min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .dashboard-panel-icon {
@@ -608,6 +615,44 @@
   color: var(--heading);
   letter-spacing: -0.01em;
 }
+
+/* Poids visuel: un seul panneau porte l'action du jour. Le liseré de
+   marque et le titre plus grand le distinguent sans changer la palette. */
+.dashboard-panel.is-primary {
+  border-color: var(--line-accent);
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-panel.is-primary::before {
+  content: "";
+  display: block;
+  height: 3px;
+  background: var(--primary-gradient);
+}
+
+.dashboard-panel.is-primary .dashboard-panel-header h4 { font-size: 18px; }
+
+.dashboard-panel-hint {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--indigo);
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--indigo-soft);
+  border: 1px solid var(--line-accent);
+  white-space: nowrap;
+}
+
+/* A l'inverse, les critères sont un réglage: ils ferment la page et
+   n'ont pas besoin d'attirer l'oeil. */
+.dashboard-panel.is-quiet {
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.dashboard-panel.is-quiet .dashboard-panel-header h4 { font-size: 15px; }
 
 .dashboard-panel-count {
   display: inline-flex;
