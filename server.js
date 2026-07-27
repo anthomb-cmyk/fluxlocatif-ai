@@ -1402,6 +1402,101 @@ function isValidInvitationSenderEmail(value) {
   return domain === "fluxlocatif.com";
 }
 
+async function sendIntakeConfirmationEmail(email, nomClient, nombreLogements) {
+  if (!resendClient || !INVITATION_FROM_EMAIL || !isValidInvitationSenderEmail(INVITATION_FROM_EMAIL)) {
+    return { sent: false, error: "Expediteur courriel non configure." };
+  }
+
+  const portail = `${PUBLIC_APP_URL || "https://fluxlocatif.up.railway.app"}/client.html`;
+  const salutation = nomClient ? `Bonjour ${nomClient},` : "Bonjour,";
+  const ligneLogements = nombreLogements === 1
+    ? "1 logement a été enregistré."
+    : `${nombreLogements} logements ont été enregistrés.`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
+      <h2 style="color:#111;">Votre profil est bien reçu</h2>
+      <p>${salutation}</p>
+      <p>Merci, votre profil FluxLocatif est complet. ${ligneLogements}</p>
+      <p>Notre équipe le vérifie et active votre compte sous peu. Vous pouvez déjà consulter votre portail.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0;">
+        <tr>
+          <td align="center" bgcolor="#4f46e5" style="border-radius:10px;">
+            <a href="${portail}" style="display:block;padding:14px 24px;color:#ffffff;text-decoration:none;font-weight:700;font-family:Arial,sans-serif;font-size:15px;line-height:1.3;">
+              Accéder à mon portail
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;word-break:break-all;">
+        Si le bouton ne fonctionne pas&nbsp;: ${portail}
+      </p>
+      <p style="margin-top:30px;">—<br>FluxLocatif</p>
+    </div>
+  `;
+
+  const text = [
+    salutation,
+    "",
+    `Merci, votre profil FluxLocatif est complet. ${ligneLogements}`,
+    "Notre équipe le vérifie et active votre compte sous peu.",
+    "",
+    "Votre portail :",
+    portail,
+    "",
+    "— FluxLocatif"
+  ].join("\n");
+
+  try {
+    const reponse = await resendClient.emails.send({
+      from: sanitizeFromField(INVITATION_FROM_EMAIL),
+      to: email,
+      subject: "FluxLocatif — Votre profil est bien reçu",
+      html,
+      text
+    });
+    if (reponse?.error) return { sent: false, error: reponse.error.message || "Envoi refusé." };
+    return { sent: true, error: null };
+  } catch (erreur) {
+    return { sent: false, error: erreur?.message || "Envoi impossible." };
+  }
+}
+
+async function sendAdminIntakeNotification(invitation, refsLogements) {
+  if (!resendClient || !ADMIN_NOTIFICATION_EMAIL || !INVITATION_FROM_EMAIL) return;
+
+  const nom = String(invitation.name || invitation.contact_name || invitation.email || "Client").trim();
+  const lignes = [
+    `Client : ${nom}`,
+    `Courriel : ${invitation.email || "-"}`,
+    `Identifiant : ${invitation.client_id || "-"}`,
+    `Logements soumis : ${refsLogements.length}${refsLogements.length ? ` (${refsLogements.join(", ")})` : ""}`,
+    "",
+    "Statut : en attente de vérification."
+  ];
+
+  try {
+    await resendClient.emails.send({
+      from: sanitizeFromField(INVITATION_FROM_EMAIL),
+      to: ADMIN_NOTIFICATION_EMAIL,
+      subject: `FluxLocatif — Profil soumis : ${nom}`,
+      text: lignes.join("\n"),
+      html: `<div style="font-family:Arial,sans-serif;">${lignes.map((l) => escapeHtmlServeur(l) || "<br>").join("<br>")}</div>`
+    });
+  } catch (erreur) {
+    console.error("[intake] notification equipe echouee:", erreur?.message || erreur);
+  }
+}
+
+// Echappement minimal pour le HTML des courriels construits cote serveur.
+function escapeHtmlServeur(valeur) {
+  return String(valeur ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 async function sendPasswordResetEmail(email, lienRecuperation) {
   if (!resendClient) {
     return { sent: false, error: "RESEND_API_KEY manquant." };
@@ -4348,6 +4443,45 @@ app.get("/api/client/apartments", async (req, res) =>
   })
 );
 
+// L'onboarding promet "Vous pourrez en ajouter depuis votre portail", et il
+// n'existait ni bouton ni route pour le faire. Le client_id vient du jeton, pas
+// du corps de la requete, comme toutes les routes /api/client.
+app.post("/api/client/apartments", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const adresse = String(req.body?.adresse || "").trim();
+
+    if (!adresse) {
+      throw createHttpError(400, "L’adresse du logement est obligatoire.");
+    }
+
+    const matchedLocation = getPreloadedLocation(req.body?.ville);
+    let cree = null;
+
+    await mutateJsonFile(LISTINGS_PATH, {}, (listings) => {
+      const ref = nextListingRef(listings);
+      cree = toListingRecord(ref, {
+        ref,
+        adresse,
+        ville:         String(req.body?.ville || "").trim() || matchedLocation?.label || "",
+        type_logement: String(req.body?.type_logement || "").trim(),
+        chambres:      String(req.body?.type_logement || "").trim(),
+        loyer:         req.body?.loyer ?? null,
+        disponibilite: canonicalAvailability(req.body?.disponibilite),
+        stationnement: canonicalParking(req.body?.stationnement),
+        animaux_acceptes: canonicalPets(req.body?.animaux_acceptes),
+        notes:         String(req.body?.notes || "").trim(),
+        client_id:     clientId,
+        statut:        "actif"
+      });
+
+      listings[ref] = cree;
+      return listings;
+    });
+
+    return res.status(201).json({ ok: true, apartment: cree });
+  })
+);
+
 app.get("/api/client/candidates", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
     const listings = await loadListingsMap();
@@ -5320,6 +5454,19 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
       listing_refs: createdListingRefs
     };
     await saveClientInvitations(invitations);
+
+    // La page de fin promet "Vous recevrez un courriel de confirmation", et
+    // rien n'etait envoye: ni au client, ni a l'equipe. Personne ne savait
+    // qu'un profil venait d'etre soumis, alors que le statut pose est
+    // pending_review. Les deux envois sont volontairement non bloquants: un
+    // echec de courriel ne doit pas faire echouer la soumission du profil.
+    const nomClient = String(invitation.name || invitation.contact_name || "").trim();
+    sendIntakeConfirmationEmail(invitation.email, nomClient, createdListingRefs.length)
+      .then((r) => { if (!r.sent) console.error("[intake] confirmation client non envoyee:", r.error); })
+      .catch((e) => console.error("[intake] confirmation client:", e));
+
+    sendAdminIntakeNotification(invitation, createdListingRefs)
+      .catch((e) => console.error("[intake] notification equipe:", e));
 
     return res.status(201).json({
       ok:           true,

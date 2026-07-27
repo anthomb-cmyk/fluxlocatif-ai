@@ -2163,6 +2163,56 @@ supabaseClient.auth.onAuthStateChange((evenement) => {
   }
 });
 
+// Ajout d'un logement depuis le portail, ce que l'onboarding promettait sans
+// que ce soit possible.
+const toggleAddApartmentBtn = document.getElementById("toggleAddApartmentBtn");
+const addApartmentForm = document.getElementById("addApartmentForm");
+
+toggleAddApartmentBtn?.addEventListener("click", () => {
+  addApartmentForm?.classList.toggle("hidden");
+  if (!addApartmentForm?.classList.contains("hidden")) {
+    document.getElementById("newApartmentAddress")?.focus();
+  }
+});
+
+document.getElementById("cancelAddApartmentBtn")?.addEventListener("click", () => {
+  addApartmentForm?.classList.add("hidden");
+  addApartmentForm?.reset();
+});
+
+addApartmentForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const statut = document.getElementById("addApartmentStatus");
+  const bouton = addApartmentForm.querySelector("button[type=submit]");
+  if (statut) { statut.textContent = ""; statut.className = "client-auth-status"; }
+  if (bouton) bouton.disabled = true;
+
+  try {
+    await fetchClientJSON("/api/client/apartments", {
+      method: "POST",
+      body: JSON.stringify({
+        adresse: document.getElementById("newApartmentAddress").value.trim(),
+        ville: document.getElementById("newApartmentCity").value.trim(),
+        type_logement: document.getElementById("newApartmentType").value.trim(),
+        loyer: document.getElementById("newApartmentRent").value || null,
+        disponibilite: document.getElementById("newApartmentAvailability").value,
+        stationnement: document.getElementById("newApartmentParking").value
+      })
+    });
+
+    addApartmentForm.reset();
+    addApartmentForm.classList.add("hidden");
+    await loadClientData();
+  } catch (error) {
+    if (statut) {
+      statut.textContent = error.message || "Impossible d’ajouter le logement.";
+      statut.className = "client-auth-status error";
+    }
+  } finally {
+    if (bouton) bouton.disabled = false;
+  }
+});
+
 const logoutBtn = document.getElementById("logoutBtn");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
