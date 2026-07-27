@@ -1258,6 +1258,13 @@ function afficherLogementsExistants() {
       <div style="white-space:nowrap;font-weight:700;">${escapeHtml(l.loyer || "")}</div>
     </div>`).join("");
 
+  // Le titre de l'etape invite a ajouter des logements, ce qui contredit le
+  // bandeau juste en dessous. On le reformule quand le portefeuille est deja la.
+  const description = document.querySelector("#step4Panel .step-desc");
+  if (description) {
+    description.textContent = "Voici les logements que nous gérons déjà pour vous. Vérifiez-les, ajoutez ce qui manque, ou continuez.";
+  }
+
   cible.innerHTML = `
     <div style="background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.15);border-radius:14px;padding:16px 18px;margin-bottom:18px;">
       <div style="font-weight:800;margin-bottom:4px;">${existants.length} logement${existants.length > 1 ? "s" : ""} déjà enregistré${existants.length > 1 ? "s" : ""}</div>
