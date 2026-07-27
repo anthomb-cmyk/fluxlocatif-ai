@@ -216,16 +216,45 @@ async function ensureDataFile(filePath, fallbackValue) {
   }
 }
 
+// Fichiers dont le contenu est ecrit a l'execution et doit survivre a un
+// deploiement. Les fichiers sous .data/ etaient deja couverts; clients.json et
+// listings.json sont versionnes dans le depot, donc chaque deploiement les
+// remettait a la version du depot et effacait les clients reels.
+function isDurableJsonPath(filePath) {
+  return (
+    filePath.startsWith(DATA_DIR) ||
+    filePath === CLIENTS_PATH ||
+    filePath === LISTINGS_PATH
+  );
+}
+
+async function readJsonFileFromDisk(filePath, fallbackValue) {
+  await ensureDataFile(filePath, fallbackValue);
+  const raw = await fs.readFile(filePath, "utf8");
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return structuredClone(fallbackValue);
+  }
+}
+
 async function readJsonFile(filePath, fallbackValue) {
-  // Durable store for runtime .data/* files: Supabase kv_store (survives Railway
-  // redeploys + shared across instances). Repo-committed JSON stays on disk.
-  if (supabaseServerClient && filePath.startsWith(DATA_DIR)) {
+  // Durable store for runtime files: Supabase kv_store (survives Railway
+  // redeploys + shared across instances).
+  if (supabaseServerClient && isDurableJsonPath(filePath)) {
     try {
       const key = path.basename(filePath);
       const { data, error } = await supabaseServerClient
         .from("kv_store").select("value").eq("key", key).maybeSingle();
       if (error) throw error;
-      return data ? data.value : structuredClone(fallbackValue);
+      if (data) return data.value;
+
+      // Premiere lecture: amorcer kv_store avec le fichier du depot s'il en
+      // existe un, pour ne pas perdre les donnees de demarrage.
+      const seed = await readJsonFileFromDisk(filePath, fallbackValue);
+      await writeJsonFile(filePath, seed);
+      return seed;
     } catch (error) {
       console.error(`[kv_store] read ${path.basename(filePath)} failed, falling back to file:`, error.message);
     }
@@ -246,7 +275,7 @@ async function readJsonFile(filePath, fallbackValue) {
 }
 
 async function writeJsonFile(filePath, value) {
-  if (supabaseServerClient && filePath.startsWith(DATA_DIR)) {
+  if (supabaseServerClient && isDurableJsonPath(filePath)) {
     try {
       const key = path.basename(filePath);
       const { error } = await supabaseServerClient
