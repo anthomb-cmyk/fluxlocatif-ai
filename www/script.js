@@ -1460,7 +1460,7 @@ async function checkServer() {
 
 async function loadListings() {
   try {
-    const data = await fetchJSON("/api/listings", {}, 10000);
+    const data = await fetchEmployeeJSON("/api/listings", {}, 10000);
     const rawListings = data.listings || {};
     const normalizedListings = {};
 

@@ -289,7 +289,10 @@ async function fetchJSON(url, options = {}) {
     ...(options.headers || {})
   };
 
-  if (String(url || "").startsWith("/api/admin")) {
+  // /api/listings exige maintenant un membre du personnel (voir requireStaff),
+  // il lui faut donc aussi le jeton.
+  const url_ = String(url || "");
+  if (url_.startsWith("/api/admin") || url_.startsWith("/api/listings")) {
     const session = await waitForActiveSession(1, 0);
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;

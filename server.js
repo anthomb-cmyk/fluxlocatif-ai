@@ -3957,7 +3957,28 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/listings", createListingsRouter({
+// /api/listings renvoie tout le portefeuille avec adresses, notes internes et
+// client_id. Elle etait publique. Les deux consoles internes s'en servent, donc
+// on exige un membre du personnel, employe ou admin, plutot que de la fermer.
+async function requireStaff(req, res, next) {
+  try {
+    await resolveEmployeeContext(req);
+    return next();
+  } catch (employeeError) {
+    try {
+      await resolveAdminContext(req);
+      return next();
+    } catch {
+      const status = employeeError.status === 401 ? 401 : 403;
+      return res.status(status).json({
+        ok: false,
+        error: status === 401 ? "Jeton d’authentification manquant." : "Accès refusé."
+      });
+    }
+  }
+}
+
+app.use("/api/listings", requireStaff, createListingsRouter({
   listingsService
 }));
 
@@ -4014,28 +4035,6 @@ app.post("/api/translator/schedule-visit", async (req, res) => handleEmployeeRou
     confirmationMessage: `Visite à planifier pour ${payload.listing_ref || "ce logement"} le ${proposedDate}. Un suivi peut maintenant être envoyé au locataire.`
   });
 }));
-
-app.post("/api/match", async (req, res) => {
-  const listing = req.body?.listing;
-  const candidate = req.body?.candidate;
-
-  if (!listing || !candidate) {
-    return res.status(400).json({
-      ok: false,
-      error: "listing et candidate sont obligatoires."
-    });
-  }
-
-  let criteria = null;
-
-  if (listing.client_id) {
-    const clientsMap = await loadClientsMap();
-    const client = clientsMap[String(listing.client_id)] || null;
-    criteria = client?.criteres || null;
-  }
-
-  return res.json(evaluateMatch(listing, candidate, criteria));
-});
 
 app.get("/api/client/me", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
@@ -5718,6 +5717,27 @@ app.use((req, res) => {
     ok: false,
     error: "Route introuvable."
   });
+});
+
+// Filet de securite: une exception dans un handler ne doit jamais remonter
+// jusqu'a un rejet non capture, qui terminerait le processus Node.
+app.use((error, req, res, _next) => {
+  console.error(`[erreur] ${req.method} ${req.path}:`, error);
+
+  if (res.headersSent) return;
+
+  const status = error?.status || 500;
+  res.status(status).json({
+    ok: false,
+    // Ne divulguer le message que pour les erreurs que le code a lui-meme
+    // levees via createHttpError; sinon un detail interne fuirait.
+    error: error?.status ? error.message : "Erreur serveur."
+  });
+});
+
+// Dernier rempart: journaliser plutot que laisser le processus mourir.
+process.on("unhandledRejection", (reason) => {
+  console.error("[rejet non capture]", reason);
 });
 
 app.listen(PORT, HOST, () => {
