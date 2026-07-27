@@ -153,6 +153,29 @@ function libelleChamp(key) {
 // Toute donnee tierce interpolee dans une chaine HTML doit passer par ici.
 // Sans cela, un message ecrit par un admin ou le texte d'un mandat pouvait
 // executer du script dans la session employe, qui detient le jeton Supabase.
+// L'identite affichee etait codee en dur dans le HTML: tout employe connecte
+// etait salue "Bonjour Camille" et vu comme "Camille Lavoie, Conseillere
+// location". On la remplit depuis le compte reellement connecte.
+function remplirIdentiteEmploye() {
+  const user = chatState.currentUser;
+  if (!user) return;
+
+  const nom = String(user.user_metadata?.full_name || user.user_metadata?.name || "").trim()
+    || String(user.email || "").split("@")[0]
+    || "Employé";
+  const prenom = nom.split(/\s+/)[0];
+  const initiales = nom.split(/\s+/).slice(0, 2).map((mot) => mot[0]).join("").toUpperCase() || "??";
+
+  const set = (id, valeur) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = valeur;
+  };
+
+  set("employeeName", nom);
+  set("employeeAvatar", initiales);
+  set("employeeGreeting", `Bonjour ${prenom}, voici votre poste de travail`);
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -1159,6 +1182,15 @@ async function fetchJSON(url, options = {}, timeoutMs = 10000) {
     }
 
     const data = await response.json();
+
+    if (response.status === 401) {
+      // Session expiree: l'utilisateur cliquait et rien ne se passait, sans
+      // aucun indice. On le renvoie a la connexion plutot que de le laisser
+      // devant des donnees perimees.
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?next=${next}`;
+      throw new Error("Session expirée. Reconnectez-vous.");
+    }
 
     if (!response.ok) {
       throw new Error(data.error || "Une erreur est survenue.");
@@ -2197,6 +2229,7 @@ supabaseClient.auth.onAuthStateChange((event) => {
 
   try {
     await requireLogin();
+    remplirIdentiteEmploye();
   } catch (error) {
     console.error("Login init error:", error);
     return;

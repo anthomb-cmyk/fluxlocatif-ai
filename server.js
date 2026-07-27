@@ -23,15 +23,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Derriere le proxy Railway, req.ip valait l'adresse du proxy pour toutes les
+// requetes: la limite de debit devenait un plafond global qui bloquait les
+// employes legitimes sans jamais isoler un abuseur.
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://nuuzkvgyolxbawvqyugu.supabase.co";
 const PUBLIC_APP_URL = String(process.env.PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
+// Ce repli sur une cle publiable codee en dur faisait demarrer le serveur dans
+// un mode degrade silencieux: supabaseServerClient existait, donc les gardes
+// admin ne renvoyaient pas 503, mais kv_store etait inaccessible en ecriture et
+// tout le stockage retombait sur le disque ephemere du conteneur. C'est ce
+// genre de repli qui fait perdre les donnees sans que personne le voie.
 const SUPABASE_SERVER_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.SUPABASE_PUBLISHABLE_KEY ||
-  "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
+  "";
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error(
+    "[demarrage] SUPABASE_SERVICE_ROLE_KEY est absente. Sans elle, les donnees " +
+    "client ne sont pas persistees dans Supabase et seraient perdues au prochain " +
+    "deploiement. Arret volontaire plutot que perte silencieuse."
+  );
+  process.exit(1);
+}
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
 const INVITATION_FROM_EMAIL = String(process.env.INVITATION_FROM_EMAIL || process.env.FROM_EMAIL || "").trim();
 const ADMIN_NOTIFICATION_EMAIL = String(process.env.ADMIN_NOTIFICATION_EMAIL || "").trim();
@@ -123,7 +142,25 @@ const supabaseServerClient = SUPABASE_URL && SUPABASE_SERVER_KEY
     })
   : null;
 
-app.use(cors());
+// CORS etait totalement ouvert (Access-Control-Allow-Origin: *) sur toute
+// l'API, y compris les routes d'onboarding non authentifiees.
+const ORIGINES_AUTORISEES = [
+  "https://fluxlocatif.com",
+  "https://www.fluxlocatif.com",
+  "https://client.fluxlocatif.com",
+  "https://fluxlocatif.up.railway.app",
+  PUBLIC_APP_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    // Pas d'origine: appel serveur a serveur ou meme origine, on laisse passer.
+    if (!origin) return callback(null, true);
+    if (ORIGINES_AUTORISEES.includes(origin)) return callback(null, true);
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
+    return callback(null, false);
+  }
+}));
 app.use(compression({
   filter: (req, res) => {
     if (req.path === "/api/chat") {
@@ -274,7 +311,40 @@ async function readJsonFile(filePath, fallbackValue) {
   }
 }
 
+// Chaque ecriture remplace le document entier. Sans serialisation, deux
+// requetes concurrentes lisent la meme version et la seconde ecrase la
+// premiere: deux employes qui discutent en meme temps perdent des messages,
+// deux creations de logement simultanees calculent la meme reference. On
+// chaine les ecritures par cle. Cela ne protege qu'une instance; la vraie
+// solution reste des tables Supabase avec insertion ligne a ligne.
+const filesDEcriture = new Map();
+
+function serialiserEcriture(cle, tache) {
+  const precedent = filesDEcriture.get(cle) || Promise.resolve();
+  const suivant = precedent.then(tache, tache);
+  filesDEcriture.set(cle, suivant.catch(() => {}));
+  return suivant;
+}
+
+// Serialiser la seule ecriture ne suffit pas: le motif reel est lire, modifier,
+// ecrire, et la lecture se fait hors du verrou. Deux requetes lisent la meme
+// version et la seconde ecrase la premiere. mutateJsonFile enferme les trois
+// etapes dans la meme file, ce qui elimine la perte de mise a jour.
+async function mutateJsonFile(filePath, fallbackValue, mutateur) {
+  return serialiserEcriture(path.basename(filePath), async () => {
+    const courant = await readJsonFile(filePath, fallbackValue);
+    const resultat = await mutateur(courant);
+    const aEcrire = resultat === undefined ? courant : resultat;
+    await writeJsonFileNow(filePath, aEcrire);
+    return aEcrire;
+  });
+}
+
 async function writeJsonFile(filePath, value) {
+  return serialiserEcriture(path.basename(filePath), () => writeJsonFileNow(filePath, value));
+}
+
+async function writeJsonFileNow(filePath, value) {
   if (supabaseServerClient && isDurableJsonPath(filePath)) {
     try {
       const key = path.basename(filePath);
@@ -826,18 +896,62 @@ function buildIncomeCriteriaFromRent(rentValue, incomeRule) {
   };
 }
 
+// Le champ "Revenu minimum requis" de l'onboarding est un texte libre dont le
+// placeholder est "ex. 3x le loyer mensuel ou 4 500 $/mois". L'ancien code
+// retirait tous les caracteres non numeriques et gardait le reste: saisir le
+// placeholder donnait 34500, et "3x le loyer" donnait 3. Ce nombre etait ensuite
+// compare au revenu mensuel du candidat. On distingue maintenant un multiple du
+// loyer d'un montant, et on ignore ce qu'on ne comprend pas plutot que
+// d'inventer un seuil.
+function parseIncomeRequirement(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { montant: null, multiple: null };
+
+  const normalized = raw.toLowerCase().replace(",", ".");
+
+  // "3x le loyer", "3 fois le loyer", "3.5x"
+  const multipleMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(?:x|fois)\b/);
+  if (multipleMatch && /loyer|rent/.test(normalized)) {
+    const multiple = Number(multipleMatch[1]);
+    if (Number.isFinite(multiple) && multiple > 0 && multiple <= 10) {
+      return { montant: null, multiple };
+    }
+  }
+
+  // Un montant: on prend le premier nombre, espaces insecables inclus.
+  const montantMatch = normalized.replace(/[\s\u00a0]/g, "").match(/(\d+(?:\.\d+)?)/);
+  if (!montantMatch) return { montant: null, multiple: null };
+
+  const montant = Number(montantMatch[1]);
+  if (!Number.isFinite(montant) || montant <= 0) return { montant: null, multiple: null };
+
+  // Un multiple du loyer ecrit sans le mot "loyer" ("3x") ne peut pas etre un
+  // revenu: en dessous de 100 on considere que ce n'est pas un montant.
+  if (montant < 100) return { montant: null, multiple: montant <= 10 ? montant : null };
+
+  return { montant, multiple: null };
+}
+
 function buildEmploymentCriteria(requirement) {
   const normalizedRequirement = String(requirement || "").trim().toLowerCase();
 
-  if (normalizedRequirement === "temps plein requis") {
-    return ["temps plein"];
-  }
+  // Le wizard d'onboarding envoie les valeurs brutes de ses <option>
+  // (full_time, stable, self_employed_ok, flexible). Elles n'etaient comparees
+  // a rien, donc le champ "Exigences d'emploi" n'avait jamais aucun effet.
+  const TEMPS_PLEIN = ["temps plein"];
+  const STABLE = ["temps plein", "temps partiel", "autonome", "retraité"];
+  const TOUS = ["temps plein", "temps partiel", "autonome", "retraité", "étudiant", "sans emploi"];
 
-  if (normalizedRequirement === "stable requis") {
-    return ["temps plein", "temps partiel", "autonome", "retraité"];
-  }
+  const map = {
+    "full_time": TEMPS_PLEIN,
+    "temps plein requis": TEMPS_PLEIN,
+    "stable": STABLE,
+    "stable requis": STABLE,
+    "self_employed_ok": ["temps plein", "temps partiel", "autonome", "retraité"],
+    "flexible": TOUS
+  };
 
-  return [];
+  return map[normalizedRequirement] || [];
 }
 
 async function saveListingsMap(listingsMap) {
@@ -1546,6 +1660,10 @@ function parseNumber(value) {
   }
 
   const normalized = String(value).replace(/[^\d.,-]/g, "").replace(",", ".");
+  // "flexible" ou "n/a" se reduisaient a "" et Number("") vaut 0, un nombre fini
+  // donc accepte. Resultat: choisir "Flexible" pour le nombre d'occupants fixait
+  // le maximum a 0 et penalisait tous les candidats.
+  if (!/\d/.test(normalized)) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -1692,7 +1810,21 @@ function evaluateMatch(listing, candidate, criteria = null) {
   const minimumIncome = parseNumber(resolvedCriteria.revenu_minimum);
   const incomeRatio = rent !== null && rent > 0 && monthlyIncome !== null ? monthlyIncome / rent : null;
 
-  if (incomeRatio !== null && incomeRatio < 2.5) {
+  // Un client peut exiger un multiple du loyer plutot qu'un montant ("3x le
+  // loyer"). Cette valeur etait stockee mais n'etait lue nulle part, donc le
+  // critere n'existait pas. Quand elle est presente, elle fait autorite sur
+  // l'heuristique generique 2.5 / 3.
+  const requiredMultiple = parseNumber(resolvedCriteria.revenu_multiple);
+
+  if (requiredMultiple !== null && incomeRatio !== null) {
+    if (incomeRatio < requiredMultiple) {
+      score -= 40;
+      reasons.push(`revenu sous le seuil de ${requiredMultiple}x le loyer`);
+    } else {
+      score += 10;
+      reasons.push(`revenu conforme au seuil de ${requiredMultiple}x le loyer`);
+    }
+  } else if (incomeRatio !== null && incomeRatio < 2.5) {
     score -= 40;
     reasons.push("revenu très insuffisant");
   } else if (incomeRatio !== null && incomeRatio >= 3) {
@@ -4121,17 +4253,19 @@ app.put("/api/client/candidates/:id", async (req, res) =>
         .map((listing) => normalizeRef(listing.ref))
     );
 
-    const candidates = await readJsonFile(CANDIDATES_PATH, []);
-    const candidate = candidates.find((item) => String(item.id) === String(req.params.id));
+    let candidate = null;
 
-    if (!candidate || !apartmentRefs.has(normalizeRef(candidate.apartment_ref))) {
-      throw createHttpError(404, "Candidat introuvable.");
-    }
+    await mutateJsonFile(CANDIDATES_PATH, [], (candidates) => {
+      candidate = candidates.find((item) => String(item.id) === String(req.params.id));
 
-    candidate.status = status;
-    candidate.updated_at = new Date().toISOString();
+      if (!candidate || !apartmentRefs.has(normalizeRef(candidate.apartment_ref))) {
+        throw createHttpError(404, "Candidat introuvable.");
+      }
 
-    await writeJsonFile(CANDIDATES_PATH, candidates);
+      candidate.status = status;
+      candidate.updated_at = new Date().toISOString();
+      return candidates;
+    });
 
     return res.json({
       ok: true,
@@ -4962,8 +5096,8 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
     const petRaw        = String(qc.pet_policy || "").trim();
 
     const criteres = {
-      revenu_minimum:         parseNumber(String(qc.min_income_requirement || "").replace(/[^0-9.]/g, "")),
-      revenu_multiple:        null,
+      revenu_minimum:         parseIncomeRequirement(qc.min_income_requirement).montant,
+      revenu_multiple:        parseIncomeRequirement(qc.min_income_requirement).multiple,
       credit_min:
         creditRaw === "excellent" ? "haut"
         : creditRaw === "good"    ? "moyen"
@@ -5614,12 +5748,16 @@ app.post("/api/admin/candidates", async (req, res) => handleAdminRoute(req, res,
 // mais avec le garde employe et le compte auteur trace sur la fiche.
 app.post("/api/employee/candidates", async (req, res) =>
   handleEmployeeRoute(req, res, async ({ user }) => {
-    const candidates = await readJsonFile(CANDIDATES_PATH, []);
+    // L'identifiant et la reference de logement ne doivent pas venir du corps de
+    // la requete: req.body.id ecrasait l'identifiant genere, et apartment_ref
+    // permettait de faire basculer une fiche dans le portefeuille d'un autre
+    // client, ce qui contourne le cloisonnement de /api/client/candidates.
+    const { id: _idIgnore, ...corps } = req.body || {};
     const baseCandidate = {
+      ...corps,
       id: createId("candidate"),
       created_at: new Date().toISOString(),
       admin_notes: "",
-      ...req.body,
       created_by_user_id: user.id,
       created_by_email: user.email || ""
     };
@@ -5628,8 +5766,10 @@ app.post("/api/employee/candidates", async (req, res) =>
       ...(await buildCandidateMatchFields(baseCandidate))
     };
 
-    candidates.push(candidate);
-    await writeJsonFile(CANDIDATES_PATH, candidates);
+    await mutateJsonFile(CANDIDATES_PATH, [], (candidates) => {
+      candidates.push(candidate);
+      return candidates;
+    });
 
     return res.status(201).json({ ok: true, candidate });
   })
@@ -5648,7 +5788,11 @@ app.put("/api/admin/candidates/:id", async (req, res) => handleAdminRoute(req, r
       });
     }
 
-    const payload = { ...(req.body || {}) };
+    // req.body.id permettait de reecrire l'identifiant, rendant la fiche
+    // introuvable par son URL. On le retire; apartment_ref reste modifiable,
+    // c'est une action admin legitime de reassignation, mais elle est validee
+    // plus bas contre les logements existants.
+    const { id: _idIgnore, ...payload } = req.body || {};
     const shouldReevaluate =
       Boolean(payload.reevaluate_match) ||
       [

@@ -713,7 +713,7 @@
 /* ---------- Listings page ---------- */
 .flx-shell .workspace-task-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr));
   gap: 18px;
   margin-top: 18px;
 }
@@ -735,7 +735,34 @@
 }
 
 @media (max-width: 880px) {
-  .flx-sidebar { display: none; }
+  /* La barre laterale etait simplement masquee, sans rien pour la remplacer:
+     l'employe restait bloque sur l'onglet actif, sans moyen d'en changer. Elle
+     se replie desormais en barre horizontale defilante au-dessus du contenu. */
+  .flx-layout { flex-direction: column; }
+  .flx-sidebar {
+    width: 100%;
+    flex: none;
+    height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--flx-border);
+  }
+  .flx-sidebar .flx-brand,
+  .flx-sidebar .flx-sidebar-divider,
+  .flx-sidebar .flx-nav-label,
+  .flx-sidebar .flx-identity { display: none; }
+  .flx-shell .workspace-nav-btn {
+    width: auto;
+    white-space: nowrap;
+    min-height: 44px;
+  }
   .flx-shell .candidate-form,
   .flx-shell .workspace-layout { grid-template-columns: 1fr; }
 }

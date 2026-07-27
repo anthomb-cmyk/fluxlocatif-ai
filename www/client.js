@@ -161,9 +161,22 @@ function fromYesNo(value) {
   return null;
 }
 
+// Les loyers sont stockes tantot deja formates ("1 250 $"), tantot en chiffres
+// bruts ("1600"). L'ancien code ajoutait un symbole dans tous les cas, d'ou
+// "1 250 $ $" d'un cote et "1600 $" sans separateur de l'autre.
 function formatCurrency(value) {
   if (value === null || value === undefined || value === "") return "-";
-  return `${value} $`;
+
+  const chiffres = String(value).replace(/[^\d,.-]/g, "").replace(/\s/g, "").replace(",", ".");
+  const nombre = Number(chiffres);
+
+  if (!Number.isFinite(nombre) || chiffres === "") return String(value);
+
+  return new Intl.NumberFormat("fr-CA", {
+    style: "currency",
+    currency: "CAD",
+    maximumFractionDigits: 0
+  }).format(nombre);
 }
 
 function formatDisplayDate(value) {
@@ -251,14 +264,14 @@ function getScoreMeta(score) {
     };
   }
 
-  if (numericScore >= 85) {
+  if (numericScore >= 80) {
     return {
       label: String(numericScore),
       className: ""
     };
   }
 
-  if (numericScore >= 70) {
+  if (numericScore >= 60) {
     return {
       label: String(numericScore),
       className: "score-mid"
@@ -352,11 +365,17 @@ function getCandidateRevenueValue(candidate) {
   return /k\b/.test(rawString) ? numericValue * 1000 : numericValue;
 }
 
+// Le revenu etait arrondi au millier: 3 200 $ s'affichait "3k$", alors que la
+// fiche du candidat montrait la valeur exacte. Le tableau et la fiche se
+// contredisaient, et le tri se faisait sur la valeur reelle.
 function formatCandidateRevenue(candidate) {
   const revenue = getCandidateRevenueValue(candidate);
   if (revenue < 0) return "—";
-  const thousands = Math.round(revenue / 1000);
-  return `${thousands}k$`;
+  return new Intl.NumberFormat("fr-CA", {
+    style: "currency",
+    currency: "CAD",
+    maximumFractionDigits: 0
+  }).format(revenue);
 }
 
 function getCandidateInitials(name) {
@@ -371,6 +390,20 @@ function getCandidateInitials(name) {
   }
 
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
+
+// Convertit un seuil de credit herite en palier du formulaire.
+function paliersDeCredit(value) {
+  if (value === null || value === undefined || value === "") return "";
+
+  const texte = String(value).trim().toLowerCase();
+  if (["bas", "moyen", "haut"].includes(texte)) return texte;
+
+  const nombre = Number(texte.replace(/[^\d]/g, ""));
+  if (!Number.isFinite(nombre) || nombre <= 0) return "";
+  if (nombre >= 700) return "haut";
+  if (nombre >= 600) return "moyen";
+  return "bas";
 }
 
 function escapeHtml(value) {
@@ -572,8 +605,37 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
   const searchInput = container.querySelector("[data-candidate-table-search]");
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
+      // rerender() reconstruit tout le innerHTML du conteneur, donc le champ
+      // etait detruit a chaque caractere et le focus perdu: impossible de taper
+      // plus d'une lettre. On memorise la position du curseur et on la restaure
+      // sur le nouveau champ apres le rendu.
+      const position = event.target.selectionStart;
       updateCandidateTableState(stateKey, { query: event.target.value || "" });
       rerender();
+
+      const nouveauChamp = document.querySelector(`#${container.id} [data-candidate-table-search]`)
+        || container.querySelector("[data-candidate-table-search]");
+      if (nouveauChamp) {
+        nouveauChamp.focus();
+        try {
+          nouveauChamp.setSelectionRange(position, position);
+        } catch {
+          // certains types de champ n'acceptent pas setSelectionRange
+        }
+      }
+    });
+  }
+
+  // Le bouton "Filtrer" n'avait aucun listener. Il ouvre desormais la rangee de
+  // pastilles de statut, qui est le filtre reel de ce tableau.
+  const filterBtn = container.querySelector(".candidate-table-filter-btn");
+  if (filterBtn) {
+    filterBtn.addEventListener("click", () => {
+      const pills = container.querySelector(".candidate-status-filters");
+      if (pills) {
+        pills.classList.toggle("hidden");
+        filterBtn.setAttribute("aria-expanded", String(!pills.classList.contains("hidden")));
+      }
     });
   }
 
@@ -812,7 +874,7 @@ function deriveApartmentStage(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 85) {
+  if (bestScore >= 80) {
     return {
       label: "Dossiers à revoir",
       tone: "info"
@@ -844,7 +906,7 @@ function deriveApartmentNextStep(apartment, candidates = []) {
     return "Nous continuons la réception des demandes.";
   }
 
-  if (bestCandidate && getCandidateScoreValue(bestCandidate) >= 85) {
+  if (bestCandidate && getCandidateScoreValue(bestCandidate) >= 80) {
     return "Des dossiers méritent votre attention.";
   }
 
@@ -875,11 +937,11 @@ function deriveCandidatePriority(candidate) {
     return "low";
   }
 
-  if (score >= 85) {
+  if (score >= 80) {
     return "high";
   }
 
-  if (score >= 70) {
+  if (score >= 60) {
     return "medium";
   }
 
@@ -962,7 +1024,7 @@ function deriveApartmentResponsibility(apartment, candidates = []) {
     return RESPONSIBILITY_LABELS.DONE;
   }
 
-  if (bestScore >= 85 && bestCandidate && !hasMaterialNegativeReasons(bestCandidate)) {
+  if (bestScore >= 80 && bestCandidate && !hasMaterialNegativeReasons(bestCandidate)) {
     return RESPONSIBILITY_LABELS.CLIENT;
   }
 
@@ -1046,11 +1108,11 @@ function deriveCandidateResponsibility(candidate) {
     return RESPONSIBILITY_LABELS.WATCH;
   }
 
-  if (score >= 85 && !hasNegativeReasons) {
+  if (score >= 80 && !hasNegativeReasons) {
     return RESPONSIBILITY_LABELS.CLIENT;
   }
 
-  if ((score >= 70 || matchMeta.tone === "positive") && !hasNegativeReasons) {
+  if ((score >= 60 || matchMeta.tone === "positive") && !hasNegativeReasons) {
     return RESPONSIBILITY_LABELS.TEAM;
   }
 
@@ -1226,7 +1288,7 @@ function deriveWatchlist(apartments = []) {
 }
 
 function countStrongCandidates(candidates = []) {
-  return candidates.filter((candidate) => getCandidateScoreValue(candidate) >= 85).length;
+  return candidates.filter((candidate) => getCandidateScoreValue(candidate) >= 80).length;
 }
 
 function getApartmentStrengthSummary(candidates = []) {
@@ -1237,7 +1299,7 @@ function getApartmentStrengthSummary(candidates = []) {
   const strongCount = countStrongCandidates(candidates);
   const promisingCount = candidates.filter((candidate) => {
     const score = getCandidateScoreValue(candidate);
-    return score >= 70 && score < 85;
+    return score >= 60 && score < 80;
   }).length;
 
   if (strongCount > 0) {
@@ -1272,7 +1334,7 @@ function deriveApartmentAttentionMeta(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 85) {
+  if (bestScore >= 80) {
     return {
       label: "Attention utile",
       tone: "medium",
@@ -1280,7 +1342,7 @@ function deriveApartmentAttentionMeta(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 70) {
+  if (bestScore >= 60) {
     return {
       label: "Suivi en cours",
       tone: "medium",
@@ -1425,7 +1487,14 @@ function handleClientRouteFailure(error) {
     return;
   }
 
-  window.location.href = `${EMPLOYEE_APP_URL}/`;
+  // Toute erreur autre qu'un 401 renvoyait le client sur la page de vente,
+  // sans un mot d'explication. C'est ce qui se produisait quand /api/client/me
+  // repondait 404. On affiche l'erreur et on le laisse sur son portail.
+  console.error("Erreur portail client:", error);
+  showClientLoginScreen(
+    error?.message || "Le portail est momentanément indisponible. Réessayez dans un instant.",
+    "error"
+  );
 }
 
 async function signInClient(event) {
@@ -1880,7 +1949,10 @@ function populateCriteriaForm() {
   const criteria = state.client?.criteres || {};
   document.getElementById("criteriaIncome").value =
     criteria.revenu_minimum === null || criteria.revenu_minimum === undefined ? "" : String(criteria.revenu_minimum);
-  document.getElementById("criteriaCredit").value = criteria.credit_min || "";
+  // Le select propose bas/moyen/haut, mais les enregistrements herites stockent
+  // un seuil numerique (680). La valeur ne correspondait a aucune option, le
+  // select retombait sur vide, et enregistrer effacait la cote du client.
+  document.getElementById("criteriaCredit").value = paliersDeCredit(criteria.credit_min);
   document.getElementById("criteriaTal").value = toYesNo(criteria.accepte_tal);
   document.getElementById("criteriaAnimals").value = toYesNo(criteria.animaux_acceptes);
   document.getElementById("criteriaOccupants").value =
@@ -1996,8 +2068,37 @@ document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
   button.addEventListener("click", () => switchTab(button.dataset.dashboardTab));
 });
 
+// Le portail n'avait aucun moyen de se deconnecter: la session restait ouverte
+// indefiniment, y compris sur un poste partage. onAuthStateChange gerait deja
+// SIGNED_OUT, mais rien ne pouvait le declencher.
+const logoutBtn = document.getElementById("logoutBtn");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    logoutBtn.disabled = true;
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (error) {
+      console.error("Deconnexion echouee:", error);
+    } finally {
+      window.location.href = "/client.html";
+    }
+  });
+}
+
 if (refreshBtn) {
-  refreshBtn.addEventListener("click", loadClientData);
+  // loadClientData est async et n'etait pas protege sur ce chemin: un echec
+  // laissait des donnees perimees a l'ecran sans que le client le sache.
+  refreshBtn.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    try {
+      await loadClientData();
+    } catch (error) {
+      console.error("Actualisation echouee:", error);
+      window.alert(error?.message || "L’actualisation a échoué. Les données affichées datent d’avant.");
+    } finally {
+      refreshBtn.disabled = false;
+    }
+  });
 }
 
 if (criteriaForm) {
