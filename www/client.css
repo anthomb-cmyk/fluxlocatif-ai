@@ -1588,3 +1588,75 @@
 
 .apartment-edit-status { font-size: 14px; color: #6b7280; }
 .apartment-edit-status.error { color: #991b1b; font-weight: 600; }
+
+/* ═══ Améliorations d'interface ══════════════════════════════════════════════
+   Style retenu: minimalisme, hiérarchie typographique nette, transitions
+   sobres. Le dégradé bleu-indigo-mauve, Inter et les cartes arrondies de la
+   marque sont conservés tels quels; seuls le confort et la lisibilité changent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Focus clavier. Il n'existait aucun style de focus: un utilisateur au clavier
+   ne savait jamais où il se trouvait dans la page. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--indigo, #4f46e5);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Ne jamais afficher l'anneau sur un clic souris, seulement au clavier. */
+:where(button, a, input, select, textarea):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Certaines personnes déclenchent des vertiges avec le mouvement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Retour visuel au survol des cartes cliquables, sans décalage de mise en page:
+   une transformation d'échelle ferait bouger les éléments voisins. */
+.apartment-pipeline-card,
+.dashboard-panel {
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+
+.apartment-pipeline-card:hover {
+  box-shadow: 0 8px 28px rgba(79, 70, 229, .10);
+  border-color: rgba(79, 70, 229, .22);
+}
+
+/* Sous-texte des tuiles: remplace le tiret vide par une information réelle. */
+.stat-context {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.stat-context strong { color: var(--text, #1f2350); font-weight: 700; }
+
+/* États vides: une phrase et une action, plutôt qu'un blanc. */
+.dashboard-empty-state {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+  padding: 34px 22px;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.dashboard-empty-state-title {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text, #1f2350);
+}
+
+.dashboard-empty-state-action { margin-top: 4px; }
