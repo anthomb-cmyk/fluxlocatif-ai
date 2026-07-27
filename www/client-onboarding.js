@@ -794,7 +794,7 @@ function initPropertyTypeChips() {
 
 function listingCardHTML(id, prefill = {}) {
   const o = (key) => escapeHtml(t(key));
-  const sel = (id, curVal) => {
+  const sel = (fieldId, curVal) => {
     const options = {
       [`listing_${id}_availability`]: [
         { v:"",         k:"opt_select" },
@@ -824,7 +824,7 @@ function listingCardHTML(id, prefill = {}) {
         { v:"yes",     k:"smoking_yes" }
       ]
     };
-    return (options[id] || []).map(opt =>
+    return (options[fieldId] || []).map(opt =>
       `<option value="${opt.v}" ${opt.v === curVal ? "selected" : ""}>${o(opt.k)}</option>`
     ).join("");
   };

@@ -38,7 +38,7 @@ const ADMIN_NOTIFICATION_EMAIL = String(process.env.ADMIN_NOTIFICATION_EMAIL || 
 
 const DATA_DIR = path.join(__dirname, ".data");
 const LISTINGS_PATH = path.join(__dirname, "listings.json");
-const LOCATIONS_PATH = path.join(__dirname, "locations-quebec.json");
+const LOCATIONS_PATH = path.join(__dirname, "www", "locations-quebec.json");
 const CLIENTS_PATH = path.join(__dirname, "clients.json");
 const CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client_invitations.json");
 const LEGACY_CLIENT_INVITATIONS_PATH = path.join(DATA_DIR, "client-invitations.json");
@@ -162,17 +162,17 @@ app.use((req, res, next) => {
 
 app.get("/employee-style.css", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  return res.sendFile(path.join(__dirname, "style.css"));
+  return res.sendFile(path.join(__dirname, "www", "style.css"));
 });
 
 app.get("/style.css", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  return res.sendFile(path.join(__dirname, "style.css"));
+  return res.sendFile(path.join(__dirname, "www", "style.css"));
 });
 
 app.get("/employee.js", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  return res.sendFile(path.join(__dirname, "script.js"));
+  return res.sendFile(path.join(__dirname, "www", "script.js"));
 });
 
 app.use(express.static(path.join(__dirname, "public"), {
@@ -192,19 +192,19 @@ app.get("/index.html", (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  return res.sendFile(path.join(__dirname, "login.html"));
+  return res.sendFile(path.join(__dirname, "www", "login.html"));
 });
 
 app.get("/admin", (req, res) => {
-  return res.sendFile(path.join(__dirname, "admin.html"));
+  return res.sendFile(path.join(__dirname, "www", "admin.html"));
 });
 
 app.get("/employee", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  return res.sendFile(path.join(__dirname, "index.html"));
+  return res.sendFile(path.join(__dirname, "www", "index.html"));
 });
 
-app.use(express.static(__dirname, { index: false }));
+app.use(express.static(path.join(__dirname, "www"), { index: false }));
 
 async function ensureDataFile(filePath, fallbackValue) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -588,10 +588,11 @@ function evaluateLocationCompatibility(listing, candidate) {
   };
 }
 
+// Ne jamais lire user_metadata ici: l'utilisateur peut l'ecrire lui-meme depuis
+// le navigateur (supabase.auth.updateUser). Seul app_metadata est reserve a la
+// cle service_role, donc seul app_metadata fait autorite pour role/client_id.
 function resolveClientIdFromUser(user) {
   return String(
-    user?.user_metadata?.client_id ||
-    user?.user_metadata?.clientId ||
     user?.app_metadata?.client_id ||
     user?.app_metadata?.clientId ||
     ""
@@ -600,7 +601,6 @@ function resolveClientIdFromUser(user) {
 
 function resolveRoleFromUser(user) {
   return String(
-    user?.user_metadata?.role ||
     user?.app_metadata?.role ||
     ""
   ).trim().toLowerCase();
@@ -3974,6 +3974,44 @@ app.get("/api/client/candidates", async (req, res) =>
   })
 );
 
+const CLIENT_CANDIDATE_STATUSES = new Set(["approuvé", "refusé", "en attente"]);
+
+app.put("/api/client/candidates/:id", async (req, res) =>
+  handleClientRoute(req, res, async ({ clientId }) => {
+    const status = String(req.body?.status || "").trim();
+
+    if (!CLIENT_CANDIDATE_STATUSES.has(status)) {
+      throw createHttpError(400, "Statut invalide.");
+    }
+
+    // Meme cloisonnement que GET /api/client/candidates: le candidat doit
+    // appartenir a un logement du client connecte.
+    const listings = await loadListingsMap();
+    const apartmentRefs = new Set(
+      Object.values(listings)
+        .filter((listing) => String(listing.client_id) === String(clientId))
+        .map((listing) => normalizeRef(listing.ref))
+    );
+
+    const candidates = await readJsonFile(CANDIDATES_PATH, []);
+    const candidate = candidates.find((item) => String(item.id) === String(req.params.id));
+
+    if (!candidate || !apartmentRefs.has(normalizeRef(candidate.apartment_ref))) {
+      throw createHttpError(404, "Candidat introuvable.");
+    }
+
+    candidate.status = status;
+    candidate.updated_at = new Date().toISOString();
+
+    await writeJsonFile(CANDIDATES_PATH, candidates);
+
+    return res.json({
+      ok: true,
+      candidate
+    });
+  })
+);
+
 app.put("/api/client/criteria", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
     const clientsMap = await loadClientsMap();
@@ -4001,7 +4039,7 @@ app.put("/api/client/criteria", async (req, res) =>
   })
 );
 
-app.get("/api/admin/user-daily-time", async (req, res) => {
+app.get("/api/admin/user-daily-time", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const requestedDay = String(req.query.day || "").trim();
     const summary = await readJsonFile(USER_DAILY_TIME_PATH, []);
@@ -4016,7 +4054,7 @@ app.get("/api/admin/user-daily-time", async (req, res) => {
       error: "Impossible de charger le temps utilisateur."
     });
   }
-});
+}));
 
 app.get("/api/admin/users", async (req, res) => handleAdminRoute(req, res, async () => {
     const users = await loadAllSupabaseUsers();
@@ -4116,7 +4154,7 @@ app.delete("/api/admin/users/:id", async (req, res) => handleAdminRoute(req, res
     });
 }));
 
-app.get("/api/admin/chat-sessions", async (_req, res) => {
+app.get("/api/admin/chat-sessions", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const sessions = await readJsonFile(CHAT_SESSIONS_PATH, []);
     res.json({ ok: true, sessions });
@@ -4126,9 +4164,9 @@ app.get("/api/admin/chat-sessions", async (_req, res) => {
       error: "Impossible de charger les sessions."
     });
   }
-});
+}));
 
-app.get("/api/admin/chat-messages", async (req, res) => {
+app.get("/api/admin/chat-messages", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const userId = String(req.query.user_id || "").trim();
     const messages = await readJsonFile(CHAT_MESSAGES_PATH, []);
@@ -4143,9 +4181,9 @@ app.get("/api/admin/chat-messages", async (req, res) => {
       error: "Impossible de charger les messages."
     });
   }
-});
+}));
 
-app.get("/api/admin/apartments", async (_req, res) => {
+app.get("/api/admin/apartments", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const listings = await loadListingsMap();
     res.json({ ok: true, apartments: Object.values(listings) });
@@ -4155,7 +4193,7 @@ app.get("/api/admin/apartments", async (_req, res) => {
       error: "Impossible de charger les appartements."
     });
   }
-});
+}));
 
 app.get("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, async () => {
     const clientsMap = await loadClientsMap();
@@ -4209,7 +4247,7 @@ app.get("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, asy
     return res.json({ ok: true, clients });
 }));
 
-app.post("/api/admin/clients", async (req, res) => {
+app.post("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const clientsMap = await loadClientsMap();
     const id = String(req.body?.id || `client_${Date.now()}`);
@@ -4228,9 +4266,9 @@ app.post("/api/admin/clients", async (req, res) => {
       error: "Impossible de créer le client."
     });
   }
-});
+}));
 
-app.post("/api/admin/client-invitations", async (req, res) => {
+app.post("/api/admin/client-invitations", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const name = String(req.body?.name || req.body?.contact_name || "").trim();
     const email = String(req.body?.email || "").trim().toLowerCase();
@@ -4287,10 +4325,10 @@ app.post("/api/admin/client-invitations", async (req, res) => {
       error: "Impossible de créer l’invitation client."
     });
   }
-});
+}));
 
 // Resend invitation email (or regenerate token if expired)
-app.post("/api/admin/client-invitations/resend", async (req, res) => {
+app.post("/api/admin/client-invitations/resend", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const clientId = String(req.body?.client_id || "").trim();
     if (!clientId) {
@@ -4344,7 +4382,7 @@ app.post("/api/admin/client-invitations/resend", async (req, res) => {
       error: error.message || "Impossible de renvoyer l'invitation."
     });
   }
-});
+}));
 
 app.get("/api/client-onboarding/invitation", async (req, res) => {
   try {
@@ -4896,7 +4934,7 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
   }
 });
 
-app.put("/api/admin/clients/:id", async (req, res) => {
+app.put("/api/admin/clients/:id", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const clientsMap = await loadClientsMap();
     const id = String(req.params.id);
@@ -4930,7 +4968,7 @@ app.put("/api/admin/clients/:id", async (req, res) => {
       error: "Impossible de modifier le client."
     });
   }
-});
+}));
 
 app.get("/api/admin/workspace/employees", async (req, res) => handleAdminRoute(req, res, async () => {
   const employees = await loadEmployeeUsersSummary();
@@ -5313,7 +5351,7 @@ app.post("/api/employee/workspace/notifications/:id/read", async (req, res) => h
   return res.json({ ok: true, notification });
 }));
 
-app.post("/api/admin/apartments", async (req, res) => {
+app.post("/api/admin/apartments", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const listings = await loadListingsMap();
     const ref = nextListingRef(listings);
@@ -5337,9 +5375,9 @@ app.post("/api/admin/apartments", async (req, res) => {
       error: "Impossible de créer l'appartement."
     });
   }
-});
+}));
 
-app.put("/api/admin/apartments/:ref", async (req, res) => {
+app.put("/api/admin/apartments/:ref", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const ref = normalizeRef(req.params.ref);
     const listings = await loadListingsMap();
@@ -5369,9 +5407,9 @@ app.put("/api/admin/apartments/:ref", async (req, res) => {
       error: "Impossible de modifier l'appartement."
     });
   }
-});
+}));
 
-app.delete("/api/admin/apartments/:ref", async (req, res) => {
+app.delete("/api/admin/apartments/:ref", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const ref = normalizeRef(req.params.ref);
     const listings = await loadListingsMap();
@@ -5393,9 +5431,9 @@ app.delete("/api/admin/apartments/:ref", async (req, res) => {
       error: "Impossible de supprimer l'appartement."
     });
   }
-});
+}));
 
-app.get("/api/admin/candidates", async (req, res) => {
+app.get("/api/admin/candidates", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const requestedStatus = String(req.query.status || "").trim();
     const storedCandidates = await readJsonFile(CANDIDATES_PATH, []);
@@ -5411,9 +5449,9 @@ app.get("/api/admin/candidates", async (req, res) => {
       error: "Impossible de charger les candidats."
     });
   }
-});
+}));
 
-app.post("/api/admin/candidates", async (req, res) => {
+app.post("/api/admin/candidates", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const candidates = await readJsonFile(CANDIDATES_PATH, []);
     const baseCandidate = {
@@ -5440,9 +5478,9 @@ app.post("/api/admin/candidates", async (req, res) => {
       error: "Impossible de créer le candidat."
     });
   }
-});
+}));
 
-app.put("/api/admin/candidates/:id", async (req, res) => {
+app.put("/api/admin/candidates/:id", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const id = String(req.params.id);
     const candidates = await readJsonFile(CANDIDATES_PATH, []);
@@ -5504,7 +5542,7 @@ app.put("/api/admin/candidates/:id", async (req, res) => {
       error: "Impossible de modifier le candidat."
     });
   }
-});
+}));
 
 // CRM — proxy to Next.js service
 app.get("/crm", (req, res) => res.redirect(302, "https://fluxlocatifwebsite-production.up.railway.app/crm"));
@@ -5529,7 +5567,7 @@ app.get("*", (req, res, next) => {
     return next();
   }
 
-  return res.sendFile(path.join(__dirname, page));
+  return res.sendFile(path.join(__dirname, "www", page));
 });
 
 app.use((req, res) => {
