@@ -1425,7 +1425,14 @@ function handleClientRouteFailure(error) {
     return;
   }
 
-  window.location.href = `${EMPLOYEE_APP_URL}/`;
+  // Toute erreur autre qu'un 401 renvoyait le client sur la page de vente,
+  // sans un mot d'explication. C'est ce qui se produisait quand /api/client/me
+  // repondait 404. On affiche l'erreur et on le laisse sur son portail.
+  console.error("Erreur portail client:", error);
+  showClientLoginScreen(
+    error?.message || "Le portail est momentanément indisponible. Réessayez dans un instant.",
+    "error"
+  );
 }
 
 async function signInClient(event) {
@@ -1997,7 +2004,19 @@ document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
 });
 
 if (refreshBtn) {
-  refreshBtn.addEventListener("click", loadClientData);
+  // loadClientData est async et n'etait pas protege sur ce chemin: un echec
+  // laissait des donnees perimees a l'ecran sans que le client le sache.
+  refreshBtn.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    try {
+      await loadClientData();
+    } catch (error) {
+      console.error("Actualisation echouee:", error);
+      window.alert(error?.message || "L’actualisation a échoué. Les données affichées datent d’avant.");
+    } finally {
+      refreshBtn.disabled = false;
+    }
+  });
 }
 
 if (criteriaForm) {

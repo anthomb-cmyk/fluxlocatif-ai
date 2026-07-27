@@ -307,6 +307,12 @@ async function fetchJSON(url, options = {}) {
 
   const data = await res.json().catch(() => ({}));
 
+  if (res.status === 401) {
+    const next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/login?next=${next}`;
+    throw new Error("Session expirée. Reconnectez-vous.");
+  }
+
   if (!res.ok) {
     throw new Error(data.error || "Erreur");
   }
@@ -690,13 +696,24 @@ async function sendWorkspaceMessage(event) {
     return;
   }
 
-  await fetchJSON("/api/admin/workspace/messages", {
-    method: "POST",
-    body: JSON.stringify({
-      employee_user_id: activeWorkspaceEmployeeId,
-      content: workspaceMessageInput.value.trim()
-    })
-  });
+  const contenu = workspaceMessageInput.value.trim();
+
+  // Sans try/catch, un echec laissait le message dans le champ, n'affichait
+  // rien, et ne rechargeait pas la conversation: l'admin ne savait pas si son
+  // message etait parti. On ne vide le champ qu'apres confirmation.
+  try {
+    await fetchJSON("/api/admin/workspace/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        employee_user_id: activeWorkspaceEmployeeId,
+        content: contenu
+      })
+    });
+  } catch (error) {
+    console.error("Envoi du message echoue:", error);
+    window.alert(error?.message || "Le message n’a pas pu être envoyé. Il est conservé dans le champ.");
+    return;
+  }
 
   workspaceMessageInput.value = "";
   await loadMessages();
@@ -1596,19 +1613,31 @@ function renderCandidatesTable(rows) {
     candidatesBody.appendChild(tr);
   });
 
+  // Ces handlers etaient async sans try/catch: un 401, 404 ou 500 rejetait la
+  // promesse sans etre capture. L'admin cliquait "Approuver", rien ne bougeait,
+  // et rien ne lui disait que l'action avait echoue.
+  const avecRetour = (fn) => async (...args) => {
+    try {
+      await fn(...args);
+    } catch (error) {
+      console.error("Action admin echouee:", error);
+      window.alert(error?.message || "L’action a échoué. Réessayez.");
+    }
+  };
+
   document.querySelectorAll(".approve-candidate-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", avecRetour(async () => {
       await updateCandidateStatus(btn.dataset.id, "approuvé");
-    });
+    }));
   });
 
   document.querySelectorAll(".evaluate-candidate-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", avecRetour(async () => {
       const candidate = allCandidates.find((item) => item.id === btn.dataset.id);
       if (candidate) {
         await evaluateCandidate(candidate);
       }
-    });
+    }));
   });
 
   document.querySelectorAll(".alternatives-candidate-btn").forEach((btn) => {
@@ -1621,9 +1650,9 @@ function renderCandidatesTable(rows) {
   });
 
   document.querySelectorAll(".reject-candidate-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", avecRetour(async () => {
       await updateCandidateStatus(btn.dataset.id, "refusé");
-    });
+    }));
   });
 }
 
@@ -1853,7 +1882,14 @@ document.querySelectorAll(".menu-btn").forEach((btn) => {
 });
 
 if (refreshBtn) {
-  refreshBtn.addEventListener("click", refreshCurrentTab);
+  refreshBtn.addEventListener("click", async () => {
+    try {
+      await refreshCurrentTab();
+    } catch (error) {
+      console.error("Rafraichissement echoue:", error);
+      window.alert(error?.message || "Impossible de rafraîchir. Les données affichées sont peut-être périmées.");
+    }
+  });
 }
 
 if (apartmentForm) {

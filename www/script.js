@@ -1160,6 +1160,15 @@ async function fetchJSON(url, options = {}, timeoutMs = 10000) {
 
     const data = await response.json();
 
+    if (response.status === 401) {
+      // Session expiree: l'utilisateur cliquait et rien ne se passait, sans
+      // aucun indice. On le renvoie a la connexion plutot que de le laisser
+      // devant des donnees perimees.
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?next=${next}`;
+      throw new Error("Session expirée. Reconnectez-vous.");
+    }
+
     if (!response.ok) {
       throw new Error(data.error || "Une erreur est survenue.");
     }
