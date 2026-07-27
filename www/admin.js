@@ -1035,6 +1035,89 @@ async function copyText(value) {
   return copied;
 }
 
+// Le wizard collecte contact principal, facturation, portefeuille, preferences
+// de processus et de marque. Verifie sur tout le depot: chacun de ces champs
+// avait un site d'ecriture et zero site de lecture. Le client remplissait six
+// ecrans dont la moitie partait dans un JSON que personne n'ouvrait jamais.
+function ouvrirProfilClient(client) {
+  const ligne = (etiquette, valeur) => {
+    const v = Array.isArray(valeur) ? valeur.join(", ") : valeur;
+    const affiche = (v === null || v === undefined || v === "") ? "-" : String(v);
+    return `<div style="display:grid;grid-template-columns:220px 1fr;gap:12px;padding:7px 0;border-bottom:1px solid #f1f2f6;">
+      <div style="color:#6b7280;font-size:13px;">${escapeHtml(etiquette)}</div>
+      <div style="font-weight:600;">${escapeHtml(affiche)}</div>
+    </div>`;
+  };
+
+  const section = (titre, lignes) =>
+    `<h4 style="margin:22px 0 6px;">${escapeHtml(titre)}</h4>${lignes.join("")}`;
+
+  const p = client.portfolio || {};
+  const b = client.billing_contact || {};
+  const w = client.workflow_preferences || {};
+  const m = client.brand_preferences || {};
+  const q = client.qualification_criteria || {};
+
+  const contenu = [
+    section("Contact principal", [
+      ligne("Nom", client.primary_contact),
+      ligne("Courriel", client.primary_email),
+      ligne("Téléphone", client.primary_phone),
+      ligne("Communication préférée", client.preferred_communication)
+    ]),
+    section("Facturation", [
+      ligne("Nom", b.name),
+      ligne("Courriel", b.email),
+      ligne("Téléphone", b.phone)
+    ]),
+    section("Portefeuille", [
+      ligne("Logements au forfait", p.units_in_plan),
+      ligne("Taille totale", p.total_portfolio_size),
+      ligne("Marchés", p.markets),
+      ligne("Types de propriétés", p.property_types)
+    ]),
+    section("Qualification", [
+      ligne("Garant", q.guarantor_policy),
+      ligne("Facteurs disqualifiants", q.disqualifying_factors),
+      ligne("Vérifications additionnelles", q.additional_screening)
+    ]),
+    section("Processus", [
+      ligne("Règles d’escalade", w.escalation_rules),
+      ligne("Processus d’approbation", w.approval_process),
+      ligne("Processus de visites", w.showing_process),
+      ligne("Notes d’approbation", w.approval_notes),
+      ligne("Attentes de communication", w.communication_expectations)
+    ]),
+    section("Marque", [
+      ligne("Ton", m.communication_tone),
+      ligne("Nom de marque", m.branding_name),
+      ligne("Signature", m.signature_contact),
+      ligne("Notes", m.additional_notes)
+    ])
+  ].join("");
+
+  const fond = document.createElement("div");
+  fond.style.cssText = "position:fixed;inset:0;background:rgba(15,17,35,.55);display:grid;place-items:center;padding:20px;z-index:80;";
+  fond.innerHTML = `
+    <div style="background:#fff;border-radius:18px;padding:26px;max-width:720px;width:100%;max-height:85vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;">
+        <div>
+          <div style="color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.12em;">Profil soumis</div>
+          <h3 style="margin:4px 0 0;">${escapeHtml(client.nom || client.id)}</h3>
+        </div>
+        <button type="button" class="secondary-btn" data-fermer>Fermer</button>
+      </div>
+      ${contenu}
+    </div>
+  `;
+
+  fond.addEventListener("click", (event) => {
+    if (event.target === fond || event.target.hasAttribute("data-fermer")) fond.remove();
+  });
+
+  document.body.appendChild(fond);
+}
+
 function renderClientsTable(rows) {
   if (!clientsBody) return;
 
@@ -1064,6 +1147,7 @@ function renderClientsTable(rows) {
       <td>${countLinkedApartments(client.id)}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" class="secondary-btn edit-client-btn" data-id="${escapeHtml(client.id)}">Modifier</button>
+        <button type="button" class="secondary-btn view-client-profile-btn" data-id="${escapeHtml(client.id)}">Profil soumis</button>
         ${!client.portal_user_id && (client.invitation_status === "pending" || client.invitation_status === "expired" || !client.invitation_status)
           ? `<button type="button" class="secondary-btn resend-invite-btn" data-client-id="${escapeHtml(client.id)}" data-email="${escapeHtml(client.portal_email || client.email || "")}" style="background:rgba(30,144,255,.08);color:#1e90ff;">✉ ${client.invitation_status === "expired" ? "Regénérer et renvoyer" : "Renvoyer l'invitation"}</button>`
           : ""}
@@ -1078,6 +1162,13 @@ function renderClientsTable(rows) {
     `;
 
     clientsBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".view-client-profile-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const client = allClients.find((item) => item.id === btn.dataset.id);
+      if (client) ouvrirProfilClient(client);
+    });
   });
 
   document.querySelectorAll(".edit-client-btn").forEach((btn) => {
