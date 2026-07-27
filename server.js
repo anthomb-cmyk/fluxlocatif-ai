@@ -253,6 +253,16 @@ const sensibleLimiter = rateLimit({
   store: new MagasinPartage("sensible"),
   windowMs: 15 * 60 * 1000,
   max: 10,
+  // Limiter par IP seule ne protege pas un compte precis: un attaquant qui
+  // dispose d'une plage d'adresses obtient le plafond multiplie par le nombre
+  // d'adresses. Constate en testant depuis un pool rotatif, ou une meme serie
+  // de requetes s'est repartie sur quatre IP. On compte donc par adresse
+  // courriel visee quand il y en a une, et par IP sinon.
+  keyGenerator: (req) => {
+    const courriel = String(req.body?.email || "").trim().toLowerCase();
+    if (courriel) return `courriel:${courriel}`;
+    return `ip:${req.ip}`;
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: {
