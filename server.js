@@ -175,7 +175,82 @@ app.use(express.json({ limit: "1mb" }));
 // Les routes non authentifiees (recuperation de mot de passe, onboarding)
 // n'avaient aucune limite de debit: enumeration de jetons et envoi de courriels
 // a volonte. Combine a trust proxy, la limite porte maintenant sur la vraie IP.
+// Le magasin par defaut d'express-rate-limit vit en memoire, donc chaque
+// instance Railway compte de son cote et la limite reelle vaut le plafond
+// multiplie par le nombre d'instances. Ce magasin partage compte dans
+// kv_store, que toutes les instances lisent deja.
+class MagasinPartage {
+  constructor(prefixe) {
+    this.prefixe = prefixe;
+    this.windowMs = 15 * 60 * 1000;
+  }
+
+  init(options) {
+    if (options?.windowMs) this.windowMs = options.windowMs;
+  }
+
+  cle(identifiant) {
+    return `ratelimit_${this.prefixe}_${identifiant}`;
+  }
+
+  async increment(identifiant) {
+    const maintenant = Date.now();
+    const cle = this.cle(identifiant);
+
+    // Repli silencieux vers un comptage permissif si Supabase est indisponible:
+    // une limite de debit ne doit jamais empecher le service de repondre.
+    if (!supabaseServerClient) {
+      return { totalHits: 1, resetTime: new Date(maintenant + this.windowMs) };
+    }
+
+    try {
+      const { data } = await supabaseServerClient
+        .from("kv_store").select("value").eq("key", cle).maybeSingle();
+
+      const courant = data?.value || null;
+      const expire = !courant || maintenant > Number(courant.expire_le || 0);
+      const compte = expire ? 1 : Number(courant.compte || 0) + 1;
+      const expire_le = expire ? maintenant + this.windowMs : Number(courant.expire_le);
+
+      await supabaseServerClient
+        .from("kv_store")
+        .upsert({ key: cle, value: { compte, expire_le }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+
+      return { totalHits: compte, resetTime: new Date(expire_le) };
+    } catch (erreur) {
+      console.error("[limite-debit] comptage partage indisponible:", erreur?.message || erreur);
+      return { totalHits: 1, resetTime: new Date(maintenant + this.windowMs) };
+    }
+  }
+
+  async decrement(identifiant) {
+    if (!supabaseServerClient) return;
+    try {
+      const cle = this.cle(identifiant);
+      const { data } = await supabaseServerClient
+        .from("kv_store").select("value").eq("key", cle).maybeSingle();
+      if (!data?.value) return;
+      const compte = Math.max(0, Number(data.value.compte || 0) - 1);
+      await supabaseServerClient
+        .from("kv_store")
+        .upsert({ key: cle, value: { ...data.value, compte }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    } catch {
+      // sans importance: un decompte rate ne fait que rendre la limite plus stricte
+    }
+  }
+
+  async resetKey(identifiant) {
+    if (!supabaseServerClient) return;
+    try {
+      await supabaseServerClient.from("kv_store").delete().eq("key", this.cle(identifiant));
+    } catch {
+      // idem
+    }
+  }
+}
+
 const sensibleLimiter = rateLimit({
+  store: new MagasinPartage("sensible"),
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -187,6 +262,7 @@ const sensibleLimiter = rateLimit({
 });
 
 const chatLimiter = rateLimit({
+  store: new MagasinPartage("chat"),
   windowMs: 15 * 60 * 1000,
   max: 40,
   standardHeaders: true,
@@ -1988,8 +2064,30 @@ function parsePolitiqueAnimaux(valeur) {
   return null;
 }
 
+// Poids du score, regroupes ici pour etre ajustables sans fouiller la fonction.
+// Un critere explicitement pose par le proprietaire et viole doit peser assez
+// pour se voir: avant, "animaux non acceptes" retirait 6 points, aussitot
+// absorbes par le plafond de 100 des qu'un bonus de revenu s'appliquait.
+const POIDS = {
+  revenuTresInsuffisant: 40,
+  revenuInsuffisant: 20,
+  creditInsuffisant: 18,
+  creditFaible: 18,
+  talDefavorable: 55,
+  tropOccupants: 20,
+  animauxRefuses: 25,
+  emploiNonAccepte: 20,
+  ancienneteInsuffisante: 10,
+  bonusRevenu: 10,
+  bonusCredit: 8
+};
+
 function evaluateMatch(listing, candidate, criteria = null) {
-  let score = 100;
+  // Bonus et penalites sont accumules separement. Les bonus sont plafonnes a
+  // 100 AVANT que les penalites s'appliquent, sinon un bon revenu masquait
+  // silencieusement un critere viole et le dossier ressortait a 100.
+  let bonus = 0;
+  let penalite = 0;
   const reasons = [];
   // Un critere non renseigne vaut maintenant null (voir parseTriBoolean). Il ne
   // doit pas ecraser la valeur par defaut du logement: on retire les null avant
@@ -2022,20 +2120,20 @@ function evaluateMatch(listing, candidate, criteria = null) {
 
   if (requiredMultiple !== null && incomeRatio !== null) {
     if (incomeRatio < requiredMultiple) {
-      score -= 40;
+      penalite += POIDS.revenuTresInsuffisant;
       reasons.push(`revenu sous le seuil de ${requiredMultiple}x le loyer`);
     } else {
-      score += 10;
+      bonus += POIDS.bonusRevenu;
       reasons.push(`revenu conforme au seuil de ${requiredMultiple}x le loyer`);
     }
   } else if (incomeRatio !== null && incomeRatio < 2.5) {
-    score -= 40;
+    penalite += POIDS.revenuTresInsuffisant;
     reasons.push("revenu très insuffisant");
   } else if (incomeRatio !== null && incomeRatio >= 3) {
-    score += 10;
+    bonus += POIDS.bonusRevenu;
     reasons.push("revenu très solide");
   } else if (minimumIncome !== null && monthlyIncome !== null && monthlyIncome < minimumIncome) {
-    score -= 20;
+    penalite += POIDS.revenuInsuffisant;
     reasons.push("revenu insuffisant");
   } else {
     reasons.push("revenu conforme");
@@ -2046,7 +2144,7 @@ function evaluateMatch(listing, candidate, criteria = null) {
 
   if (requiredCredit > 0) {
     if (candidateCredit < requiredCredit) {
-      score -= 18;
+      penalite += POIDS.creditInsuffisant;
       reasons.push("crédit insuffisant");
     } else {
       reasons.push("crédit conforme");
@@ -2054,27 +2152,27 @@ function evaluateMatch(listing, candidate, criteria = null) {
   }
 
   if (candidateCredit >= 3) {
-    score += 8;
+    bonus += POIDS.bonusCredit;
     reasons.push("bon crédit");
   } else if (candidateCredit === 1) {
-    score -= 18;
+    penalite += POIDS.creditFaible;
     reasons.push("crédit faible");
   }
 
   if (!resolvedCriteria.accepte_tal && parseBoolean(candidate?.tal)) {
-    score -= 55;
+    penalite += POIDS.talDefavorable;
     reasons.push("dossier TAL défavorable");
   }
 
   const occupants = parseNumber(candidate?.nombre_personnes ?? candidate?.occupants_total);
   const maxOccupants = parseNumber(resolvedCriteria.max_occupants);
   if (occupants !== null && maxOccupants !== null && occupants > maxOccupants) {
-    score -= 8;
+    penalite += POIDS.tropOccupants;
     reasons.push("trop d’occupants");
   }
 
   if (!resolvedCriteria.animaux_acceptes && parseBoolean(candidate?.animaux ?? candidate?.pets)) {
-    score -= 6;
+    penalite += POIDS.animauxRefuses;
     reasons.push("animaux non acceptés");
   }
 
@@ -2083,29 +2181,33 @@ function evaluateMatch(listing, candidate, criteria = null) {
     ? resolvedCriteria.emplois_acceptes.map((job) => String(job).trim().toLowerCase())
     : [];
   if (acceptedJobs.length && !acceptedJobs.includes(employmentStatus)) {
-    score -= 6;
+    penalite += POIDS.emploiNonAccepte;
     reasons.push("emploi non accepté");
   }
 
   const seniorityMonths = parseNumber(candidate?.anciennete_mois ?? candidate?.employment_length_months);
   const minimumSeniority = parseNumber(resolvedCriteria.anciennete_min_mois);
   if (seniorityMonths !== null && minimumSeniority !== null && seniorityMonths < minimumSeniority) {
-    score -= 6;
+    penalite += POIDS.ancienneteInsuffisante;
     reasons.push("ancienneté insuffisante");
   }
 
   const locationResult = evaluateLocationCompatibility(listing, candidate);
-  score += locationResult.scoreDelta || 0;
+  const deltaLocalisation = locationResult.scoreDelta || 0;
+  if (deltaLocalisation >= 0) bonus += deltaLocalisation; else penalite += -deltaLocalisation;
   reasons.push(...(locationResult.reasons || []));
 
-  score = Math.max(0, Math.min(100, score));
+  let score = Math.max(0, Math.min(100, 100 + bonus) - penalite);
 
   let status = "refusé";
   if (locationResult.forceReject || (!resolvedCriteria.accepte_tal && parseBoolean(candidate?.tal))) {
     status = "refusé";
-  } else if (score >= 85) {
+  // Memes seuils que la legende affichee au client dans son portail: 80-100
+  // tres compatible, 60-79 compatible. Le serveur utilisait 85 et 70, donc un
+  // score de 82 etait "accepte" a l'ecran et "a revoir" en base.
+  } else if (score >= 80) {
     status = "accepté";
-  } else if (score >= 70) {
+  } else if (score >= 60) {
     status = "à revoir";
   }
 
@@ -2157,7 +2259,8 @@ async function buildAlternativeListings(candidate, listingsMap = null, clientsMa
         reasons: result.reasons
       };
     })
-    .filter((listing) => listing.match_status !== "refusé" && listing.match_score >= 70)
+    // Meme seuil que le reste: 60 est la limite basse de "compatible".
+    .filter((listing) => listing.match_status !== "refusé" && listing.match_score >= 60)
     .sort((a, b) => b.match_score - a.match_score)
     .slice(0, limit);
 }
@@ -5449,6 +5552,7 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
     const employmentRaw = String(qc.employment_requirements || "").trim();
     const creditRaw     = String(qc.credit_score_requirement || "").trim();
     const petRaw        = String(qc.pet_policy || "").trim();
+    const talRaw        = String(qc.tal_policy || "").trim().toLowerCase();
 
     const criteres = {
       revenu_minimum:         parseIncomeRequirement(qc.min_income_requirement).montant,
@@ -5459,14 +5563,20 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
         : creditRaw === "fair"    ? "bas"
         : null,
       credit_score_requirement: creditRaw || null,
-      // Le wizard ne pose jamais la question du TAL: ecrire true ici inventait
-      // une politique que le client n'a pas choisie, et le portail l'affichait
-      // ensuite comme un fait. null veut dire non renseigne; le client peut le
-      // definir depuis l'onglet Criteres de son portail.
-      accepte_tal:            null,
-      tal_policy:             null,
+      // La question du TAL est maintenant posee a l'etape 5. 'cas par cas' n'est
+      // ni un oui ni un non: on le garde comme non renseigne cote booleen, et la
+      // nuance reste dans tal_policy, visible par l'equipe.
+      accepte_tal:
+        talRaw === "accepte" ? true
+        : talRaw === "refuse" ? false
+        : null,
+      tal_policy:             talRaw || null,
       max_occupants:          parseNumber(qc.occupancy_rules),
-      animaux_acceptes:       petRaw !== "not_allowed",
+      // petRaw vide veut dire non renseigne, pas 'acceptes'.
+      animaux_acceptes:
+        !petRaw ? null
+        : petRaw === "not_allowed" ? false
+        : true,
       pet_policy:             petRaw || null,
       emplois_acceptes:       buildEmploymentCriteria(employmentRaw),
       employment_requirement: employmentRaw || null,

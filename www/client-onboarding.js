@@ -592,7 +592,7 @@ const CHAMPS_BROUILLON = [
   "billingName", "billingEmail", "billingPhone",
   "unitsInPlan", "totalPortfolioSize",
   "minIncomeReq", "creditScoreReq", "employmentReq", "guarantorPolicy",
-  "petPolicy", "occupancyRules", "disqualifyingFactors", "additionalScreening",
+  "petPolicy", "talPolicy", "occupancyRules", "disqualifyingFactors", "additionalScreening",
   "escalationRules", "approvalProcess", "showingProcess", "approvalNotes",
   "commExpectations"
 ];
@@ -1199,6 +1199,7 @@ async function submitIntake() {
         employment_requirements:  val("employmentReq"),
         guarantor_policy:         val("guarantorPolicy"),
         pet_policy:               val("petPolicy"),
+        tal_policy:               val("talPolicy"),
         occupancy_rules:          val("occupancyRules"),
         disqualifying_factors:    val("disqualifyingFactors"),
         additional_screening:     val("additionalScreening")
