@@ -1,6 +1,8 @@
 const SUPABASE_URL = "https://nuuzkvgyolxbawvqyugu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_103-rw3MwM7k2xUeMMUodg_fRr9vUD4";
-const EMPLOYEE_APP_URL = "https://fluxlocatif.up.railway.app";
+// Meme origine que la page courante, comme CLIENT_APP_URL. Un domaine code
+// en dur force un saut inutile et casse des que ce domaine change.
+const EMPLOYEE_APP_URL = "";
 // Meme origine que la page courante. L'admin, l'app employe et le portail
 // client sont servis par le meme serveur, donc un chemin relatif marche
 // partout. Le domaine etait code en dur ici, et son certificat expire
@@ -1464,14 +1466,33 @@ async function requireLogin() {
   state.clientId = resolveClientId(user);
   const role = resolveUserRole(user);
 
+  // La racine de ce domaine est la page vitrine, pas la console employe. Ces
+  // deux redirections envoyaient donc un admin ou un employe qui ouvre le
+  // portail client droit sur la page de vente, sans explication. Les vraies
+  // destinations sont /admin et /employee.
   if (role && role !== "client") {
-    window.location.href = role === "admin" ? `${EMPLOYEE_APP_URL}/admin.html` : `${EMPLOYEE_APP_URL}/`;
+    window.location.href = role === "admin" ? "/admin" : "/employee";
     throw new Error("Ce rôle ne peut pas utiliser le portail client.");
   }
 
   if (!state.clientId) {
-    window.location.href = `${EMPLOYEE_APP_URL}/`;
-    throw new Error("Employee users must use employee platform.");
+    // Ni role ni client_id: c'est un membre du personnel. On verifie s'il est
+    // admin avant de l'envoyer vers l'espace employe, pour ne pas le faire
+    // rebondir d'une console a l'autre.
+    let estAdmin = false;
+    try {
+      const { data } = await supabaseClient
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      estAdmin = Boolean(data);
+    } catch {
+      estAdmin = false;
+    }
+
+    window.location.href = estAdmin ? "/admin" : "/employee";
+    throw new Error("Ce compte n’est pas un compte client.");
   }
 
   return user;
