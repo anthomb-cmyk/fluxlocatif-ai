@@ -1936,3 +1936,82 @@
 }
 
 .dashboard-empty-state-action { margin-top: 4px; }
+
+/* ═══ Dossiers sur téléphone: des cartes, pas un tableau ═════════════════════
+   Un tableau de six colonnes dans 375px oblige à faire défiler latéralement
+   pour lire une seule ligne: on voyait "CANDIDAT" et une moitié de "PROPRIÉTÉ",
+   le reste hors écran. Chaque dossier devient une carte lisible d'un coup.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+  .candidate-table-wrap { overflow-x: visible; }
+
+  .candidate-table { min-width: 0; width: 100%; }
+
+  /* L'en-tête ne sert plus à rien: chaque valeur porte son étiquette. */
+  .candidate-table thead { display: none; }
+
+  .candidate-table,
+  .candidate-table tbody,
+  .candidate-table tr,
+  .candidate-table td { display: block; width: auto; }
+
+  .candidate-table tr {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--surface);
+  }
+
+  .candidate-table td {
+    border: 0;
+    padding: 0;
+  }
+
+  /* Le nom occupe toute la largeur, en tête de carte. */
+  .candidate-table td:first-child {
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft, var(--line));
+    padding-right: 52px;
+  }
+
+  /* Les autres valeurs se lisent en paires étiquette / valeur. */
+  .candidate-table td[data-colonne] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 6px 0;
+  }
+
+  .candidate-table td[data-colonne]::before {
+    content: attr(data-colonne);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted-faint, #6b7280);
+    flex: 0 0 auto;
+  }
+
+  /* Le bouton d'actions se cale en haut à droite de la carte. */
+  .candidate-table td.candidate-action-cell {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 0;
+  }
+
+  .candidate-score-display { justify-content: flex-end; gap: 10px; }
+  .candidate-score-track { width: 96px; }
+
+  /* Barre d'outils: la recherche prend toute la largeur, et les pastilles de
+     statut restent repliées derrière le bouton Filtrer tant qu'on ne les
+     demande pas. Elles occupaient deux rangées avant le premier dossier. */
+  .candidate-table-search-row { flex-wrap: wrap; }
+  .candidate-table-search { flex: 1 1 100%; }
+  /* Repliees par defaut sur petit ecran: elles occupaient deux rangees avant
+     le premier dossier. Le bouton Filtrer les deplie. */
+  .candidate-status-filters { display: none; }
+  .candidate-status-filters.deplie { display: flex; flex-wrap: wrap; }
+}

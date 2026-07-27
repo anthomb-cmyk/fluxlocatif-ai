@@ -657,8 +657,11 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
     filterBtn.addEventListener("click", () => {
       const pills = container.querySelector(".candidate-status-filters");
       if (pills) {
-        pills.classList.toggle("hidden");
-        filterBtn.setAttribute("aria-expanded", String(!pills.classList.contains("hidden")));
+        // On bascule une classe "deplie" plutot que "hidden": le repli par
+        // defaut est decide par le CSS selon la largeur, donc passer du
+        // telephone a l'ordinateur reaffiche les pastilles tout seul.
+        pills.classList.toggle("deplie");
+        filterBtn.setAttribute("aria-expanded", String(pills.classList.contains("deplie")));
       }
     });
   }
@@ -807,10 +810,10 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                             </div>
                           </div>
                         </td>
-                        <td class="candidate-property-cell">${escapeHtml(apartmentLabel)}</td>
-                        <td class="candidate-income-cell">${formatCandidateRevenue(candidate)}</td>
-                        <td><span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span></td>
-                        <td class="candidate-score-cell">
+                        <td class="candidate-property-cell" data-colonne="Propriété">${escapeHtml(apartmentLabel)}</td>
+                        <td class="candidate-income-cell" data-colonne="Revenu">${formatCandidateRevenue(candidate)}</td>
+                        <td data-colonne="Statut"><span class="status-pill ${statusMeta.tone}">${statusMeta.label}</span></td>
+                        <td class="candidate-score-cell" data-colonne="Compatibilité">
                           <div class="candidate-score-display">
                             <div class="candidate-score-track">
                               <div class="candidate-score-fill ${scoreMeta.className}" style="width:${scoreMeta.value}%"></div>
