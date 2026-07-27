@@ -3738,11 +3738,24 @@ async function resolveEmployeeContext(req) {
     throw createHttpError(403, "Accès employé refusé.");
   }
 
-  if (resolveClientIdFromUser(user)) {
+  // Un admin de la table admin_users doit aussi pouvoir passer, meme sans role
+  // explicite dans app_metadata, sinon la console admin perd /api/listings.
+  const { data: adminRow } = await supabaseServerClient
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (adminRow) {
     throw createHttpError(403, "Accès employé refusé.");
   }
 
-  return { user, role: "employee" };
+  // Refus par defaut. L'ancien code accordait le role employe a tout compte
+  // authentifie sans role ni client_id. Or l'inscription publique est activee
+  // sur le projet Supabase (disable_signup: false), donc n'importe qui pouvait
+  // se creer un compte et obtenir l'acces employe, dont /api/chat qui declenche
+  // des appels OpenAI factures.
+  throw createHttpError(403, "Accès employé refusé.");
 }
 
 async function handleEmployeeRoute(req, res, handler) {
