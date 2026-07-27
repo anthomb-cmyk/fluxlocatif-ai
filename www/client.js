@@ -1497,6 +1497,82 @@ function handleClientRouteFailure(error) {
   );
 }
 
+// ── Recuperation de mot de passe ────────────────────────────────────────────
+// Le SMTP de Supabase n'est pas configure, donc le flux natif n'envoie rien. Le
+// serveur genere le lien et l'expedie par Resend. Quand l'utilisateur revient
+// par ce lien, Supabase depose une session de type "recovery" dans l'URL, et on
+// affiche le formulaire de nouveau mot de passe a la place de la connexion.
+
+function afficherFormulaireNouveauMotDePasse() {
+  document.getElementById("clientLoginForm")?.classList.add("hidden");
+  document.getElementById("forgotPasswordBtn")?.classList.add("hidden");
+  document.getElementById("resetPasswordForm")?.classList.remove("hidden");
+  showClientLoginScreen("Lien vérifié. Choisissez votre nouveau mot de passe.", "success");
+}
+
+async function demanderReinitialisation() {
+  const champ = document.getElementById("clientLoginEmail");
+  const email = String(champ?.value || "").trim();
+
+  if (!email || !email.includes("@")) {
+    showClientLoginScreen("Entrez d’abord votre adresse courriel, puis cliquez à nouveau.", "error");
+    champ?.focus();
+    return;
+  }
+
+  const bouton = document.getElementById("forgotPasswordBtn");
+  if (bouton) bouton.disabled = true;
+
+  try {
+    const reponse = await fetch("/api/client/password-reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    const data = await reponse.json().catch(() => ({}));
+
+    if (!reponse.ok) {
+      throw new Error(data.error || "Demande impossible pour le moment.");
+    }
+
+    showClientLoginScreen(
+      data.message || "Si un compte existe pour cette adresse, un courriel vient d’être envoyé.",
+      "success"
+    );
+  } catch (error) {
+    showClientLoginScreen(error.message || "Demande impossible pour le moment.", "error");
+  } finally {
+    if (bouton) bouton.disabled = false;
+  }
+}
+
+async function enregistrerNouveauMotDePasse(event) {
+  event.preventDefault();
+
+  const valeur = document.getElementById("resetPasswordValue")?.value || "";
+  const confirmation = document.getElementById("resetPasswordConfirm")?.value || "";
+
+  if (valeur.length < 8) {
+    showClientLoginScreen("Le mot de passe doit faire au moins 8 caractères.", "error");
+    return;
+  }
+
+  if (valeur !== confirmation) {
+    showClientLoginScreen("Les deux mots de passe ne correspondent pas.", "error");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: valeur });
+    if (error) throw error;
+
+    showClientLoginScreen("Mot de passe enregistré. Vous pouvez vous connecter.", "success");
+    window.setTimeout(() => { window.location.href = "/client.html"; }, 1500);
+  } catch (error) {
+    showClientLoginScreen(error.message || "Impossible d’enregistrer le mot de passe.", "error");
+  }
+}
+
 async function signInClient(event) {
   event.preventDefault();
 
@@ -2071,6 +2147,22 @@ document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
 // Le portail n'avait aucun moyen de se deconnecter: la session restait ouverte
 // indefiniment, y compris sur un poste partage. onAuthStateChange gerait deja
 // SIGNED_OUT, mais rien ne pouvait le declencher.
+// Le lien "Mot de passe oublie" et le formulaire de nouveau mot de passe.
+document.getElementById("forgotPasswordBtn")?.addEventListener("click", demanderReinitialisation);
+document.getElementById("resetPasswordForm")?.addEventListener("submit", enregistrerNouveauMotDePasse);
+
+// Retour par le lien de recuperation: Supabase place le type dans le fragment
+// d'URL et emet PASSWORD_RECOVERY. Dans les deux cas on montre le formulaire.
+if (/type=recovery/.test(window.location.hash || "")) {
+  afficherFormulaireNouveauMotDePasse();
+}
+
+supabaseClient.auth.onAuthStateChange((evenement) => {
+  if (evenement === "PASSWORD_RECOVERY") {
+    afficherFormulaireNouveauMotDePasse();
+  }
+});
+
 const logoutBtn = document.getElementById("logoutBtn");
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {

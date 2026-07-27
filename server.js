@@ -171,6 +171,20 @@ app.use(compression({
 }));
 app.use(express.json({ limit: "1mb" }));
 
+// Les routes non authentifiees (recuperation de mot de passe, onboarding)
+// n'avaient aucune limite de debit: enumeration de jetons et envoi de courriels
+// a volonte. Combine a trust proxy, la limite porte maintenant sur la vraie IP.
+const sensibleLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    error: "Trop de tentatives. Réessayez dans quelques minutes."
+  }
+});
+
 const chatLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 40,
@@ -1386,6 +1400,66 @@ function isValidInvitationSenderEmail(value) {
 
   const domain = email.split("@")[1] || "";
   return domain === "fluxlocatif.com";
+}
+
+async function sendPasswordResetEmail(email, lienRecuperation) {
+  if (!resendClient) {
+    return { sent: false, error: "RESEND_API_KEY manquant." };
+  }
+
+  if (!INVITATION_FROM_EMAIL || !isValidInvitationSenderEmail(INVITATION_FROM_EMAIL)) {
+    return { sent: false, error: "Expediteur non valide." };
+  }
+
+  const subject = "FluxLocatif — Réinitialiser votre mot de passe";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto;">
+      <h2 style="color: #111;">Réinitialiser votre mot de passe</h2>
+      <p>Bonjour,</p>
+      <p>Vous avez demandé à réinitialiser le mot de passe de votre espace FluxLocatif.</p>
+      <p style="margin: 26px 0;">
+        <a href="${lienRecuperation}"
+           style="background:#4f46e5;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;">
+          Choisir un nouveau mot de passe
+        </a>
+      </p>
+      <p style="color:#6b7280;font-size:13px;">
+        Ce lien est valide une heure. Si vous n’êtes pas à l’origine de cette demande,
+        ignorez ce message: votre mot de passe reste inchangé.
+      </p>
+      <p style="margin-top: 30px;">—<br>FluxLocatif</p>
+    </div>
+  `;
+  const text = [
+    "Bonjour,",
+    "",
+    "Vous avez demandé à réinitialiser le mot de passe de votre espace FluxLocatif.",
+    "",
+    "Choisir un nouveau mot de passe :",
+    lienRecuperation,
+    "",
+    "Ce lien est valide une heure. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
+    "",
+    "— FluxLocatif"
+  ].join("\n");
+
+  try {
+    const reponse = await resendClient.emails.send({
+      from: sanitizeFromField(INVITATION_FROM_EMAIL),
+      to: email,
+      subject,
+      html,
+      text
+    });
+
+    if (reponse?.error) {
+      return { sent: false, error: reponse.error.message || "Envoi refusé." };
+    }
+
+    return { sent: true, error: null };
+  } catch (erreur) {
+    return { sent: false, error: erreur?.message || "Envoi impossible." };
+  }
 }
 
 async function sendClientInvitationEmail(invitation, onboardingLink) {
@@ -4180,6 +4254,48 @@ app.post("/api/translator/schedule-visit", async (req, res) => handleEmployeeRou
     confirmationMessage: `Visite à planifier pour ${payload.listing_ref || "ce logement"} le ${proposedDate}. Un suivi peut maintenant être envoyé au locataire.`
   });
 }));
+
+// Recuperation de mot de passe. Le SMTP de Supabase n'est pas configure, donc
+// ses courriels de reinitialisation ne partent pas. On genere le lien avec la
+// cle service_role et on l'envoie par Resend, qui fonctionne deja pour les
+// invitations. Reponse toujours identique, qu'un compte existe ou non, pour ne
+// pas transformer cette route en detecteur d'adresses.
+app.post("/api/client/password-reset", sensibleLimiter, async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const reponseNeutre = {
+    ok: true,
+    message: "Si un compte existe pour cette adresse, un courriel vient d’être envoyé."
+  };
+
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ ok: false, error: "Adresse courriel invalide." });
+  }
+
+  try {
+    const base = PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
+    const { data, error } = await supabaseServerClient.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo: `${base}/client.html` }
+    });
+
+    if (error || !data?.properties?.action_link) {
+      // Compte inexistant: on journalise mais on ne le dit pas a l'appelant.
+      console.log("[password-reset] aucun lien genere pour", email, error?.message || "");
+      return res.json(reponseNeutre);
+    }
+
+    const envoi = await sendPasswordResetEmail(email, data.properties.action_link);
+    if (!envoi.sent) {
+      console.error("[password-reset] envoi echoue:", envoi.error);
+    }
+
+    return res.json(reponseNeutre);
+  } catch (erreur) {
+    console.error("[password-reset] erreur:", erreur);
+    return res.json(reponseNeutre);
+  }
+});
 
 app.get("/api/client/me", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
