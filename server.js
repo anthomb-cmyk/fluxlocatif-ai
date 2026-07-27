@@ -4874,10 +4874,26 @@ app.get("/api/client-onboarding/invitation", async (req, res) => {
     const { invitation, status } = await resolveInvitationByToken(token);
     ensureInvitationUsable(status, invitation);
 
+    // Un client peut avoir ete pre-rempli par l'equipe avant l'envoi du lien,
+    // a partir d'un catalogue par exemple. Dans ce cas l'etape Logements ne doit
+    // pas exiger une nouvelle saisie, sinon le client recree ce qui existe deja.
+    const listings = await loadListingsMap();
+    const logementsExistants = Object.values(listings).filter(
+      (l) => String(l.client_id) === String(invitation.client_id)
+    );
+
     return res.json({
       ok: true,
       invitation: sanitizeInvitation(invitation),
-      current_step: invitation.account_created_at ? 2 : 1
+      current_step: invitation.account_created_at ? 2 : 1,
+      existing_listings_count: logementsExistants.length,
+      existing_listings: logementsExistants.map((l) => ({
+        ref: l.ref,
+        adresse: l.adresse,
+        type_logement: l.type_logement || l.chambres || "",
+        loyer: l.loyer,
+        disponibilite: l.disponibilite
+      }))
     });
   } catch (error) {
     return res.status(error.status || 500).json({

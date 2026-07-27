@@ -672,9 +672,16 @@ function nextStep(from) {
   clearStatus(`step${from}Status`);
 
   if (from === 4) {
+    const dejaEnregistres = (state.logementsExistants || []).length;
+
     for (let i = 0; i < state.listings.length; i++) {
       const id  = state.listings[i].id;
       const adr = document.getElementById(`listing_${id}_address`)?.value.trim();
+
+      // Une carte vide est toleree quand des logements sont deja enregistres:
+      // le client n'a rien a ressaisir.
+      if (!adr && dejaEnregistres) continue;
+
       if (!adr) {
         setStatus("step4Status", t("err_listing_address", { n: i + 1 }), "error");
         return;
@@ -1132,7 +1139,11 @@ function rebuildListingCards() {
 }
 
 function collectListings() {
-  return state.listings.map(({ id }) => {
+  // Les cartes sans adresse sont ignorees: elles apparaissent quand le client a
+  // deja des logements enregistres et n'a rien a ajouter.
+  return state.listings.filter(({ id }) =>
+    Boolean(document.getElementById(`listing_${id}_address`)?.value.trim())
+  ).map(({ id }) => {
     const availSel = document.getElementById(`listing_${id}_availability`)?.value || "";
     return {
       address:              document.getElementById(`listing_${id}_address`)?.value.trim()  || "",
@@ -1228,13 +1239,41 @@ async function submitIntake() {
 
 // ─── Invitation validation ────────────────────────────────────────────────────
 
+function afficherLogementsExistants() {
+  const existants = state.logementsExistants || [];
+  const cible = document.getElementById("existingListingsBox");
+  if (!cible) return;
+
+  if (!existants.length) {
+    cible.classList.add("hidden");
+    return;
+  }
+
+  const lignes = existants.map((l) => `
+    <div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(79,70,229,.10);">
+      <div>${escapeHtml(l.adresse || "-")} <span style="color:var(--muted);">${escapeHtml(l.type_logement || "")}</span></div>
+      <div style="white-space:nowrap;font-weight:700;">${escapeHtml(l.loyer || "")}</div>
+    </div>`).join("");
+
+  cible.innerHTML = `
+    <div style="background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.15);border-radius:14px;padding:16px 18px;margin-bottom:18px;">
+      <div style="font-weight:800;margin-bottom:4px;">${existants.length} logement${existants.length > 1 ? "s" : ""} déjà enregistré${existants.length > 1 ? "s" : ""}</div>
+      <p style="color:var(--muted);margin-bottom:10px;">Notre équipe les a saisis à partir de votre catalogue. Vous n’avez rien à ressaisir. Ajoutez seulement ce qui manque, ou continuez.</p>
+      ${lignes}
+    </div>`;
+  cible.classList.remove("hidden");
+}
+
 async function validateInvitation() {
   if (!state.token) { showInvalid(t("err_token_missing")); return; }
   try {
     const result     = await fetchJSON(`/api/client-onboarding/invitation?token=${encodeURIComponent(state.token)}`);
     state.invitation = result.invitation || null;
+    state.logementsExistants = Array.isArray(result.existing_listings) ? result.existing_listings : [];
     prefillFromInvitation();
     configureAccountStep();
+
+    afficherLogementsExistants();
 
     const etapeDepart = result.current_step === 2 ? 2 : 1;
     const brouillonRestaure = etapeDepart === 2 && restaurerBrouillon();
