@@ -251,14 +251,14 @@ function getScoreMeta(score) {
     };
   }
 
-  if (numericScore >= 85) {
+  if (numericScore >= 80) {
     return {
       label: String(numericScore),
       className: ""
     };
   }
 
-  if (numericScore >= 70) {
+  if (numericScore >= 60) {
     return {
       label: String(numericScore),
       className: "score-mid"
@@ -572,8 +572,37 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
   const searchInput = container.querySelector("[data-candidate-table-search]");
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
+      // rerender() reconstruit tout le innerHTML du conteneur, donc le champ
+      // etait detruit a chaque caractere et le focus perdu: impossible de taper
+      // plus d'une lettre. On memorise la position du curseur et on la restaure
+      // sur le nouveau champ apres le rendu.
+      const position = event.target.selectionStart;
       updateCandidateTableState(stateKey, { query: event.target.value || "" });
       rerender();
+
+      const nouveauChamp = document.querySelector(`#${container.id} [data-candidate-table-search]`)
+        || container.querySelector("[data-candidate-table-search]");
+      if (nouveauChamp) {
+        nouveauChamp.focus();
+        try {
+          nouveauChamp.setSelectionRange(position, position);
+        } catch {
+          // certains types de champ n'acceptent pas setSelectionRange
+        }
+      }
+    });
+  }
+
+  // Le bouton "Filtrer" n'avait aucun listener. Il ouvre desormais la rangee de
+  // pastilles de statut, qui est le filtre reel de ce tableau.
+  const filterBtn = container.querySelector(".candidate-table-filter-btn");
+  if (filterBtn) {
+    filterBtn.addEventListener("click", () => {
+      const pills = container.querySelector(".candidate-status-filters");
+      if (pills) {
+        pills.classList.toggle("hidden");
+        filterBtn.setAttribute("aria-expanded", String(!pills.classList.contains("hidden")));
+      }
     });
   }
 
@@ -812,7 +841,7 @@ function deriveApartmentStage(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 85) {
+  if (bestScore >= 80) {
     return {
       label: "Dossiers à revoir",
       tone: "info"
@@ -844,7 +873,7 @@ function deriveApartmentNextStep(apartment, candidates = []) {
     return "Nous continuons la réception des demandes.";
   }
 
-  if (bestCandidate && getCandidateScoreValue(bestCandidate) >= 85) {
+  if (bestCandidate && getCandidateScoreValue(bestCandidate) >= 80) {
     return "Des dossiers méritent votre attention.";
   }
 
@@ -875,11 +904,11 @@ function deriveCandidatePriority(candidate) {
     return "low";
   }
 
-  if (score >= 85) {
+  if (score >= 80) {
     return "high";
   }
 
-  if (score >= 70) {
+  if (score >= 60) {
     return "medium";
   }
 
@@ -962,7 +991,7 @@ function deriveApartmentResponsibility(apartment, candidates = []) {
     return RESPONSIBILITY_LABELS.DONE;
   }
 
-  if (bestScore >= 85 && bestCandidate && !hasMaterialNegativeReasons(bestCandidate)) {
+  if (bestScore >= 80 && bestCandidate && !hasMaterialNegativeReasons(bestCandidate)) {
     return RESPONSIBILITY_LABELS.CLIENT;
   }
 
@@ -1046,11 +1075,11 @@ function deriveCandidateResponsibility(candidate) {
     return RESPONSIBILITY_LABELS.WATCH;
   }
 
-  if (score >= 85 && !hasNegativeReasons) {
+  if (score >= 80 && !hasNegativeReasons) {
     return RESPONSIBILITY_LABELS.CLIENT;
   }
 
-  if ((score >= 70 || matchMeta.tone === "positive") && !hasNegativeReasons) {
+  if ((score >= 60 || matchMeta.tone === "positive") && !hasNegativeReasons) {
     return RESPONSIBILITY_LABELS.TEAM;
   }
 
@@ -1226,7 +1255,7 @@ function deriveWatchlist(apartments = []) {
 }
 
 function countStrongCandidates(candidates = []) {
-  return candidates.filter((candidate) => getCandidateScoreValue(candidate) >= 85).length;
+  return candidates.filter((candidate) => getCandidateScoreValue(candidate) >= 80).length;
 }
 
 function getApartmentStrengthSummary(candidates = []) {
@@ -1237,7 +1266,7 @@ function getApartmentStrengthSummary(candidates = []) {
   const strongCount = countStrongCandidates(candidates);
   const promisingCount = candidates.filter((candidate) => {
     const score = getCandidateScoreValue(candidate);
-    return score >= 70 && score < 85;
+    return score >= 60 && score < 80;
   }).length;
 
   if (strongCount > 0) {
@@ -1272,7 +1301,7 @@ function deriveApartmentAttentionMeta(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 85) {
+  if (bestScore >= 80) {
     return {
       label: "Attention utile",
       tone: "medium",
@@ -1280,7 +1309,7 @@ function deriveApartmentAttentionMeta(apartment, candidates = []) {
     };
   }
 
-  if (bestScore >= 70) {
+  if (bestScore >= 60) {
     return {
       label: "Suivi en cours",
       tone: "medium",
@@ -2002,6 +2031,23 @@ document.querySelectorAll(".menu-btn").forEach((button) => {
 document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
   button.addEventListener("click", () => switchTab(button.dataset.dashboardTab));
 });
+
+// Le portail n'avait aucun moyen de se deconnecter: la session restait ouverte
+// indefiniment, y compris sur un poste partage. onAuthStateChange gerait deja
+// SIGNED_OUT, mais rien ne pouvait le declencher.
+const logoutBtn = document.getElementById("logoutBtn");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    logoutBtn.disabled = true;
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (error) {
+      console.error("Deconnexion echouee:", error);
+    } finally {
+      window.location.href = "/client.html";
+    }
+  });
+}
 
 if (refreshBtn) {
   // loadClientData est async et n'etait pas protege sur ce chemin: un echec
