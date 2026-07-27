@@ -1810,8 +1810,33 @@ function renderDashboardApartmentOverview() {
   `).join("");
 }
 
+// Un client dont aucun critere n'est defini voyait quatre lignes "Non precise",
+// sans jamais apprendre que c'est l'etape qui fait fonctionner le tri des
+// candidats. On lui dit, et on l'y emmene.
+function aucunCritereDefini() {
+  const c = state.client?.criteres || {};
+  const renseigne = (v) =>
+    v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0);
+
+  return ![
+    c.revenu_minimum, c.revenu_multiple, c.credit_min, c.accepte_tal,
+    c.max_occupants, c.animaux_acceptes, c.anciennete_min_mois, c.emplois_acceptes
+  ].some(renseigne);
+}
+
 function renderDashboardCriteriaSummary() {
   if (!dashboardCriteriaSummary) return;
+
+  if (state.client && aucunCritereDefini()) {
+    dashboardCriteriaSummary.innerHTML = `
+      <div class="dashboard-empty-state">
+        <div class="dashboard-empty-state-title">Vos critères ne sont pas encore définis</div>
+        <div>C’est ce qui nous permet d’écarter les dossiers qui ne vous conviennent pas avant qu’ils n’arrivent chez vous. Cinq minutes, une seule fois.</div>
+        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
+      </div>
+    `;
+    return;
+  }
 
   if (!state.client) {
     dashboardCriteriaSummary.innerHTML = `
@@ -2405,8 +2430,11 @@ document.querySelectorAll(".menu-btn").forEach((button) => {
   button.addEventListener("click", () => switchTab(button.dataset.tab));
 });
 
-document.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
-  button.addEventListener("click", () => switchTab(button.dataset.dashboardTab));
+// Delegation: ces boutons sont aussi crees dynamiquement dans les etats vides,
+// donc une ecoute posee au chargement ne les atteindrait jamais.
+document.addEventListener("click", (evenement) => {
+  const cible = evenement.target.closest("[data-dashboard-tab]");
+  if (cible) switchTab(cible.dataset.dashboardTab);
 });
 
 // Le portail n'avait aucun moyen de se deconnecter: la session restait ouverte
