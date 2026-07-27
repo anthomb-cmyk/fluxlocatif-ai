@@ -79,6 +79,7 @@ let allApartments = [];
 let allCandidates = [];
 let allTranslatorReports = [];
 let lastPendingCandidatesCount = 0;
+let pendingCandidatesBaselineSet = false;
 let allClients = [];
 let workspaceEmployees = [];
 let workspaceConversations = [];
@@ -207,7 +208,7 @@ function formatTranslatorReportStatus(value) {
 function clientLabel(clientId) {
   if (!clientId) return "-";
   const client = allClients.find((item) => item.id === clientId);
-  return client?.nom || clientId;
+  return escapeHtml(client?.nom || clientId);
 }
 
 function clientBooleanToSelectValue(value) {
@@ -289,7 +290,10 @@ async function fetchJSON(url, options = {}) {
     ...(options.headers || {})
   };
 
-  if (String(url || "").startsWith("/api/admin")) {
+  // /api/listings exige maintenant un membre du personnel (voir requireStaff),
+  // il lui faut donc aussi le jeton.
+  const url_ = String(url || "");
+  if (url_.startsWith("/api/admin") || url_.startsWith("/api/listings")) {
     const session = await waitForActiveSession(1, 0);
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;
@@ -369,16 +373,16 @@ async function loadUsers() {
       ? `${(row.today_total_seconds / 60).toFixed(1)} min · ${row.today_heartbeat_count ?? 0} heartbeat(s)`
       : "Aucune activité aujourd’hui";
     tr.innerHTML = `
-      <td>${row.full_name || row.email || row.user_id || "-"}</td>
-      <td>${row.email || "-"}</td>
+      <td>${escapeHtml(row.full_name || row.email || row.user_id || "-")}</td>
+      <td>${escapeHtml(row.email || "-")}</td>
       <td>${row.is_deactivated ? "Désactivé" : "Actif"}</td>
       <td>${formatDate(row.created_at)}</td>
       <td>${activityLabel}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="secondary-btn deactivate-user-btn" data-id="${row.user_id}" data-email="${row.email || ""}" ${row.is_deactivated ? "disabled" : ""}>
+        <button type="button" class="secondary-btn deactivate-user-btn" data-id="${escapeHtml(row.user_id)}" data-email="${escapeHtml(row.email || "")}" ${row.is_deactivated ? "disabled" : ""}>
           Désactiver
         </button>
-        <button type="button" class="secondary-btn delete-user-btn" data-id="${row.user_id}" data-email="${row.email || ""}" style="background:#fee2e2;color:#991b1b;">
+        <button type="button" class="secondary-btn delete-user-btn" data-id="${escapeHtml(row.user_id)}" data-email="${escapeHtml(row.email || "")}" style="background:#fee2e2;color:#991b1b;">
           Supprimer définitivement
         </button>
       </td>
@@ -564,8 +568,8 @@ async function loadSessions() {
   for (const row of data.sessions || []) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.id || "-"}</td>
-      <td>${row.user_id || "-"}</td>
+      <td>${escapeHtml(row.id || "-")}</td>
+      <td>${escapeHtml(row.user_id || "-")}</td>
       <td>${formatDate(row.started_at)}</td>
       <td>${formatDate(row.ended_at)}</td>
       <td>${formatDate(row.last_seen_at)}</td>
@@ -607,8 +611,8 @@ async function loadMessages() {
       button.style.display = "grid";
       button.style.gap = "4px";
       button.innerHTML = `
-        <span style="font-weight:800;">${employee.full_name || employee.email || employee.user_id}</span>
-        <span style="font-size:.88rem;color:#6b7280;">${conversation.last_message?.content || "Aucun message pour le moment."}</span>
+        <span style="font-weight:800;">${escapeHtml(employee.full_name || employee.email || employee.user_id)}</span>
+        <span style="font-size:.88rem;color:#6b7280;">${escapeHtml(conversation.last_message?.content || "Aucun message pour le moment.")}</span>
         ${conversation.unread_count ? `<span style="font-size:.82rem;color:#1e90ff;font-weight:800;">${conversation.unread_count} non lu(s)</span>` : ""}
       `;
       button.addEventListener("click", () => {
@@ -652,7 +656,7 @@ function renderWorkspaceThread(messages = []) {
     bubble.style.background = isAdminMessage ? "rgba(79,70,229,.10)" : "#f3f4f6";
     bubble.innerHTML = `
       <div style="font-weight:800;margin-bottom:4px;">${isAdminMessage ? "Admin" : "Employé"}</div>
-      <div>${message.content || ""}</div>
+      <div>${escapeHtml(message.content || "")}</div>
       <div style="margin-top:6px;font-size:.8rem;color:#6b7280;">${formatDate(message.created_at)}</div>
     `;
 
@@ -904,7 +908,7 @@ function fillClientForm(client) {
   submitClientBtn.textContent = "Sauvegarder les modifications";
   cancelClientEditBtn.style.display = "inline-flex";
   editingClientBadge.style.display = "inline-flex";
-  editingClientBadge.textContent = `Modification : ${client.nom || client.id}`;
+  editingClientBadge.textContent = `Modification : ${escapeHtml(client.nom || client.id)}`;
   clientFormStatus.textContent = "";
   clientFormStatus.style.color = "";
 
@@ -957,7 +961,7 @@ function fillApartmentForm(row) {
   submitApartmentBtn.textContent = "Sauvegarder les modifications";
   cancelEditBtn.style.display = "inline-flex";
   editingRefBadge.style.display = "inline-flex";
-  editingRefBadge.textContent = `Modification : L-${row.ref}`;
+  editingRefBadge.textContent = `Modification : L-${escapeHtml(row.ref)}`;
   apartmentFormStatus.textContent = "";
   apartmentFormStatus.style.color = "";
 
@@ -1014,8 +1018,8 @@ function renderClientsTable(rows) {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td>${client.nom || "-"}</td>
-      <td>${client.portal_email || client.email || "-"}</td>
+      <td>${escapeHtml(client.nom || "-")}</td>
+      <td>${escapeHtml(client.portal_email || client.email || "-")}</td>
       <td>${formatPortalAccessStatus(client)}</td>
       <td>${formatInvitationStatus(client)}${client.onboarding_link ? " · lien disponible" : ""}</td>
       <td>${criteria.revenu_minimum ?? "-"}</td>
@@ -1027,16 +1031,16 @@ function renderClientsTable(rows) {
       <td>${criteria.anciennete_min_mois ?? "-"}</td>
       <td>${countLinkedApartments(client.id)}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="secondary-btn edit-client-btn" data-id="${client.id}">Modifier</button>
+        <button type="button" class="secondary-btn edit-client-btn" data-id="${escapeHtml(client.id)}">Modifier</button>
         ${!client.portal_user_id && (client.invitation_status === "pending" || client.invitation_status === "expired" || !client.invitation_status)
-          ? `<button type="button" class="secondary-btn resend-invite-btn" data-client-id="${client.id}" data-email="${client.portal_email || client.email || ""}" style="background:rgba(30,144,255,.08);color:#1e90ff;">✉ ${client.invitation_status === "expired" ? "Regénérer et renvoyer" : "Renvoyer l'invitation"}</button>`
+          ? `<button type="button" class="secondary-btn resend-invite-btn" data-client-id="${escapeHtml(client.id)}" data-email="${escapeHtml(client.portal_email || client.email || "")}" style="background:rgba(30,144,255,.08);color:#1e90ff;">✉ ${client.invitation_status === "expired" ? "Regénérer et renvoyer" : "Renvoyer l'invitation"}</button>`
           : ""}
-        ${client.onboarding_link ? `<button type="button" class="secondary-btn copy-client-link-btn" data-link="${client.onboarding_link}">Copier le lien</button>` : ""}
+        ${client.onboarding_link ? `<button type="button" class="secondary-btn copy-client-link-btn" data-link="${escapeHtml(client.onboarding_link)}">Copier le lien</button>` : ""}
         ${client.portal_user_id && client.portal_access_status !== "deactivated"
-          ? `<button type="button" class="secondary-btn deactivate-client-access-btn" data-user-id="${client.portal_user_id}" data-email="${client.portal_email || client.email || ""}">Désactiver accès</button>`
+          ? `<button type="button" class="secondary-btn deactivate-client-access-btn" data-user-id="${escapeHtml(client.portal_user_id)}" data-email="${escapeHtml(client.portal_email || client.email || "")}">Désactiver accès</button>`
           : ""}
         ${client.portal_user_id
-          ? `<button type="button" class="secondary-btn delete-client-access-btn" data-user-id="${client.portal_user_id}" data-email="${client.portal_email || client.email || ""}" style="background:#fee2e2;color:#991b1b;">Supprimer accès</button>`
+          ? `<button type="button" class="secondary-btn delete-client-access-btn" data-user-id="${escapeHtml(client.portal_user_id)}" data-email="${escapeHtml(client.portal_email || client.email || "")}" style="background:#fee2e2;color:#991b1b;">Supprimer accès</button>`
           : ""}
       </td>
     `;
@@ -1194,34 +1198,34 @@ function renderApartmentsTable(rows) {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td>L-${row.ref || "-"}</td>
-      <td>${row.adresse || "-"}</td>
-      <td>${row.ville || "-"}</td>
+      <td>L-${escapeHtml(row.ref || "-")}</td>
+      <td>${escapeHtml(row.adresse || "-")}</td>
+      <td>${escapeHtml(row.ville || "-")}</td>
       <td>${clientLabel(row.client_id)}</td>
-      <td>${row.type_logement || "-"}</td>
-      <td>${row.chambres ?? "-"}</td>
-      <td>${row.superficie || "-"}</td>
-      <td>${row.loyer ?? "-"}</td>
-      <td>${row.inclusions || "-"}</td>
-      <td>${row.electricite || "-"}</td>
-      <td>${row.laveuse_secheuse || "-"}</td>
-      <td>${row.electros_inclus || "-"}</td>
-      <td>${row.balcon || "-"}</td>
-      <td>${row.wifi || "-"}</td>
-      <td>${row.acces_au_terrain || "-"}</td>
-      <td>${row.nombre_stationnements_gratuits ?? "-"}</td>
-      <td>${row.nombre_stationnements_payants ?? "-"}</td>
-      <td>${row.prix_stationnement_payant ?? "-"}</td>
-      <td>${row.nombre_logements_batisse ?? "-"}</td>
-      <td>${row.rangement || "-"}</td>
-      <td>${row.animaux_acceptes || "-"}</td>
-      <td>${row.meuble || "-"}</td>
-      <td>${row.disponibilite || "-"}</td>
-      <td>${row.statut || "-"}</td>
-      <td>${row.notes || "-"}</td>
+      <td>${escapeHtml(row.type_logement || "-")}</td>
+      <td>${escapeHtml(row.chambres ?? "-")}</td>
+      <td>${escapeHtml(row.superficie || "-")}</td>
+      <td>${escapeHtml(row.loyer ?? "-")}</td>
+      <td>${escapeHtml(row.inclusions || "-")}</td>
+      <td>${escapeHtml(row.electricite || "-")}</td>
+      <td>${escapeHtml(row.laveuse_secheuse || "-")}</td>
+      <td>${escapeHtml(row.electros_inclus || "-")}</td>
+      <td>${escapeHtml(row.balcon || "-")}</td>
+      <td>${escapeHtml(row.wifi || "-")}</td>
+      <td>${escapeHtml(row.acces_au_terrain || "-")}</td>
+      <td>${escapeHtml(row.nombre_stationnements_gratuits ?? "-")}</td>
+      <td>${escapeHtml(row.nombre_stationnements_payants ?? "-")}</td>
+      <td>${escapeHtml(row.prix_stationnement_payant ?? "-")}</td>
+      <td>${escapeHtml(row.nombre_logements_batisse ?? "-")}</td>
+      <td>${escapeHtml(row.rangement || "-")}</td>
+      <td>${escapeHtml(row.animaux_acceptes || "-")}</td>
+      <td>${escapeHtml(row.meuble || "-")}</td>
+      <td>${escapeHtml(row.disponibilite || "-")}</td>
+      <td>${escapeHtml(row.statut || "-")}</td>
+      <td>${escapeHtml(row.notes || "-")}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="secondary-btn edit-apartment-btn" data-ref="${row.ref}">Modifier</button>
-        <button type="button" class="secondary-btn delete-apartment-btn" data-ref="${row.ref}" style="background:#fee2e2;color:#991b1b;">Supprimer</button>
+        <button type="button" class="secondary-btn edit-apartment-btn" data-ref="${escapeHtml(row.ref)}">Modifier</button>
+        <button type="button" class="secondary-btn delete-apartment-btn" data-ref="${escapeHtml(row.ref)}" style="background:#fee2e2;color:#991b1b;">Supprimer</button>
       </td>
     `;
 
@@ -1446,7 +1450,7 @@ async function updateCandidateStatus(id, status) {
 
 async function evaluateCandidate(candidate) {
   if (!candidate?.id) return;
-  await fetchJSON(`/api/admin/candidates/${candidate.id}`, {
+  await fetchJSON(`/api/admin/candidates/${escapeHtml(candidate.id)}`, {
     method: "PUT",
     body: JSON.stringify({
       reevaluate_match: true
@@ -1510,7 +1514,7 @@ function openAlternativeListingsModal(candidate) {
         <div>
           <div style="font-size:.85rem;font-weight:800;color:#1e90ff;text-transform:uppercase;letter-spacing:.05em;">Suggestions</div>
           <h3 style="margin:6px 0 0;color:#191d45;">Autres logements compatibles</h3>
-          <div style="margin-top:6px;color:#6b7280;">${candidate.candidate_name || "Candidat"} · logement initial L-${candidate.apartment_ref || "-"}</div>
+          <div style="margin-top:6px;color:#6b7280;">${escapeHtml(candidate.candidate_name || "Candidat")} · logement initial L-${escapeHtml(candidate.apartment_ref || "-")}</div>
         </div>
         <button type="button" id="closeAlternativeListingsModal" class="secondary-btn">Fermer</button>
       </div>
@@ -1562,30 +1566,30 @@ function renderCandidatesTable(rows) {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td>L-${candidate.apartment_ref || "-"}</td>
-      <td>${candidate.candidate_name || "-"}</td>
-      <td>${candidate.phone || "-"}</td>
-      <td>${candidate.email || "-"}</td>
-      <td>${candidate.job_title || "-"}</td>
-      <td>${candidate.employer_name || "-"}</td>
-      <td>${candidate.employment_length || "-"}</td>
-      <td>${candidate.employment_status || "-"}</td>
-      <td>${candidate.monthly_income || "-"}</td>
-      <td>${candidate.credit_level || "-"}</td>
-      <td>${candidate.tal_record || "-"}</td>
-      <td>${candidate.occupants_total || "-"}</td>
-      <td>${candidate.pets || "-"}</td>
-      <td>${candidate.employee_notes || "-"}</td>
-      <td>${candidate.admin_notes || "-"}</td>
-      <td>${candidate.status || "-"}</td>
+      <td>L-${escapeHtml(candidate.apartment_ref || "-")}</td>
+      <td>${escapeHtml(candidate.candidate_name || "-")}</td>
+      <td>${escapeHtml(candidate.phone || "-")}</td>
+      <td>${escapeHtml(candidate.email || "-")}</td>
+      <td>${escapeHtml(candidate.job_title || "-")}</td>
+      <td>${escapeHtml(candidate.employer_name || "-")}</td>
+      <td>${escapeHtml(candidate.employment_length || "-")}</td>
+      <td>${escapeHtml(candidate.employment_status || "-")}</td>
+      <td>${escapeHtml(candidate.monthly_income || "-")}</td>
+      <td>${escapeHtml(candidate.credit_level || "-")}</td>
+      <td>${escapeHtml(candidate.tal_record || "-")}</td>
+      <td>${escapeHtml(candidate.occupants_total || "-")}</td>
+      <td>${escapeHtml(candidate.pets || "-")}</td>
+      <td>${escapeHtml(candidate.employee_notes || "-")}</td>
+      <td>${escapeHtml(candidate.admin_notes || "-")}</td>
+      <td>${escapeHtml(candidate.status || "-")}</td>
       <td>${candidate.match_status ? `<span class="${matchStatusClass(candidate.match_status)}">${formatMatchStatus(candidate.match_status)}</span>` : "-"}</td>
-      <td>${candidate.match_score ?? "-"}</td>
-      <td>${Array.isArray(candidate.match_reasons) && candidate.match_reasons.length ? candidate.match_reasons.join(", ") : "-"}</td>
+      <td>${escapeHtml(candidate.match_score ?? "-")}</td>
+      <td>${Array.isArray(candidate.match_reasons) && candidate.match_reasons.length ? escapeHtml(candidate.match_reasons.join(", ")) : "-"}</td>
       <td style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="secondary-btn evaluate-candidate-btn" data-id="${candidate.id}">Évaluer</button>
-        <button type="button" class="secondary-btn alternatives-candidate-btn" data-id="${candidate.id}">Suggestions</button>
-        <button type="button" class="secondary-btn approve-candidate-btn" data-id="${candidate.id}" style="background:#dcfce7;color:#166534;">Approuver</button>
-        <button type="button" class="secondary-btn reject-candidate-btn" data-id="${candidate.id}" style="background:#fee2e2;color:#991b1b;">Refuser</button>
+        <button type="button" class="secondary-btn evaluate-candidate-btn" data-id="${escapeHtml(candidate.id)}">Évaluer</button>
+        <button type="button" class="secondary-btn alternatives-candidate-btn" data-id="${escapeHtml(candidate.id)}">Suggestions</button>
+        <button type="button" class="secondary-btn approve-candidate-btn" data-id="${escapeHtml(candidate.id)}" style="background:#dcfce7;color:#166534;">Approuver</button>
+        <button type="button" class="secondary-btn reject-candidate-btn" data-id="${escapeHtml(candidate.id)}" style="background:#fee2e2;color:#991b1b;">Refuser</button>
       </td>
     `;
 
@@ -1816,11 +1820,16 @@ async function checkNewCandidates() {
     const data = await fetchJSON("/api/admin/candidates?status=en attente");
     const pendingCount = (data.candidates || []).length;
 
-    if (lastPendingCandidatesCount !== 0 && pendingCount > lastPendingCandidatesCount) {
+    // Le garde-fou etait `lastPendingCandidatesCount !== 0`, cense ignorer le
+    // premier chargement. Il s'appliquait en permanence: des que la file
+    // retombait a zero, cas normal apres traitement, le candidat suivant
+    // n'alertait plus jamais. On utilise un drapeau d'initialisation dedie.
+    if (pendingCandidatesBaselineSet && pendingCount > lastPendingCandidatesCount) {
       alert("Nouveau candidat reçu");
     }
 
     lastPendingCandidatesCount = pendingCount;
+    pendingCandidatesBaselineSet = true;
   } catch (error) {
     console.error("Erreur notification candidats:", error);
   }

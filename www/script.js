@@ -122,6 +122,46 @@ function resolveUserRole(user) {
   ).trim().toLowerCase();
 }
 
+// Les cles techniques renvoyees par le serveur etaient affichees telles quelles
+// a l'employe: "move_in_date, occupants_total, has_animals" dans une interface
+// francaise. On les traduit ici.
+const CHAMP_LABELS = {
+  move_in_date: "date d\u2019emm\u00e9nagement",
+  occupants_total: "nombre d\u2019occupants",
+  has_animals: "animaux",
+  employment_status: "statut d\u2019emploi",
+  income: "revenu",
+  credit: "cr\u00e9dit",
+  tal: "dossier TAL",
+  full_name: "nom complet",
+  phone: "t\u00e9l\u00e9phone",
+  email: "courriel"
+};
+
+const CONFIANCE_LABELS = { low: "faible", medium: "moyenne", high: "\u00e9lev\u00e9e" };
+
+const MANDAT_STATUT_LABELS = {
+  assigned: "Assign\u00e9",
+  in_progress: "En cours",
+  completed: "Compl\u00e9t\u00e9"
+};
+
+function libelleChamp(key) {
+  return CHAMP_LABELS[String(key)] || String(key);
+}
+
+// Toute donnee tierce interpolee dans une chaine HTML doit passer par ici.
+// Sans cela, un message ecrit par un admin ou le texte d'un mandat pouvait
+// executer du script dans la session employe, qui detient le jeton Supabase.
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleString("fr-CA");
@@ -464,25 +504,25 @@ function renderTranslatorQualificationPanel() {
         <div class="translator-qualification-title">${statusConfig.icon} ${statusConfig.title}</div>
         <div class="translator-qualification-copy">${statusConfig.copy}</div>
       </div>
-      <div class="translator-qualification-chip">Confiance ${payload.confidence || "low"}</div>
+      <div class="translator-qualification-chip">Confiance ${CONFIANCE_LABELS[payload.confidence] || "faible"}</div>
     </div>
     <div class="translator-qualification-meta">
       ${Array.isArray(payload.missing_fields) && payload.missing_fields.length
-        ? `<div class="translator-qualification-chip">Manquants: ${payload.missing_fields.join(", ")}</div>`
+        ? `<div class="translator-qualification-chip">Manquants: ${escapeHtml(payload.missing_fields.map(libelleChamp).join(", "))}</div>`
         : `<div class="translator-qualification-chip">Aucun champ critique manquant</div>`}
-      ${payload.listing_ref ? `<div class="translator-qualification-chip">${payload.listing_ref}</div>` : ""}
+      ${payload.listing_ref ? `<div class="translator-qualification-chip">${escapeHtml(payload.listing_ref)}</div>` : ""}
     </div>
     ${
       Array.isArray(payload.blocking_reasons) && payload.blocking_reasons.length
-        ? `<div class="translator-qualification-blockers">Raisons bloquantes: ${payload.blocking_reasons.join(" · ")}</div>`
+        ? `<div class="translator-qualification-blockers">Raisons bloquantes: ${escapeHtml(payload.blocking_reasons.join(" · "))}</div>`
         : ""
     }
     ${
       Array.isArray(payload.matches) && payload.matches.length
         ? `<div class="translator-qualification-matches">
             ${payload.matches.map((match) => `
-              <button type="button" class="secondary-btn translator-alt-listing-btn" data-ref="${match.ref}">
-                Changer vers ${match.ref}
+              <button type="button" class="secondary-btn translator-alt-listing-btn" data-ref="${escapeHtml(match.ref)}">
+                Changer vers ${escapeHtml(match.ref)}
               </button>
             `).join("")}
           </div>`
@@ -1174,7 +1214,7 @@ function renderNotifications() {
 
   employeeNotificationBanner.classList.remove("hidden");
   employeeNotificationBanner.innerHTML = unreadNotifications.map((notification) => `
-    <button type="button" class="workspace-alert-banner" data-id="${notification.id}" data-type="${notification.type}" data-reference="${notification.reference_id || ""}">
+    <button type="button" class="workspace-alert-banner" data-id="${escapeHtml(notification.id)}" data-type="${escapeHtml(notification.type)}" data-reference="${escapeHtml(notification.reference_id || "")}">
       <div>
         <div class="workspace-alert-title">${notification.type === "message" ? "Nouveau message de l’administration" : "Nouveau listing assigné"}</div>
         <div class="workspace-alert-meta">${formatDate(notification.created_at)}</div>
@@ -1246,7 +1286,7 @@ function renderEmployeeMessageThread() {
       <div class="workspace-message-row ${isSelf ? "from-self" : ""}">
         <div class="workspace-message-bubble">
           <div style="font-weight:800;margin-bottom:4px;">${isSelf ? "Vous" : "Administration"}</div>
-          <div>${message.content || ""}</div>
+          <div>${escapeHtml(message.content || "")}</div>
           <div class="workspace-task-meta">${formatDate(message.created_at)}</div>
         </div>
       </div>
@@ -1313,11 +1353,11 @@ function renderEmployeeListingTasks() {
     <div class="workspace-task-card ${chatState.highlightedWorkspaceTaskId === task.id ? "highlighted" : ""}" data-task-id="${task.id}">
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
         <div>
-          <div style="font-weight:800;">${task.title || "Mandat"}</div>
-          <div class="workspace-task-meta">Statut : ${task.status || "assigned"} · ${formatDate(task.created_at)}</div>
+          <div style="font-weight:800;">${escapeHtml(task.title || "Mandat")}</div>
+          <div class="workspace-task-meta">Statut : ${MANDAT_STATUT_LABELS[task.status] || task.status || "Assign\u00e9"} · ${formatDate(task.created_at)}</div>
         </div>
       </div>
-      <div style="margin-top:12px;line-height:1.6;white-space:pre-wrap;">${task.listing_text || ""}</div>
+      <div style="margin-top:12px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(task.listing_text || "")}</div>
       <div class="workspace-task-actions">
         <button type="button" class="secondary-btn copy-task-text-btn" data-text="${encodeURIComponent(task.listing_text || "")}">Copier le texte</button>
         ${task.status !== "in_progress" ? `<button type="button" class="secondary-btn task-status-btn" data-id="${task.id}" data-status="in_progress">Marquer en cours</button>` : ""}
@@ -1460,7 +1500,7 @@ async function checkServer() {
 
 async function loadListings() {
   try {
-    const data = await fetchJSON("/api/listings", {}, 10000);
+    const data = await fetchEmployeeJSON("/api/listings", {}, 10000);
     const rawListings = data.listings || {};
     const normalizedListings = {};
 
@@ -1628,7 +1668,7 @@ async function runCandidateEvaluation(apartmentRef, threadKey = "") {
     }[status] || "Qualification en cours.";
 
     const missingHtml = Array.isArray(evalPayload.missing_fields) && evalPayload.missing_fields.length
-      ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">Champs manquants : ${evalPayload.missing_fields.join(", ")}</div>`
+      ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">Champs manquants : ${escapeHtml(evalPayload.missing_fields.map(libelleChamp).join(", "))}</div>`
       : "";
 
     const matchesHtml = Array.isArray(evalPayload.matches) && evalPayload.matches.length
@@ -1830,7 +1870,12 @@ async function handleCandidateSubmit(event) {
       "success"
     );
 
-    runCandidateEvaluation(String(displayRef), chatState.activeTranslatorThreadKey || "");
+    // L'appel a runCandidateEvaluation a ete retire ici: il evaluait l'etat du
+    // fil traducteur, pas la fiche qui vient d'etre soumise, et affichait sous
+    // le formulaire un verdict "Locataire eligible" ou "Profil non conforme"
+    // calcule sur une conversation potentiellement vide ou concernant un autre
+    // locataire. Le score du candidat est deja calcule cote serveur par
+    // buildCandidateMatchFields a la creation de la fiche.
 
     candidateForm.reset();
     clearSelectedPreferredLocation();
