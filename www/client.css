@@ -180,6 +180,84 @@
 
 @keyframes flx-spin { to { transform: rotate(360deg); } }
 
+/* ===================== ÉTATS DE CHARGEMENT =====================
+   Le portail restait entierement vide pendant les trois appels reseau,
+   puis tout apparaissait d'un coup. On affiche desormais la coquille
+   immediatement, avec des blocs gris a l'emplacement et a la taille du
+   contenu attendu: le client voit tout de suite que ca charge, et rien ne
+   saute quand les donnees arrivent. */
+
+@keyframes flx-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.flx-skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 37%,
+    var(--skeleton-base) 63%
+  );
+  background-size: 200% 100%;
+  animation: flx-shimmer 1.4s linear infinite;
+}
+
+.flx-skeleton-line { height: 12px; }
+.flx-skeleton-line.tall { height: 16px; }
+.flx-skeleton-line.value { height: 26px; border-radius: 6px; }
+.flx-skeleton-pill { height: 22px; border-radius: 999px; }
+.flx-skeleton-glyph { width: 36px; height: 36px; border-radius: 10px; }
+
+.flx-skeleton-stack { display: grid; gap: 10px; }
+.flx-skeleton-row { display: flex; align-items: center; gap: 10px; }
+.flx-skeleton-row > .flx-skeleton { flex: 1 1 auto; }
+
+.flx-skeleton-block {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.flx-skeleton-block:last-child { border-bottom: 0; }
+
+/* Le bouton Actualiser dit ou en est la requete au lieu de se contenter
+   de se griser. */
+.client-platform-page .primary-btn[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.client-platform-page .primary-btn[aria-busy="true"] svg {
+  animation: flx-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* Pendant une actualisation, le contenu deja affiche reste lisible mais
+   recule d'un cran: on ne le vide pas, sinon le client perd sa page. Au
+   premier chargement il n'y a rien a estomper, ce sont les squelettes qui
+   parlent, d'ou l'attribut distinct de aria-busy. */
+.client-scroll[data-refreshing="true"] .client-scroll-inner {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.flx-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ===================== SHELL / LAYOUT ===================== */
 
 .client-platform-shell {
@@ -1781,6 +1859,13 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Sans animation, le degrade de balayage n'a plus de sens: le squelette
+     redevient un aplat, et il reste parfaitement lisible comme tel. */
+  .flx-skeleton {
+    background: var(--skeleton-base);
+    animation: none !important;
   }
 }
 
