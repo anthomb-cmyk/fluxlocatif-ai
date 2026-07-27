@@ -1488,7 +1488,13 @@ function switchTab(tabName) {
 
 function renderDashboard() {
   const totalApartments = state.apartments.length;
-  const availableApartments = state.apartments.filter((item) => item.disponibilite === "disponible").length;
+  // Comparait avec l'egalite stricte a "disponible", alors que la valeur reelle
+  // est une phrase ("Disponible maintenant", "Disponible dans 30 jours"). Le
+  // compteur affichait donc 0 pour un portefeuille entierement disponible. On
+  // reutilise la meme lecture que les pastilles de l'interface.
+  const availableApartments = state.apartments.filter(
+    (item) => getAvailabilityMeta(item.disponibilite).tone === "positive"
+  ).length;
   const totalCandidates = state.candidates.length;
   const approvedCount = state.candidates.filter((item) => item.status === "approuvé").length;
   const refusedCount = state.candidates.filter((item) => item.status === "refusé").length;

@@ -714,8 +714,28 @@ async function loadClientInvitations() {
   return readJsonFile(LEGACY_CLIENT_INVITATIONS_PATH, []);
 }
 
+// Un booleen a trois etats: true, false, ou null quand le client n'a jamais
+// repondu. Boolean(undefined) donnait false et Boolean(x ?? true) donnait true,
+// ce qui inventait une politique animaux ou TAL que personne n'avait choisie.
+function parseTriBoolean(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean") return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "oui", "yes", "1"].includes(normalized)) return true;
+  if (["false", "non", "no", "0"].includes(normalized)) return false;
+  return null;
+}
+
 function normalizeClientRecord(id, value = {}) {
-  const critSrc = value?.qualification_criteria || value?.criteres || {};
+  // Fusionner les deux formes plutot que d'en choisir une. L'ancien code faisait
+  // `qualification_criteria || criteres`, donc des qu'un client avait ete
+  // sauvegarde une fois, qualification_criteria existait toujours et la saisie
+  // du formulaire (envoyee dans criteres) n'etait plus jamais lue: la valeur
+  // saisie etait ignoree et les champs absents de l'autre forme etaient effaces.
+  const critSrc = {
+    ...(value?.qualification_criteria || {}),
+    ...(value?.criteres || {})
+  };
   return {
     id: String(value.id || id || ""),
     nom: String(value.nom || "").trim(),
@@ -761,10 +781,10 @@ function normalizeClientRecord(id, value = {}) {
       revenu_minimum: parseNumber(critSrc.revenu_minimum ?? critSrc.min_income_requirement),
       revenu_multiple: critSrc.revenu_multiple ?? null,
       credit_min: critSrc.credit_min ?? null,
-      accepte_tal: Boolean(critSrc.accepte_tal ?? true),
+      accepte_tal: parseTriBoolean(critSrc.accepte_tal),
       tal_policy: critSrc.tal_policy ?? null,
       max_occupants: parseNumber(critSrc.max_occupants ?? critSrc.occupancy_rules),
-      animaux_acceptes: Boolean(critSrc.animaux_acceptes),
+      animaux_acceptes: parseTriBoolean(critSrc.animaux_acceptes),
       emplois_acceptes: Array.isArray(critSrc.emplois_acceptes)
         ? critSrc.emplois_acceptes.map((job) => String(job))
         : [],
@@ -1579,6 +1599,59 @@ function normalizeCreditLevel(value) {
   return 0;
 }
 
+// Le wizard d'onboarding soumet les valeurs brutes de ses <option>, en anglais
+// ("Included", "Street only", "small_only", "Now"). Tout le reste du produit lit
+// ces champs avec des expressions regulieres francaises, qui ne reconnaissaient
+// donc rien et tombaient sur le repli negatif: un logement declare avec
+// stationnement inclus faisait repondre au bot qu'il n'y a pas de stationnement.
+// On ecrit desormais des valeurs canoniques francaises a l'entree.
+function canonicalParking(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const map = {
+    "included": "Inclus dans le loyer",
+    "available ($)": "Disponible, frais supplementaires",
+    "street only": "Stationnement de rue seulement",
+    "none": "Aucun stationnement"
+  };
+  return map[raw.toLowerCase()] || raw;
+}
+
+function canonicalPets(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const map = {
+    "yes": "Oui, animaux acceptes",
+    "small_only": "Oui, petits animaux seulement",
+    "negotiable": "A negocier",
+    "no": "Non, animaux refuses"
+  };
+  return map[raw.toLowerCase()] || raw;
+}
+
+function canonicalSmoking(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const map = {
+    "no": "Non-fumeur",
+    "outside_only": "Fumeur a l'exterieur seulement",
+    "yes": "Fumeur accepte"
+  };
+  return map[raw.toLowerCase()] || raw;
+}
+
+function canonicalAvailability(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+  if (lower === "now") return "Disponible maintenant";
+  if (lower === "30 days") return "Disponible dans 30 jours";
+  if (lower === "60 days") return "Disponible dans 60 jours";
+  // collectListings resout deja "custom" en date ISO avant l'envoi.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `Disponible le ${raw}`;
+  return raw;
+}
+
 function getDefaultCriteria(listing) {
   const rent = parseNumber(listing?.loyer ?? listing?.rent);
 
@@ -1601,9 +1674,17 @@ function isListingRelevantForMatching(listing) {
 function evaluateMatch(listing, candidate, criteria = null) {
   let score = 100;
   const reasons = [];
+  // Un critere non renseigne vaut maintenant null (voir parseTriBoolean). Il ne
+  // doit pas ecraser la valeur par defaut du logement: on retire les null avant
+  // la fusion, sinon "le client n'a jamais repondu" deviendrait "le client a
+  // repondu non".
+  const providedCriteria = Object.fromEntries(
+    Object.entries(criteria || {}).filter(([, v]) => v !== null && v !== undefined)
+  );
+
   const resolvedCriteria = {
     ...getDefaultCriteria(listing),
-    ...(criteria || {})
+    ...providedCriteria
   };
 
   const rent = parseNumber(listing?.loyer ?? listing?.rent);
@@ -2578,13 +2659,17 @@ function getListingParkingLine(listing) {
   if (explicitParking) {
     if (
       parseBoolean(explicitParking) ||
-      /\b(?:oui|inclus|inclu|compris|disponible|1 place|une place|stationnement disponible|parking disponible)\b/.test(normalizedExplicit)
+      // Les valeurs anglaises viennent des logements enregistres avant que
+      // l'intake ecrive des valeurs canoniques (voir canonicalParking).
+      /\b(?:oui|inclus|inclu|compris|disponible|1 place|une place|stationnement disponible|parking disponible|included|available)\b/.test(normalizedExplicit)
     ) {
       return "Oui, il y a du stationnement disponible pour ce logement.";
     }
 
     if (
-      /\b(?:non|aucun|pas de stationnement|pas de parking|sans stationnement|indisponible)\b/.test(normalizedExplicit)
+      // "rue seulement" (street only) n'est pas un stationnement fourni avec le
+      // logement: on repond non, comme pour l'absence de stationnement.
+      /\b(?:non|aucun|pas de stationnement|pas de parking|sans stationnement|indisponible|none|street only|rue seulement)\b/.test(normalizedExplicit)
     ) {
       return "Non, il n’y a pas de stationnement pour ce logement.";
     }
@@ -3137,13 +3222,15 @@ function getListingPetsLine(listing) {
 
     if (
       parseBoolean(explicitPolicy) ||
-      /accept|autorise|permis|oui/.test(normalized)
+      // small_only et negotiable viennent des logements enregistres avant que
+      // l'intake ecrive des valeurs canoniques (voir canonicalPets).
+      /accept|autorise|permis|oui|small_only|negotiable|petits animaux|negocier/.test(normalized)
     ) {
       return "Oui, les animaux sont acceptés pour ce logement.";
     }
 
     if (
-      /non|interdit|refus|pas d['’ ]animaux|aucun animal|sans animaux/.test(normalized)
+      /non|interdit|refus|pas d['’ ]animaux|aucun animal|sans animaux|not_allowed/.test(normalized)
     ) {
       return "Non, les animaux ne sont pas acceptés pour ce logement.";
     }
@@ -4838,12 +4925,12 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
           type_logement: String(listing.unit_type || "").trim(),
           chambres:      String(listing.unit_type || "").trim(),
           loyer:         listing.monthly_rent || null,
-          disponibilite: String(listing.availability_date || "").trim(),
+          disponibilite: canonicalAvailability(listing.availability_date, listing.custom_availability_date),
           debut_bail:    String(listing.desired_lease_start || "").trim(),
           amenities:     String(listing.amenities || "").trim(),
-          stationnement: String(listing.parking || "").trim(),
-          animaux_acceptes: String(listing.pets_allowed || "").trim(),
-          fumeur:        String(listing.smoking_allowed || "").trim(),
+          stationnement: canonicalParking(listing.parking),
+          animaux_acceptes: canonicalPets(listing.pets_allowed),
+          fumeur:        canonicalSmoking(listing.smoking_allowed),
           lien_existant: String(listing.existing_listing_link || "").trim(),
           notes:         String(listing.notes || "").trim(),
           client_id:     invitation.client_id,
