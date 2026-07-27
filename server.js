@@ -1922,6 +1922,64 @@ function isListingRelevantForMatching(listing) {
   return !status || ["actif", "active", "disponible", "en attente"].includes(status);
 }
 
+// Criteres declares sur le logement lui-meme. Seules les valeurs reellement
+// renseignees sont renvoyees: une cle absente laisse le reglage du client
+// s'appliquer.
+function criteresDuLogement(listing) {
+  const specifiques = {};
+
+  const animaux = parsePolitiqueAnimaux(listing?.animaux_acceptes);
+  if (animaux !== null) specifiques.animaux_acceptes = animaux;
+
+  const credit = listing?.credit_requis ?? listing?.required_credit ?? listing?.credit_minimum;
+  if (credit !== null && credit !== undefined && credit !== "") specifiques.credit_min = credit;
+
+  const occupants = parseNumber(listing?.max_occupants ?? listing?.occupants_max);
+  if (occupants !== null) specifiques.max_occupants = occupants;
+
+  const tal = parseTriBoolean(listing?.accepte_tal);
+  if (tal !== null) specifiques.accepte_tal = tal;
+
+  return specifiques;
+}
+
+// La politique animaux d'un logement est du texte libre saisi par le
+// proprietaire ("Petit chien permis / Chat permis", "Chien non permis").
+// On lit segment par segment: si au moins une espece est acceptee, le logement
+// accepte les animaux. Le tri fin se fait a la visite, pas au score.
+function parsePolitiqueAnimaux(valeur) {
+  const texte = String(valeur ?? "").trim();
+  if (!texte) return null;
+
+  const direct = parseTriBoolean(texte);
+  if (direct !== null) return direct;
+
+  const segments = texte
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[\/,;]|\bet\b/)
+    .map((seg) => seg.trim())
+    .filter(Boolean);
+
+  let auMoinsUnAccepte = false;
+  let auMoinsUnRefus = false;
+
+  for (const seg of segments) {
+    // Le refus est teste en premier: "aucun animal accepte" est un refus,
+    // meme s'il contient le mot "accepte".
+    if (/(non permis|non accepte|non autorise|refus|interdit|aucun|pas d.animaux|sans animaux)/.test(seg)) {
+      auMoinsUnRefus = true;
+      continue;
+    }
+    if (/(permis|accepte|autorise|oui)/.test(seg)) auMoinsUnAccepte = true;
+  }
+
+  if (auMoinsUnAccepte) return true;
+  if (auMoinsUnRefus) return false;
+  return null;
+}
+
 function evaluateMatch(listing, candidate, criteria = null) {
   let score = 100;
   const reasons = [];
@@ -1933,9 +1991,14 @@ function evaluateMatch(listing, candidate, criteria = null) {
     Object.entries(criteria || {}).filter(([, v]) => v !== null && v !== undefined)
   );
 
+  // Le plus precis gagne: valeurs par defaut, puis reglages globaux du client,
+  // puis ce que le logement declare lui-meme. Un proprietaire dont la politique
+  // animaux varie d'un immeuble a l'autre n'a ainsi pas a choisir une regle
+  // unique qui contredirait ce que le bot annonce deja aux locataires.
   const resolvedCriteria = {
     ...getDefaultCriteria(listing),
-    ...providedCriteria
+    ...providedCriteria,
+    ...criteresDuLogement(listing)
   };
 
   const rent = parseNumber(listing?.loyer ?? listing?.rent);
