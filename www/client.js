@@ -1866,7 +1866,7 @@ function renderDashboardWatchlist() {
 // resultat est affiche sous la regle globale, pour que le client sache
 // exactement a combien de ses logements elle s'applique.
 function logementsAvecReglePropre() {
-  return state.apartments.filter((a) => String(a.animaux_acceptes || "").trim());
+  return state.apartments.filter((a) => derogationsDuLogement(a).length);
 }
 
 function noteExceptionsAnimaux() {
@@ -2014,14 +2014,31 @@ function renderApartments() {
 // Ce que le logement applique reellement, affiche sur sa fiche. Sans cela, le
 // client lisait sa regle globale dans l'onglet Criteres et ignorait qu'un
 // immeuble avait la sienne, qui prend le dessus.
+function derogationsDuLogement(apartment) {
+  const derogations = [];
+
+  const animaux = String(apartment.animaux_acceptes || "").trim();
+  if (animaux) derogations.push(`Animaux : ${animaux}`);
+
+  if (apartment.accepte_tal === true) derogations.push("Dossier TAL : accepté");
+  if (apartment.accepte_tal === false) derogations.push("Dossier TAL : refusé");
+
+  const credit = String(apartment.credit_requis || "").trim();
+  if (credit) derogations.push(`Crédit : ${credit}`);
+
+  if (apartment.max_occupants) derogations.push(`Occupants : ${apartment.max_occupants} max`);
+
+  return derogations;
+}
+
 function renderReglePropre(apartment) {
-  const politique = String(apartment.animaux_acceptes || "").trim();
-  if (!politique) return "";
+  const derogations = derogationsDuLogement(apartment);
+  if (!derogations.length) return "";
 
   return `
     <div class="apartment-own-rule">
-      <span class="apartment-own-rule-tag">Règle propre à ce logement</span>
-      <span>Animaux&nbsp;: ${escapeHtml(politique)}</span>
+      <span class="apartment-own-rule-tag">Règle${derogations.length > 1 ? "s" : ""} propre${derogations.length > 1 ? "s" : ""} à ce logement</span>
+      <span>${derogations.map((d) => escapeHtml(d)).join(" · ")}</span>
       <span class="apartment-own-rule-note">Prend le dessus sur vos critères généraux.</span>
     </div>`;
 }
@@ -2031,10 +2048,25 @@ function renderEditeurLogement(apartment) {
   const opt = (valeur, courant, libelle) =>
     `<option value="${escapeHtml(valeur)}"${String(courant).trim() === valeur ? " selected" : ""}>${escapeHtml(libelle)}</option>`;
 
-  const politiqueGlobale = state.client?.criteres?.animaux_acceptes;
-  const libelleGlobal = politiqueGlobale === true ? "acceptés"
-    : politiqueGlobale === false ? "refusés"
+  const globaux = state.client?.criteres || {};
+  const libelleGlobal = globaux.animaux_acceptes === true ? "acceptés"
+    : globaux.animaux_acceptes === false ? "refusés"
     : "non précisé";
+  const libelleTalGlobal = globaux.accepte_tal === true ? "accepté"
+    : globaux.accepte_tal === false ? "refusé"
+    : "non précisé";
+  const libelleCreditGlobal = globaux.credit_min || "non précisé";
+  const libelleOccupantsGlobal = globaux.max_occupants ? `${globaux.max_occupants} max` : "non précisé";
+
+  // Un champ vide veut dire "suivre les criteres generaux". La valeur heritee
+  // est affichee dans l'option elle-meme, pour que le client sache ce qu'il
+  // herite avant de choisir d'y deroger.
+  const heriteOuValeur = (valeurLogement, options) => {
+    const courant = valeurLogement === null || valeurLogement === undefined ? "" : String(valeurLogement);
+    return options.map(([v, libelle]) =>
+      `<option value="${escapeHtml(v)}"${courant === v ? " selected" : ""}>${escapeHtml(libelle)}</option>`
+    ).join("");
+  };
 
   return `
     <form class="apartment-edit-form hidden" data-edit-ref="${ref}">
@@ -2055,6 +2087,32 @@ function renderEditeurLogement(apartment) {
           ${opt("Oui, animaux acceptes", apartment.animaux_acceptes, "Animaux acceptés pour ce logement")}
           ${opt("Oui, petits animaux seulement", apartment.animaux_acceptes, "Petits animaux seulement")}
           ${opt("Non, animaux refuses", apartment.animaux_acceptes, "Animaux refusés pour ce logement")}
+        </select>
+        <select name="accepte_tal">
+          ${heriteOuValeur(apartment.accepte_tal, [
+            ["", `Dossier TAL : suivre mes critères (${libelleTalGlobal})`],
+            ["true", "Dossier TAL accepté pour ce logement"],
+            ["false", "Dossier TAL refusé pour ce logement"]
+          ])}
+        </select>
+        <select name="credit_requis">
+          ${heriteOuValeur(apartment.credit_requis, [
+            ["", `Crédit : suivre mes critères (${libelleCreditGlobal})`],
+            ["haut", "Crédit élevé exigé (700+)"],
+            ["moyen", "Crédit moyen exigé (600–699)"],
+            ["bas", "Crédit bas accepté"]
+          ])}
+        </select>
+        <select name="max_occupants">
+          ${heriteOuValeur(apartment.max_occupants, [
+            ["", `Occupants : suivre mes critères (${libelleOccupantsGlobal})`],
+            ["1", "1 occupant maximum"],
+            ["2", "2 occupants maximum"],
+            ["3", "3 occupants maximum"],
+            ["4", "4 occupants maximum"],
+            ["5", "5 occupants maximum"],
+            ["6", "6 occupants maximum"]
+          ])}
         </select>
       </div>
       <div class="apartment-edit-actions">
@@ -2088,7 +2146,12 @@ function brancherEditeursLogement() {
       if (submit) submit.disabled = true;
 
       const corps = {};
-      new FormData(form).forEach((valeur, cle) => { corps[cle] = valeur; });
+      new FormData(form).forEach((valeur, cle) => {
+        // Une chaine vide sur un critere veut dire "suivre mes criteres
+        // generaux": on envoie null pour effacer une derogation existante.
+        const criteres = ["accepte_tal", "credit_requis", "max_occupants", "animaux_acceptes"];
+        corps[cle] = (criteres.includes(cle) && valeur === "") ? null : valeur;
+      });
 
       try {
         await fetchClientJSON(`/api/client/apartments/${encodeURIComponent(form.dataset.editRef)}`, {
