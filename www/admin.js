@@ -89,7 +89,6 @@ let activeWorkspaceEmployeeId = "";
 
 function resolveUserRole(user) {
   return String(
-    user?.user_metadata?.role ||
     user?.app_metadata?.role ||
     ""
   ).trim().toLowerCase();
@@ -134,8 +133,6 @@ async function requireAdmin() {
 
   const userId = session.user.id;
   const clientId = String(
-    session.user?.user_metadata?.client_id ||
-    session.user?.user_metadata?.clientId ||
     session.user?.app_metadata?.client_id ||
     session.user?.app_metadata?.clientId ||
     ""

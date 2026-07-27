@@ -1086,10 +1086,20 @@ async function saveClientInvitations(invitations) {
   await writeJsonFile(CLIENT_INVITATIONS_PATH, invitations);
 }
 
+// Les cles portent le prefixe "L-". Number("L-1008") vaut NaN, donc l'ancienne
+// version ignorait tous les logements existants et repartait a 1001, creant des
+// references en collision avec celles deja utilisees.
 function nextListingRef(listingsMap) {
-  const refs = Object.keys(listingsMap).map((ref) => Number(ref)).filter(Number.isFinite);
+  const refs = Object.keys(listingsMap)
+    .map((ref) => Number(normalizeRef(ref)))
+    .filter(Number.isFinite);
   const nextRef = refs.length ? Math.max(...refs) + 1 : 1001;
   return String(nextRef);
+}
+
+// Convention de cle du magasin, alignee sur l'existant.
+function cleLogement(ref) {
+  return `L-${normalizeRef(ref)}`;
 }
 
 function createId(prefix) {
@@ -4572,6 +4582,17 @@ app.get("/api/client/apartments", async (req, res) =>
 // L'onboarding promet "Vous pourrez en ajouter depuis votre portail", et il
 // n'existait ni bouton ni route pour le faire. Le client_id vient du jeton, pas
 // du corps de la requete, comme toutes les routes /api/client.
+// Les cles du magasin de logements portent le prefixe "L-" ("L-1008"), alors que
+// normalizeRef le retire ("1008"). Une route qui cherchait listings[normalizeRef]
+// ne trouvait donc jamais rien et repondait 404. On resout la vraie cle, quelle
+// que soit la convention utilisee a l'ecriture.
+function trouverCleLogement(listings, ref) {
+  const nu = normalizeRef(ref);
+  if (Object.prototype.hasOwnProperty.call(listings, `L-${nu}`)) return `L-${nu}`;
+  if (Object.prototype.hasOwnProperty.call(listings, nu)) return nu;
+  return null;
+}
+
 // Modification d'un logement par son proprietaire. Le client ne pouvait
 // qu'ajouter, jamais corriger: une erreur de saisie l'obligeait a nous appeler.
 // Liste blanche stricte des champs, et le logement doit lui appartenir.
@@ -4583,15 +4604,17 @@ const CHAMPS_LOGEMENT_MODIFIABLES = [
 
 app.put("/api/client/apartments/:ref", async (req, res) =>
   handleClientRoute(req, res, async ({ clientId }) => {
-    const ref = normalizeRef(req.params.ref);
     let modifie = null;
 
     await mutateJsonFile(LISTINGS_PATH, {}, (listings) => {
-      const existant = listings[ref];
+      const cle = trouverCleLogement(listings, req.params.ref);
+      const existant = cle ? listings[cle] : null;
 
       if (!existant || String(existant.client_id) !== String(clientId)) {
         throw createHttpError(404, "Logement introuvable.");
       }
+
+      const ref = cle;
 
       const patch = {};
       for (const champ of CHAMPS_LOGEMENT_MODIFIABLES) {
@@ -4617,8 +4640,10 @@ app.put("/api/client/apartments/:ref", async (req, res) =>
         delete base.city; delete base.address;
       }
 
-      modifie = toListingRecord(ref, { ...base, ref, client_id: clientId });
-      listings[ref] = modifie;
+      // toListingRecord renormalise le champ ref; on conserve la cle d'origine
+      // pour ne pas creer un doublon sous une autre convention.
+      modifie = { ...toListingRecord(ref, { ...base, ref, client_id: clientId }), ref: cle };
+      listings[cle] = modifie;
       return listings;
     });
 
@@ -4639,6 +4664,7 @@ app.post("/api/client/apartments", async (req, res) =>
 
     await mutateJsonFile(LISTINGS_PATH, {}, (listings) => {
       const ref = nextListingRef(listings);
+      const cle = cleLogement(ref);
       cree = toListingRecord(ref, {
         ref,
         adresse,
@@ -4654,7 +4680,8 @@ app.post("/api/client/apartments", async (req, res) =>
         statut:        "actif"
       });
 
-      listings[ref] = cree;
+      cree = { ...cree, ref: cle };
+      listings[cle] = cree;
       return listings;
     });
 
