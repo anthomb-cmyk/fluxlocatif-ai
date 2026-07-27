@@ -763,6 +763,14 @@ function toListingRecord(key, value) {
     laveuse_secheuse: value?.laveuse_secheuse ?? "",
     nombre_logements_batisse: buildingUnitsValue,
     rangement: value?.rangement ?? "",
+
+    // Criteres propres au logement. Ils etaient lus par evaluateMatch mais
+    // absents d'ici, donc silencieusement effaces a chaque enregistrement.
+    // null veut dire "suivre les criteres generaux du client".
+    accepte_tal: parseTriBoolean(value?.accepte_tal),
+    credit_requis: String(value?.credit_requis ?? value?.required_credit ?? value?.credit_minimum ?? "").trim() || null,
+    max_occupants: parseNumber(value?.max_occupants ?? value?.occupants_max),
+
     client_id: value?.client_id ?? null,
     address: value?.address ?? value?.adresse ?? "",
     city: value?.city ?? value?.ville ?? preloadedLocation?.label ?? "",
@@ -4456,7 +4464,8 @@ app.get("/api/client/apartments", async (req, res) =>
 // Liste blanche stricte des champs, et le logement doit lui appartenir.
 const CHAMPS_LOGEMENT_MODIFIABLES = [
   "adresse", "ville", "type_logement", "loyer", "disponibilite",
-  "stationnement", "animaux_acceptes", "inclusions", "notes", "statut"
+  "stationnement", "animaux_acceptes", "inclusions", "notes", "statut",
+  "accepte_tal", "credit_requis", "max_occupants"
 ];
 
 app.put("/api/client/apartments/:ref", async (req, res) =>
