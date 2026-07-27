@@ -175,7 +175,82 @@ app.use(express.json({ limit: "1mb" }));
 // Les routes non authentifiees (recuperation de mot de passe, onboarding)
 // n'avaient aucune limite de debit: enumeration de jetons et envoi de courriels
 // a volonte. Combine a trust proxy, la limite porte maintenant sur la vraie IP.
+// Le magasin par defaut d'express-rate-limit vit en memoire, donc chaque
+// instance Railway compte de son cote et la limite reelle vaut le plafond
+// multiplie par le nombre d'instances. Ce magasin partage compte dans
+// kv_store, que toutes les instances lisent deja.
+class MagasinPartage {
+  constructor(prefixe) {
+    this.prefixe = prefixe;
+    this.windowMs = 15 * 60 * 1000;
+  }
+
+  init(options) {
+    if (options?.windowMs) this.windowMs = options.windowMs;
+  }
+
+  cle(identifiant) {
+    return `ratelimit_${this.prefixe}_${identifiant}`;
+  }
+
+  async increment(identifiant) {
+    const maintenant = Date.now();
+    const cle = this.cle(identifiant);
+
+    // Repli silencieux vers un comptage permissif si Supabase est indisponible:
+    // une limite de debit ne doit jamais empecher le service de repondre.
+    if (!supabaseServerClient) {
+      return { totalHits: 1, resetTime: new Date(maintenant + this.windowMs) };
+    }
+
+    try {
+      const { data } = await supabaseServerClient
+        .from("kv_store").select("value").eq("key", cle).maybeSingle();
+
+      const courant = data?.value || null;
+      const expire = !courant || maintenant > Number(courant.expire_le || 0);
+      const compte = expire ? 1 : Number(courant.compte || 0) + 1;
+      const expire_le = expire ? maintenant + this.windowMs : Number(courant.expire_le);
+
+      await supabaseServerClient
+        .from("kv_store")
+        .upsert({ key: cle, value: { compte, expire_le }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+
+      return { totalHits: compte, resetTime: new Date(expire_le) };
+    } catch (erreur) {
+      console.error("[limite-debit] comptage partage indisponible:", erreur?.message || erreur);
+      return { totalHits: 1, resetTime: new Date(maintenant + this.windowMs) };
+    }
+  }
+
+  async decrement(identifiant) {
+    if (!supabaseServerClient) return;
+    try {
+      const cle = this.cle(identifiant);
+      const { data } = await supabaseServerClient
+        .from("kv_store").select("value").eq("key", cle).maybeSingle();
+      if (!data?.value) return;
+      const compte = Math.max(0, Number(data.value.compte || 0) - 1);
+      await supabaseServerClient
+        .from("kv_store")
+        .upsert({ key: cle, value: { ...data.value, compte }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    } catch {
+      // sans importance: un decompte rate ne fait que rendre la limite plus stricte
+    }
+  }
+
+  async resetKey(identifiant) {
+    if (!supabaseServerClient) return;
+    try {
+      await supabaseServerClient.from("kv_store").delete().eq("key", this.cle(identifiant));
+    } catch {
+      // idem
+    }
+  }
+}
+
 const sensibleLimiter = rateLimit({
+  store: new MagasinPartage("sensible"),
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -187,6 +262,7 @@ const sensibleLimiter = rateLimit({
 });
 
 const chatLimiter = rateLimit({
+  store: new MagasinPartage("chat"),
   windowMs: 15 * 60 * 1000,
   max: 40,
   standardHeaders: true,
