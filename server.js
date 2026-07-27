@@ -5376,7 +5376,11 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
         : creditRaw === "fair"    ? "bas"
         : null,
       credit_score_requirement: creditRaw || null,
-      accepte_tal:            true,
+      // Le wizard ne pose jamais la question du TAL: ecrire true ici inventait
+      // une politique que le client n'a pas choisie, et le portail l'affichait
+      // ensuite comme un fait. null veut dire non renseigne; le client peut le
+      // definir depuis l'onglet Criteres de son portail.
+      accepte_tal:            null,
       tal_policy:             null,
       max_occupants:          parseNumber(qc.occupancy_rules),
       animaux_acceptes:       petRaw !== "not_allowed",
