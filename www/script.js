@@ -1813,8 +1813,8 @@ async function handleCandidateSubmit(event) {
   }
 
   try {
-    const result = await fetchJSON(
-      "/api/admin/candidates",
+    const result = await fetchEmployeeJSON(
+      "/api/employee/candidates",
       {
         method: "POST",
         body: JSON.stringify(payload)

@@ -5509,6 +5509,33 @@ app.post("/api/admin/candidates", async (req, res) => handleAdminRoute(req, res,
   }
 }));
 
+// La console employe soumet ses fiches de prequalification ici. Elle postait
+// avant sur POST /api/admin/candidates, qui n'avait aucune authentification;
+// depuis que cette route est fermee, un employe recevait 401. Meme traitement,
+// mais avec le garde employe et le compte auteur trace sur la fiche.
+app.post("/api/employee/candidates", async (req, res) =>
+  handleEmployeeRoute(req, res, async ({ user }) => {
+    const candidates = await readJsonFile(CANDIDATES_PATH, []);
+    const baseCandidate = {
+      id: createId("candidate"),
+      created_at: new Date().toISOString(),
+      admin_notes: "",
+      ...req.body,
+      created_by_user_id: user.id,
+      created_by_email: user.email || ""
+    };
+    const candidate = {
+      ...baseCandidate,
+      ...(await buildCandidateMatchFields(baseCandidate))
+    };
+
+    candidates.push(candidate);
+    await writeJsonFile(CANDIDATES_PATH, candidates);
+
+    return res.status(201).json({ ok: true, candidate });
+  })
+);
+
 app.put("/api/admin/candidates/:id", async (req, res) => handleAdminRoute(req, res, async () => {
   try {
     const id = String(req.params.id);
