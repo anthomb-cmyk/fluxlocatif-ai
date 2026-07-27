@@ -144,6 +144,21 @@ async function requireAdmin() {
     return session.user;
   }
 
+  // La table admin_users est lue AVANT l'aiguillage par role. L'ancien ordre
+  // renvoyait vers l'espace employe tout compte portant role=employee, meme
+  // s'il figurait dans admin_users: le serveur accordait l'acces, le front le
+  // refusait. C'est ce qui empechait anthonymakeen@gmail.com d'ouvrir la
+  // console admin.
+  const { data: adminRowPrioritaire, error: adminLookupError } = await supabaseClient
+    .from("admin_users")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!adminLookupError && adminRowPrioritaire) {
+    return session.user;
+  }
+
   if (role === "client") {
     window.location.href = `${CLIENT_APP_URL}/client.html`;
     throw new Error("Les clients doivent utiliser le portail client.");

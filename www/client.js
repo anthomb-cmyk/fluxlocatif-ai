@@ -161,9 +161,22 @@ function fromYesNo(value) {
   return null;
 }
 
+// Les loyers sont stockes tantot deja formates ("1 250 $"), tantot en chiffres
+// bruts ("1600"). L'ancien code ajoutait un symbole dans tous les cas, d'ou
+// "1 250 $ $" d'un cote et "1600 $" sans separateur de l'autre.
 function formatCurrency(value) {
   if (value === null || value === undefined || value === "") return "-";
-  return `${value} $`;
+
+  const chiffres = String(value).replace(/[^\d,.-]/g, "").replace(/\s/g, "").replace(",", ".");
+  const nombre = Number(chiffres);
+
+  if (!Number.isFinite(nombre) || chiffres === "") return String(value);
+
+  return new Intl.NumberFormat("fr-CA", {
+    style: "currency",
+    currency: "CAD",
+    maximumFractionDigits: 0
+  }).format(nombre);
 }
 
 function formatDisplayDate(value) {
@@ -352,11 +365,17 @@ function getCandidateRevenueValue(candidate) {
   return /k\b/.test(rawString) ? numericValue * 1000 : numericValue;
 }
 
+// Le revenu etait arrondi au millier: 3 200 $ s'affichait "3k$", alors que la
+// fiche du candidat montrait la valeur exacte. Le tableau et la fiche se
+// contredisaient, et le tri se faisait sur la valeur reelle.
 function formatCandidateRevenue(candidate) {
   const revenue = getCandidateRevenueValue(candidate);
   if (revenue < 0) return "—";
-  const thousands = Math.round(revenue / 1000);
-  return `${thousands}k$`;
+  return new Intl.NumberFormat("fr-CA", {
+    style: "currency",
+    currency: "CAD",
+    maximumFractionDigits: 0
+  }).format(revenue);
 }
 
 function getCandidateInitials(name) {
@@ -371,6 +390,20 @@ function getCandidateInitials(name) {
   }
 
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
+
+// Convertit un seuil de credit herite en palier du formulaire.
+function paliersDeCredit(value) {
+  if (value === null || value === undefined || value === "") return "";
+
+  const texte = String(value).trim().toLowerCase();
+  if (["bas", "moyen", "haut"].includes(texte)) return texte;
+
+  const nombre = Number(texte.replace(/[^\d]/g, ""));
+  if (!Number.isFinite(nombre) || nombre <= 0) return "";
+  if (nombre >= 700) return "haut";
+  if (nombre >= 600) return "moyen";
+  return "bas";
 }
 
 function escapeHtml(value) {
@@ -1916,7 +1949,10 @@ function populateCriteriaForm() {
   const criteria = state.client?.criteres || {};
   document.getElementById("criteriaIncome").value =
     criteria.revenu_minimum === null || criteria.revenu_minimum === undefined ? "" : String(criteria.revenu_minimum);
-  document.getElementById("criteriaCredit").value = criteria.credit_min || "";
+  // Le select propose bas/moyen/haut, mais les enregistrements herites stockent
+  // un seuil numerique (680). La valeur ne correspondait a aucune option, le
+  // select retombait sur vide, et enregistrer effacait la cote du client.
+  document.getElementById("criteriaCredit").value = paliersDeCredit(criteria.credit_min);
   document.getElementById("criteriaTal").value = toYesNo(criteria.accepte_tal);
   document.getElementById("criteriaAnimals").value = toYesNo(criteria.animaux_acceptes);
   document.getElementById("criteriaOccupants").value =
