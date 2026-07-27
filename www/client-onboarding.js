@@ -1247,6 +1247,8 @@ function afficherLogementsExistants() {
 
   if (!existants.length) {
     cible.classList.add("hidden");
+    // Aucun logement enregistre: on amorce une carte vide a remplir.
+    if (!state.listings.length) addListingCard();
     return;
   }
 
@@ -1306,8 +1308,9 @@ async function loadSessionUser() {
   goToClientPortalBtn?.addEventListener("click", () => { window.location.href = "/client.html"; });
   addListingBtn?.addEventListener("click", () => addListingCard());
 
-  // Seed first listing card
-  addListingCard();
+  // La premiere carte n'est plus creee ici: elle ne doit apparaitre que si le
+  // client n'a aucun logement deja enregistre. C'est decide apres la validation
+  // de l'invitation, dans afficherLogementsExistants.
 
   // Tags + chips
   initMarketsTagInput();
