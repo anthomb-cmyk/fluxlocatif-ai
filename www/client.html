@@ -428,6 +428,15 @@
                     <input id="criteriaSeniority" type="number" min="0" placeholder="ex. 12" />
                     <span class="field-help">En mois chez l’employeur actuel.</span>
                   </div>
+
+                  <!-- Le client saisit ce texte pendant l'accueil. Le serveur
+                       l'envoyait deja au portail, mais aucun ecran ne
+                       l'affichait: il ne retrouvait pas ses propres regles. -->
+                  <div class="field field-large">
+                    <label for="criteriaScreening">Documents et vérifications exigés</label>
+                    <textarea id="criteriaScreening" rows="3" placeholder="ex. pièce d’identité, talon de paye récent"></textarea>
+                    <span class="field-help">Ce que notre équipe réclame à chaque candidat au moment de sa demande.</span>
+                  </div>
                 </div>
 
                 <div class="form-actions">

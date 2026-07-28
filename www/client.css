@@ -1645,6 +1645,10 @@
   gap: 14px;
 }
 
+/* Une exigence ecrite en toutes lettres est plus longue qu'un montant ou un
+   nombre d'occupants: elle prend les deux colonnes plutot qu'une demi-ligne. */
+.client-platform-page .form-grid .field-large { grid-column: 1 / -1; }
+
 .client-platform-page .admin-form input,
 .client-platform-page .admin-form select,
 .client-platform-page .admin-form textarea {

@@ -2465,6 +2465,13 @@ function populateCriteriaForm() {
     criteria.anciennete_min_mois === null || criteria.anciennete_min_mois === undefined
       ? ""
       : String(criteria.anciennete_min_mois);
+
+  // Ce texte ne vit pas dans criteres mais dans qualification_criteria: c'est
+  // la saisie libre de l'accueil, que le portail recevait sans jamais la montrer.
+  const champExigences = document.getElementById("criteriaScreening");
+  if (champExigences) {
+    champExigences.value = state.client?.qualification_criteria?.additional_screening || "";
+  }
 }
 
 function openCandidateModal(candidate) {
@@ -2554,6 +2561,14 @@ async function saveCriteria(event) {
         .filter(Boolean)
     }
   };
+
+  // On n'envoie la cle que si le champ est bien present. Sinon un ecran qui ne
+  // l'affiche pas enverrait une valeur vide et effacerait le texte du client,
+  // exactement comme les listes deroulantes des logements le faisaient.
+  const champExigences = document.getElementById("criteriaScreening");
+  if (champExigences) {
+    payload.criteres.additional_screening = champExigences.value.trim() || null;
+  }
 
   try {
     const result = await fetchClientJSON("/api/client/criteria", {
