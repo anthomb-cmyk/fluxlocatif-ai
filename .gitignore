@@ -2,3 +2,6 @@
 node_modules/
 .data/
 fluxlocatifwebsite-repo/
+
+# Configuration locale d outillage, propre a chaque poste.
+.claude/

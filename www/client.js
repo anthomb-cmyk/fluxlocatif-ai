@@ -28,7 +28,6 @@ const clientShell = document.getElementById("clientShell");
 const pageTitle = document.getElementById("pageTitle");
 const clientMeta = document.getElementById("clientMeta");
 const refreshBtn = document.getElementById("refreshBtn");
-const apartmentsSupervisionSummary = document.getElementById("apartmentsSupervisionSummary");
 const apartmentsBody = document.getElementById("apartmentsBody");
 const candidatesReviewSummary = document.getElementById("candidatesReviewSummary");
 const candidatesBody = document.getElementById("candidatesBody");
@@ -46,7 +45,6 @@ const statDecisionSplitTrend = document.getElementById("statDecisionSplitTrend")
 const dashboardDecisionQueue = document.getElementById("dashboardDecisionQueue");
 const dashboardApartmentOverview = document.getElementById("dashboardApartmentOverview");
 const dashboardCriteriaSummary = document.getElementById("dashboardCriteriaSummary");
-const dashboardWatchlist = document.getElementById("dashboardWatchlist");
 
 const candidateModal = document.getElementById("candidateModal");
 const closeCandidateModalBtn = document.getElementById("closeCandidateModalBtn");
@@ -179,6 +177,28 @@ function formatCurrency(value) {
     currency: "CAD",
     maximumFractionDigits: 0
   }).format(nombre);
+}
+
+// Huit logements affichaient la meme adresse "6994, rue Birnam" avec des
+// references et des loyers differents: rien ne disait qu'il s'agit d'unites du
+// meme immeuble. On montre le numero d'unite quand la donnee l'a.
+function nomUnite(apartment) {
+  const direct = String(apartment?.unite || apartment?.unit || "").trim();
+  if (direct) return `App. ${direct.replace(/^#/, "")}`;
+
+  // Aucun champ dedie n'existe, mais la reprise du portefeuille a laisse le
+  // numero dans les notes ("Unité #1.") et dans la description.
+  const texte = `${apartment?.notes || ""} ${apartment?.description || ""}`;
+  const trouve = texte.match(/unit[ée]\s*#?\s*([\w-]+)/i);
+  if (trouve) return `App. ${trouve[1]}`;
+
+  return `Réf. L-${apartment?.ref || "-"}`;
+}
+
+// Un loyer affiche "1 000 $" sans periodicite se lit comme un prix unique.
+function formatLoyerMensuel(value) {
+  const formate = formatCurrency(value);
+  return formate === "-" ? formate : `${formate}/mois`;
 }
 
 function formatDisplayDate(value) {
@@ -435,37 +455,32 @@ function getDashboardCandidateStatusMeta(candidate) {
   return { label: "En cours", tone: "info" };
 }
 
+// Le palier ne vivait que dans la legende, en haut de page. Au moment de lire
+// un score, a sept cents pixels plus bas, elle n'etait plus a l'ecran. Le
+// chiffre porte maintenant sa couleur et son explication.
 function getCandidateScoreDisplayMeta(candidate) {
   const score = getCandidateScoreValue(candidate);
+  const borne = Math.max(0, Math.min(100, score));
 
   if (score < 0) {
     return {
       value: 0,
       label: "—",
-      className: "low"
+      className: "low",
+      palier: "Pas encore évalué",
+      infobulle: "Ce dossier n’a pas encore été comparé à vos critères."
     };
   }
 
-  if (score >= 80) {
-    return {
-      value: Math.max(0, Math.min(100, score)),
-      label: String(score),
-      className: "high"
-    };
-  }
-
-  if (score >= 60) {
-    return {
-      value: Math.max(0, Math.min(100, score)),
-      label: String(score),
-      className: "mid"
-    };
-  }
+  const palier = score >= 80 ? "Très compatible" : score >= 60 ? "Compatible" : "À vérifier";
+  const className = score >= 80 ? "high" : score >= 60 ? "mid" : "low";
 
   return {
-    value: Math.max(0, Math.min(100, score)),
+    value: borne,
     label: String(score),
-    className: "low"
+    className,
+    palier,
+    infobulle: `Correspondance avec vos critères : ${score} sur 100, ${palier.toLowerCase()}.`
   };
 }
 
@@ -650,21 +665,9 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
     });
   }
 
-  // Le bouton "Filtrer" n'avait aucun listener. Il ouvre desormais la rangee de
-  // pastilles de statut, qui est le filtre reel de ce tableau.
-  const filterBtn = container.querySelector(".candidate-table-filter-btn");
-  if (filterBtn) {
-    filterBtn.addEventListener("click", () => {
-      const pills = container.querySelector(".candidate-status-filters");
-      if (pills) {
-        // On bascule une classe "deplie" plutot que "hidden": le repli par
-        // defaut est decide par le CSS selon la largeur, donc passer du
-        // telephone a l'ordinateur reaffiche les pastilles tout seul.
-        pills.classList.toggle("deplie");
-        filterBtn.setAttribute("aria-expanded", String(pills.classList.contains("deplie")));
-      }
-    });
-  }
+  // Le bouton "Filtrer" a ete retire: les pastilles de statut sont le filtre
+  // reel de ce tableau et restent visibles a toutes les largeurs, donc un
+  // bouton qui les deplie n'a plus rien a deplier.
 
   container.querySelectorAll("[data-candidate-status-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -715,7 +718,9 @@ function renderCandidateTable(container, candidates = [], options = {}) {
     stateKey = "candidatesTableState",
     title = "Dossiers récents",
     limit = null,
-    emptyMessage = "Aucun dossier à afficher pour le moment."
+    emptyMessage = "Aucun dossier à afficher pour le moment.",
+    emptyTitle = "",
+    emptyHint = ""
   } = options;
 
   const tableState = state[stateKey] || state.candidatesTableState;
@@ -736,10 +741,6 @@ function renderCandidateTable(container, candidates = [], options = {}) {
               data-candidate-table-search="${stateKey}"
             />
           </label>
-          <button type="button" class="candidate-table-filter-btn">
-            <span>Filtrer</span>
-            <span aria-hidden="true">⌕</span>
-          </button>
         </div>
         <div class="candidate-status-filters">
           ${getCandidateTableStatusOptions().map((status) => `
@@ -770,7 +771,7 @@ function renderCandidateTable(container, candidates = [], options = {}) {
             <col class="col-score" />
             <col class="col-actions" />
           </colgroup>
-          <thead>
+          <thead${visibleRows.length ? "" : ' class="hidden"'}>
             <tr>
               <th>Candidat</th>
               <th>Propriété</th>
@@ -818,7 +819,7 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                             <div class="candidate-score-track">
                               <div class="candidate-score-fill ${scoreMeta.className}" style="width:${scoreMeta.value}%"></div>
                             </div>
-                            <div class="candidate-score-number">${scoreMeta.label}</div>
+                            <div class="candidate-score-number ${scoreMeta.className}" title="${escapeHtml(scoreMeta.infobulle)}">${scoreMeta.label}</div>
                           </div>
                         </td>
                         <td class="candidate-action-cell">
@@ -846,7 +847,21 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                   }).join("")
                 : `
                   <tr>
-                    <td colspan="6" class="candidate-table-empty">${emptyMessage}</td>
+                    <td colspan="6" class="candidate-table-empty">
+                      <div class="empty-state">
+                        <svg class="empty-state-art" width="64" height="64" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                          <rect x="10" y="14" width="44" height="36" rx="6" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+                          <path d="M10 24h44" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+                          <circle cx="17" cy="19" r="1.6" fill="currentColor" opacity="0.5"/>
+                          <circle cx="23" cy="19" r="1.6" fill="currentColor" opacity="0.5"/>
+                          <path d="M20 36h12M20 42h20" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+                          <circle cx="46" cy="42" r="10" fill="var(--surface)" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+                          <path d="m42 42 3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <div class="empty-state-title">${escapeHtml(emptyTitle || "Vous êtes à jour.")}</div>
+                        <div class="empty-state-copy">${escapeHtml(emptyHint || emptyMessage)}</div>
+                      </div>
+                    </td>
                   </tr>
                 `
             }
@@ -1310,23 +1325,6 @@ function deriveDecisionQueue(candidates = []) {
     .slice(0, 3);
 }
 
-function deriveWatchlist(apartments = []) {
-  return apartments
-    .map((apartment) => {
-      const candidates = getApartmentCandidates(apartment.ref);
-      const responsibility = getApartmentResponsibilityMeta(apartment, candidates);
-      const stage = getSafeStageMeta(deriveApartmentStage(apartment, candidates));
-
-      return {
-        apartment,
-        candidates,
-        responsibility,
-        stage
-      };
-    })
-    .filter((item) => item.responsibility.label === RESPONSIBILITY_LABELS.WATCH)
-    .slice(0, 3);
-}
 
 function countStrongCandidates(candidates = []) {
   return candidates.filter((candidate) => getCandidateScoreValue(candidate) >= 80).length;
@@ -1754,7 +1752,7 @@ function renderLoadingSkeletons() {
     `;
   }
 
-  [dashboardApartmentOverview, dashboardWatchlist].forEach((node) => {
+  [dashboardApartmentOverview].forEach((node) => {
     if (node) node.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3)}</div>`;
   });
 
@@ -1766,9 +1764,6 @@ function renderLoadingSkeletons() {
     `;
   }
 
-  if (apartmentsSupervisionSummary) {
-    apartmentsSupervisionSummary.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3, 2)}</div>`;
-  }
 
   if (apartmentsBody) {
     apartmentsBody.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(4)}</div>`;
@@ -1866,7 +1861,6 @@ function renderDashboard() {
   renderDashboardDecisionQueue();
   renderDashboardApartmentOverview();
   renderDashboardCriteriaSummary();
-  renderDashboardWatchlist();
 }
 
 function renderDashboardDecisionQueue() {
@@ -1882,7 +1876,9 @@ function renderDashboardDecisionQueue() {
     stateKey: "dashboardTableState",
     title: "Dossiers à prioriser",
     limit: 5,
-    emptyMessage: "Aucun dossier prioritaire pour le moment."
+    emptyMessage: "Aucun dossier prioritaire pour le moment.",
+    emptyTitle: "Rien à décider pour l’instant.",
+    emptyHint: "Dès qu’un candidat sera préqualifié par notre équipe, il apparaîtra ici avec son score de compatibilité."
   });
 }
 
@@ -1935,28 +1931,28 @@ function renderDashboardApartmentOverview() {
     })
     .slice(0, 4);
 
-  dashboardApartmentOverview.innerHTML = apartmentItems.map((item) => `
-    <div class="dashboard-item">
-      <div class="dashboard-item-top">
-        <div class="dashboard-item-main">
-          <div class="dashboard-item-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
-          <div class="dashboard-item-meta">${escapeHtml(item.apartment.ville || "Ville à confirmer")} · ${escapeHtml(formatCurrency(item.apartment.loyer))}</div>
+  // Meme allegement que sur l'onglet Appartements: une adresse, un statut, une
+  // phrase. Les quatre pastilles empilees repetaient ce que la phrase dit, et
+  // la pastille de score affichait "-" quand aucun dossier n'existait.
+  dashboardApartmentOverview.innerHTML = apartmentItems.map((item) => {
+    const nb = item.candidates.length;
+    const resume = nb
+      ? `${nb} candidature${nb > 1 ? "s" : ""}${item.bestCandidate ? `, meilleur score ${getCandidateScoreValue(item.bestCandidate)}` : ""}.`
+      : "Aucune candidature reçue, nous surveillons.";
+
+    return `
+      <div class="dashboard-item">
+        <div class="dashboard-item-top">
+          <div class="dashboard-item-main">
+            <div class="dashboard-item-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
+            <div class="dashboard-item-meta">${escapeHtml(item.apartment.ville || "Ville à confirmer")} · ${escapeHtml(formatLoyerMensuel(item.apartment.loyer))}</div>
+          </div>
+          <span class="responsibility-pill ${item.responsibility.className}">${item.responsibility.label}</span>
         </div>
-        <span class="responsibility-pill ${item.responsibility.className}">${item.responsibility.label}</span>
+        <div class="responsibility-note">${escapeHtml(resume)}</div>
       </div>
-      <div class="dashboard-item-summary">
-        <span class="status-pill ${item.stage.tone}">${item.stage.label}</span>
-        <span class="status-pill ${getAvailabilityMeta(item.apartment.disponibilite).tone}">${getAvailabilityMeta(item.apartment.disponibilite).label}</span>
-        <span class="data-pill">${item.candidates.length} dossier${item.candidates.length > 1 ? "s" : ""}</span>
-        <span class="score-pill ${item.scoreMeta.className}">${item.scoreMeta.label}</span>
-      </div>
-      <div class="next-step-note">
-        <div class="next-step-label">Prochaine étape</div>
-        <div class="next-step-copy">${item.responsibility.nextStep}</div>
-      </div>
-      <div class="responsibility-note">${item.responsibility.reason}</div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
 // Un client dont aucun critere n'est defini voyait quatre lignes "Non precise",
@@ -1981,7 +1977,7 @@ function renderDashboardCriteriaSummary() {
       <div class="dashboard-empty-state">
         <div class="dashboard-empty-state-title">Vos critères ne sont pas encore définis</div>
         <div>C’est ce qui nous permet d’écarter les dossiers qui ne vous conviennent pas avant qu’ils n’arrivent chez vous. Cinq minutes, une seule fois.</div>
-        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
+        <button type="button" class="secondary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
       </div>
     `;
     return;
@@ -1992,7 +1988,7 @@ function renderDashboardCriteriaSummary() {
       <div class="dashboard-empty-state">
         <div class="dashboard-empty-state-title">Aucun critère défini</div>
         <div>Sans critères, nous ne pouvons pas trier les candidats pour vous. C’est l’étape qui fait le plus de différence.</div>
-        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
+        <button type="button" class="secondary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
       </div>
     `;
     return;
@@ -2038,47 +2034,6 @@ function renderDashboardCriteriaSummary() {
   `).join("");
 }
 
-function renderDashboardWatchlist() {
-  if (!dashboardWatchlist) return;
-
-  const watchlistItems = deriveWatchlist(state.apartments);
-
-  if (!watchlistItems.length) {
-    dashboardWatchlist.innerHTML = `
-      <div class="dashboard-empty-state">
-        <div class="dashboard-empty-state-title">Rien à surveiller</div>
-        <div>Aucun de vos logements ne demande votre attention en ce moment.</div>
-      </div>
-    `;
-    return;
-  }
-
-  dashboardWatchlist.innerHTML = watchlistItems.map((item) => {
-    const availabilityMeta = getAvailabilityMeta(item.apartment.disponibilite);
-    const responsibility = item.responsibility;
-
-    return `
-      <div class="dashboard-item">
-        <div class="dashboard-item-top">
-          <div class="dashboard-item-main">
-            <div class="dashboard-item-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
-            <div class="dashboard-item-meta">${item.apartment.ville || "Ville à confirmer"}</div>
-          </div>
-          <span class="responsibility-pill ${responsibility.className}">${responsibility.label}</span>
-        </div>
-        <div class="dashboard-item-summary">
-          <span class="status-pill ${availabilityMeta.tone}">${availabilityMeta.label}</span>
-          <span class="data-pill">${item.candidates.length} dossier${item.candidates.length > 1 ? "s" : ""}</span>
-        </div>
-        <div class="next-step-note">
-          <div class="next-step-label">Prochaine étape</div>
-          <div class="next-step-copy">${responsibility.nextStep}</div>
-        </div>
-        <div class="responsibility-note">${responsibility.reason}</div>
-      </div>
-    `;
-  }).join("");
-}
 
 // Compte les logements qui declarent leur propre politique animaux. Le
 // resultat est affiche sous la regle globale, pour que le client sache
@@ -2103,31 +2058,9 @@ function renderApartments() {
 
   apartmentsBody.innerHTML = "";
 
-  if (apartmentsSupervisionSummary) {
-    const responsibilityCounts = state.apartments.reduce((accumulator, apartment) => {
-      const label = deriveApartmentResponsibility(apartment, getApartmentCandidates(apartment.ref));
-      accumulator[label] = (accumulator[label] || 0) + 1;
-      return accumulator;
-    }, {});
-
-    apartmentsSupervisionSummary.innerHTML = `
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">En attente du client</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.CLIENT] || 0}</div>
-        <div class="apartments-supervision-note">Unités à revoir.</div>
-      </div>
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">Pris en charge par l’équipe</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.TEAM] || 0}</div>
-        <div class="apartments-supervision-note">Unités en cours de tri.</div>
-      </div>
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">À surveiller</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.WATCH] || 0}</div>
-        <div class="apartments-supervision-note">Unités à suivre de près.</div>
-      </div>
-    `;
-  }
+  // La rangee de compteurs annoncait "0, 0, 16" juste au-dessus des en-tetes de
+  // groupes, qui portent deja "A surveiller 16" et "Complete 4". Les comptes de
+  // groupes suffisent.
 
   if (!state.apartments.length) {
     apartmentsBody.innerHTML = `
@@ -2176,52 +2109,94 @@ function renderApartments() {
       return b.apartmentCandidates.length - a.apartmentCandidates.length;
     });
 
-  apartmentsBody.innerHTML = apartmentItems.map((item) => `
+  // Une unite sans candidature disait la meme chose cinq fois: une pastille
+  // "0 dossier recu", une pastille "Aucun dossier recu pour le moment", une
+  // ligne "Aucun dossier n'est encore visible", un encadre Prochaine etape
+  // "Surveiller l'arrivee de nouvelles candidatures", et enfin "Aucun dossier
+  // fort actuellement pour cette unite". Sur vingt logements la page devenait
+  // illisible. Une seule phrase suffit.
+  const resumeCandidatures = (item) => {
+    if (!item.apartmentCandidates.length) {
+      return "Aucune candidature reçue, nous surveillons.";
+    }
+
+    const nb = item.apartmentCandidates.length;
+    const base = `${nb} candidature${nb > 1 ? "s" : ""} reçue${nb > 1 ? "s" : ""}`;
+    if (!item.bestCandidate) return `${base}.`;
+
+    const score = getCandidateScoreValue(item.bestCandidate);
+    const nom = item.bestCandidate.candidate_name || "dossier sans nom";
+    return `${base}, meilleur dossier ${escapeHtml(nom)}${score >= 0 ? ` (${score})` : ""}.`;
+  };
+
+  // La prochaine etape n'est affichee que si elle demande quelque chose. Un
+  // "Surveiller l'arrivee de nouvelles candidatures" repete vingt fois ne dit
+  // rien que la ligne au-dessus ne disait deja.
+  const etapeUtile = (item) =>
+    item.apartmentCandidates.length > 0 && item.responsibility.label !== RESPONSIBILITY_LABELS.WATCH;
+
+  const ligne = (libelle, valeur) => `
+    <div class="apartment-fact">
+      <span class="apartment-fact-label">${libelle}</span>
+      <span class="apartment-fact-value">${valeur}</span>
+    </div>`;
+
+  const carte = (item) => `
     <article class="apartment-pipeline-card">
       <div class="apartment-pipeline-header">
         <div class="apartment-pipeline-main">
-          <div class="apartment-pipeline-title">${item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`}</div>
+          <div class="apartment-pipeline-title">${escapeHtml(item.apartment.adresse || `Appartement L-${item.apartment.ref || "-"}`)}</div>
           <div class="apartment-pipeline-meta">
-            ${item.apartment.ville || "Ville à confirmer"} · Réf. L-${item.apartment.ref || "-"} · ${formatCurrency(item.apartment.loyer)}
+            ${escapeHtml(item.apartment.ville || "Ville à confirmer")} · ${escapeHtml(nomUnite(item.apartment))} · ${formatLoyerMensuel(item.apartment.loyer)}
           </div>
         </div>
-        <div class="apartment-pipeline-statuses">
-          <span class="status-pill ${item.stage.tone}">${item.stage.label}</span>
-          <span class="responsibility-pill ${item.responsibility.className}">${item.responsibility.label}</span>
+        <div class="apartment-pipeline-actions">
+          <button type="button" class="secondary-btn compact-action apartment-review-btn">Dossiers liés</button>
+          <button type="button" class="secondary-btn compact-action apartment-edit-btn" data-ref="${escapeHtml(item.apartment.ref)}">Modifier</button>
         </div>
       </div>
 
-      <div class="apartment-pipeline-grid">
-        <div class="apartment-pipeline-panel">
-          <div class="apartment-pipeline-panel-label">Responsabilité</div>
-          <div class="apartment-pipeline-summary">
-            <span class="status-pill ${item.availabilityMeta.tone}">${item.availabilityMeta.label}</span>
-            <span class="data-pill">${item.apartmentCandidates.length} dossier${item.apartmentCandidates.length > 1 ? "s" : ""} reçu${item.apartmentCandidates.length > 1 ? "s" : ""}</span>
-            <span class="data-pill">${item.strongSummary}</span>
-          </div>
-          <div class="responsibility-note">${item.responsibility.reason}</div>
-        </div>
-
-        <div class="apartment-pipeline-next-step">
-          <div class="apartment-pipeline-next-step-title">Prochaine étape</div>
-          <div class="apartment-pipeline-next-step-copy">${item.responsibility.nextStep}</div>
-          <div class="apartment-pipeline-panel-copy">
-            ${item.bestCandidate
-              ? `Dossier le plus avancé actuellement : ${item.bestCandidate.candidate_name || "Candidat"}`
-              : "Aucun dossier fort actuellement pour cette unité."}
-          </div>
-        </div>
-      </div>
-
-      ${renderReglePropre(item.apartment)}
-
-      <div class="apartment-pipeline-actions">
-        <button type="button" class="secondary-btn compact-action apartment-review-btn">Voir les dossiers liés</button>
-        <button type="button" class="secondary-btn compact-action apartment-edit-btn" data-ref="${escapeHtml(item.apartment.ref)}">Modifier</button>
+      <div class="apartment-facts">
+        ${ligne("Disponibilité", `<span class="status-pill ${item.availabilityMeta.tone}">${item.availabilityMeta.label}</span>`)}
+        ${ligne("Candidatures", resumeCandidatures(item))}
+        ${etapeUtile(item) ? ligne("Prochaine étape", escapeHtml(item.responsibility.nextStep)) : ""}
+        ${derogationsDuLogement(item.apartment).length
+          ? ligne("Règle propre", `${derogationsDuLogement(item.apartment).map((d) => escapeHtml(d)).join(" · ")} <span class="apartment-fact-note">prend le dessus sur vos critères généraux</span>`)
+          : ""}
       </div>
 
       ${renderEditeurLogement(item.apartment)}
-    </article>
+    </article>`;
+
+  // Vingt cartes a la suite, toutes semblables, forcaient a defiler pour
+  // trouver celle qui demande quelque chose. On les regroupe par statut, et
+  // seul le groupe qui attend le client s'ouvre tout seul.
+  const ORDRE_GROUPES = [
+    RESPONSIBILITY_LABELS.CLIENT,
+    RESPONSIBILITY_LABELS.TEAM,
+    RESPONSIBILITY_LABELS.WATCH,
+    RESPONSIBILITY_LABELS.DONE
+  ];
+
+  const groupes = ORDRE_GROUPES
+    .map((label) => ({ label, items: apartmentItems.filter((i) => i.responsibility.label === label) }))
+    .filter((g) => g.items.length);
+
+  // Le premier groupe est ouvert: tout replier donnait deux lignes et un ecran
+  // blanc, ce qui laissait croire a un portefeuille vide. Les suivants restent
+  // replies, avec leur compte visible dans l'en-tete.
+  const ouvrir = (groupe, index) => index === 0;
+
+  apartmentsBody.innerHTML = groupes.map((groupe, index) => `
+    <details class="apartment-group"${ouvrir(groupe, index) ? " open" : ""}>
+      <summary class="apartment-group-summary">
+        <span class="apartment-group-title">${escapeHtml(groupe.label)}</span>
+        <span class="apartment-group-count">${groupe.items.length}</span>
+      </summary>
+      <div class="apartment-group-body">
+        ${groupe.items.map(carte).join("")}
+      </div>
+    </details>
   `).join("");
 
   document.querySelectorAll(".apartment-review-btn").forEach((button) => {
@@ -2455,7 +2430,9 @@ function renderCandidates() {
     renderCandidateTable(candidatesBody, [], {
       stateKey: "candidatesTableState",
       title: "Tous les dossiers",
-      emptyMessage: "Aucun dossier à afficher pour le moment."
+      emptyMessage: "Aucun dossier à afficher pour le moment.",
+      emptyTitle: "Aucune candidature pour le moment.",
+      emptyHint: "Nos annonces tournent. Notre équipe vérifie chaque dossier avant de vous le présenter, vous ne verrez ici que les dossiers conformes à vos critères."
     });
     return;
   }
@@ -2463,7 +2440,9 @@ function renderCandidates() {
   renderCandidateTable(candidatesBody, state.candidates, {
     stateKey: "candidatesTableState",
     title: "Tous les dossiers",
-    emptyMessage: "Aucun dossier ne correspond aux filtres actuels."
+    emptyMessage: "Aucun dossier ne correspond aux filtres actuels.",
+    emptyTitle: "Aucun dossier ne correspond.",
+    emptyHint: "Élargissez la recherche ou retirez un filtre pour revoir les autres dossiers."
   });
 }
 
@@ -2548,6 +2527,8 @@ async function loadClientData() {
   clientMeta.textContent = nb
     ? `${state.client.nom || "Votre portefeuille"} · ${nb} logement${nb > 1 ? "s" : ""}`
     : (state.client.nom || "Votre portefeuille");
+  renseignerCompte();
+  marquerMiseAJour();
   renderDashboard();
   renderApartments();
   renderCandidates();
@@ -2667,6 +2648,79 @@ addApartmentForm?.addEventListener("submit", async (event) => {
     if (bouton) bouton.disabled = false;
   }
 });
+
+// Le portail n'affichait ni avatar, ni nom, ni salutation: seulement le nom du
+// compte dans la barre du haut. On identifie la personne, ce qui distingue un
+// espace client d'un back-office.
+const accountBtn = document.getElementById("accountBtn");
+const accountPanel = document.getElementById("accountPanel");
+
+function initialesDe(texte) {
+  const mots = String(texte || "").trim().split(/[\s-]+/).filter(Boolean);
+  if (!mots.length) return "FL";
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase();
+}
+
+function renseignerCompte() {
+  const c = state.client || {};
+  const personne = c.contact_name || c.primary_contact || c.contact || "";
+  const societe = c.nom || c.company_name || "Votre portefeuille";
+  const affiche = personne || societe;
+
+  const avatar = document.getElementById("accountAvatar");
+  const nom = document.getElementById("accountName");
+  const nomPanneau = document.getElementById("accountPanelName");
+
+  if (avatar) avatar.textContent = initialesDe(affiche);
+  if (nom) nom.textContent = affiche;
+  if (nomPanneau) nomPanneau.textContent = personne ? `${personne} · ${societe}` : societe;
+
+  const avatarLateral = document.getElementById("sidebarAvatar");
+  const nomLateral = document.getElementById("sidebarName");
+  if (avatarLateral) avatarLateral.textContent = initialesDe(affiche);
+  if (nomLateral) nomLateral.textContent = affiche;
+
+  // Badge sur Dossiers: le nombre de dossiers qui attendent une decision.
+  const badge = document.getElementById("sidebarCandidateBadge");
+  if (badge) {
+    const enAttente = (state.candidates || []).filter(
+      (c) => deriveCandidateResponsibility(c) === RESPONSIBILITY_LABELS.CLIENT
+    ).length;
+    badge.textContent = enAttente ? String(enAttente) : "";
+  }
+}
+
+// Remplace le bouton "Actualiser" en degrade: on dit quand les donnees datent,
+// plutot que d'offrir en permanence l'action la plus visible de l'ecran.
+function marquerMiseAJour() {
+  const cible = document.getElementById("clientLastUpdated");
+  if (!cible) return;
+  const h = new Date().toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" });
+  cible.textContent = `Mis à jour à ${h}`;
+}
+
+if (accountBtn && accountPanel) {
+  const fermer = () => {
+    accountPanel.classList.add("hidden");
+    accountBtn.setAttribute("aria-expanded", "false");
+  };
+
+  accountBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const ouvert = !accountPanel.classList.contains("hidden");
+    accountPanel.classList.toggle("hidden", ouvert);
+    accountBtn.setAttribute("aria-expanded", String(!ouvert));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!accountPanel.contains(event.target) && event.target !== accountBtn) fermer();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") fermer();
+  });
+}
 
 const logoutBtn = document.getElementById("logoutBtn");
 if (logoutBtn) {

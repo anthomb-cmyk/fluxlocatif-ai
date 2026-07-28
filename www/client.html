@@ -21,8 +21,14 @@
       <p>Logements, dossiers et critères dans un seul espace.</p>
 
       <form id="clientLoginForm" class="client-auth-form">
-        <input id="clientLoginEmail" type="email" placeholder="Courriel" required />
-        <input id="clientLoginPassword" type="password" placeholder="Mot de passe" required />
+        <div class="field">
+          <label for="clientLoginEmail">Courriel</label>
+          <input id="clientLoginEmail" type="email" autocomplete="email" required />
+        </div>
+        <div class="field">
+          <label for="clientLoginPassword">Mot de passe</label>
+          <input id="clientLoginPassword" type="password" autocomplete="current-password" required />
+        </div>
         <button id="clientLoginSubmit" type="submit" class="primary-btn">Se connecter</button>
       </form>
 
@@ -30,8 +36,15 @@
 
       <form id="resetPasswordForm" class="client-auth-form hidden">
         <p class="client-auth-hint">Choisissez un nouveau mot de passe.</p>
-        <input id="resetPasswordValue" type="password" placeholder="Nouveau mot de passe (8 caractères minimum)" minlength="8" required />
-        <input id="resetPasswordConfirm" type="password" placeholder="Confirmer le mot de passe" minlength="8" required />
+        <div class="field">
+          <label for="resetPasswordValue">Nouveau mot de passe</label>
+          <input id="resetPasswordValue" type="password" autocomplete="new-password" minlength="8" required />
+          <span class="field-help">8 caractères minimum.</span>
+        </div>
+        <div class="field">
+          <label for="resetPasswordConfirm">Confirmer le mot de passe</label>
+          <input id="resetPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+        </div>
         <button type="submit" class="primary-btn">Enregistrer le mot de passe</button>
       </form>
 
@@ -52,6 +65,16 @@
         </div>
       </div>
 
+      <!-- La barre laterale portait quatre entrees et beaucoup de vide, sans
+           jamais dire a qui appartient cet espace. -->
+      <div class="client-sidebar-identity">
+        <span class="client-sidebar-identity-avatar" id="sidebarAvatar" aria-hidden="true">FL</span>
+        <div>
+          <div class="client-sidebar-identity-name" id="sidebarName">Mon compte</div>
+          <div class="client-sidebar-identity-role">Propriétaire</div>
+        </div>
+      </div>
+
       <nav class="menu" aria-label="Navigation">
         <span class="menu-label">Navigation</span>
         <button class="menu-btn active" data-tab="dashboard">
@@ -65,6 +88,7 @@
         <button class="menu-btn" data-tab="candidates">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Dossiers
+          <span class="menu-badge" id="sidebarCandidateBadge"></span>
         </button>
         <button class="menu-btn" data-tab="criteria">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>
@@ -98,25 +122,59 @@
           <h2 id="pageTitle">Tableau de bord</h2>
           <div class="client-meta" id="clientMeta"></div>
         </div>
+        <!-- "Actualiser" portait le degrade et occupait la place la plus visible
+             de chaque ecran, pour une action utilitaire. Il devient une icone,
+             accompagnee de l'heure de derniere mise a jour. La deconnexion
+             passe derriere l'avatar, ou on la cherche. -->
         <div class="client-topbar-side">
-          <button id="refreshBtn" class="primary-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
-            Actualiser
+          <span class="client-last-updated" id="clientLastUpdated"></span>
+          <button id="refreshBtn" class="icon-btn" type="button" aria-label="Actualiser les données" title="Actualiser">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
           </button>
-          <button id="logoutBtn" type="button" class="secondary-btn" title="Se déconnecter">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
-            Déconnexion
-          </button>
+
+          <div class="account-menu">
+            <button id="accountBtn" type="button" class="account-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="accountPanel">
+              <span class="account-avatar" id="accountAvatar" aria-hidden="true">FL</span>
+              <span class="account-name" id="accountName">Mon compte</span>
+              <svg class="account-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="account-panel hidden" id="accountPanel" role="menu">
+              <div class="account-panel-head">
+                <div class="account-panel-name" id="accountPanelName">Mon compte</div>
+                <div class="account-panel-role">Propriétaire</div>
+              </div>
+              <button id="logoutBtn" type="button" class="account-panel-item" role="menuitem">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+                Déconnexion
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
       <!-- mobile tab nav -->
+      <!-- Barre fixe en bas, quatre colonnes egales. La rangee de pastilles
+           defilait horizontalement et "Criteres" restait coupe au bord de
+           l'ecran: l'onglet ou le proprietaire regle sa selection etait
+           introuvable. Les libelles sont raccourcis pour tenir sur 375px. -->
       <nav class="client-mobile-nav" aria-label="Navigation mobile client">
         <div class="client-mobile-nav-track">
-          <button class="menu-btn active" data-tab="dashboard">Tableau de bord</button>
-          <button class="menu-btn" data-tab="apartments">Appartements</button>
-          <button class="menu-btn" data-tab="candidates">Dossiers</button>
-          <button class="menu-btn" data-tab="criteria">Critères</button>
+          <button class="menu-btn active" data-tab="dashboard">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            <span>Accueil</span>
+          </button>
+          <button class="menu-btn" data-tab="apartments">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/></svg>
+            <span>Logements</span>
+          </button>
+          <button class="menu-btn" data-tab="candidates">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            <span>Dossiers</span>
+          </button>
+          <button class="menu-btn" data-tab="criteria">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+            <span>Critères</span>
+          </button>
         </div>
       </nav>
 
@@ -159,10 +217,10 @@
                   <div class="stat-card-glyph">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01"/></svg>
                   </div>
-                  <div class="stat-context" id="statTotalApartmentsTrend"></div>
                 </div>
                 <div class="stat-value" id="statTotalApartments">0</div>
                 <div class="stat-label">Total des appartements</div>
+                <div class="stat-context" id="statTotalApartmentsTrend"></div>
               </div>
 
               <div class="stat-card">
@@ -170,10 +228,10 @@
                   <div class="stat-card-glyph">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                   </div>
-                  <div class="stat-context" id="statAvailableApartmentsTrend"></div>
                 </div>
                 <div class="stat-value" id="statAvailableApartments">0</div>
                 <div class="stat-label">Appartements disponibles</div>
+                <div class="stat-context" id="statAvailableApartmentsTrend"></div>
               </div>
 
               <div class="stat-card">
@@ -181,10 +239,10 @@
                   <div class="stat-card-glyph">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
-                  <div class="stat-context" id="statCandidatesTrend"></div>
                 </div>
                 <div class="stat-value" id="statCandidates">0</div>
                 <div class="stat-label">Candidats</div>
+                <div class="stat-context" id="statCandidatesTrend"></div>
               </div>
 
               <div class="stat-card">
@@ -192,15 +250,19 @@
                   <div class="stat-card-glyph">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="m22 7-8.5 8.5-5-5L2 17"/></svg>
                   </div>
-                  <div class="stat-context" id="statDecisionSplitTrend"></div>
                 </div>
                 <div class="stat-value" id="statDecisionSplit">0 / 0</div>
                 <div class="stat-label">Approuvés / refusés</div>
+                <div class="stat-context" id="statDecisionSplitTrend"></div>
               </div>
             </div>
 
             <!-- 3. LE DÉTAIL PAR LOGEMENT -->
-            <div class="dashboard-grid dashboard-row">
+            <!-- La "Liste de surveillance" a ete retiree: elle derivait des
+                 memes logements que l'apercu et affichait donc les memes
+                 adresses, les memes pastilles et la meme prochaine etape, cote
+                 a cote. L'apercu prend toute la largeur. -->
+            <div class="dashboard-row">
               <div class="dashboard-panel">
                 <div class="dashboard-panel-header">
                   <div class="dashboard-panel-header-main">
@@ -213,21 +275,6 @@
                 </div>
                 <div class="dashboard-panel-body">
                   <div id="dashboardApartmentOverview"></div>
-                </div>
-              </div>
-
-              <div class="dashboard-panel">
-                <div class="dashboard-panel-header">
-                  <div class="dashboard-panel-header-main">
-                    <span class="dashboard-panel-icon purple">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </span>
-                    <h4>Liste de surveillance</h4>
-                  </div>
-                  <button type="button" class="dashboard-panel-link" data-dashboard-tab="apartments">Voir tout</button>
-                </div>
-                <div class="dashboard-panel-body">
-                  <div id="dashboardWatchlist"></div>
                 </div>
               </div>
             </div>
@@ -254,7 +301,6 @@
           <!-- ============ APARTMENTS ============ -->
           <section class="hidden" id="apartmentsTab">
             <div class="module-header">
-              <span class="module-kicker">Appartements</span>
               <h3>Supervision du portefeuille locatif</h3>
               <p>Statut et prochaine étape par unité.</p>
             </div>
@@ -289,7 +335,6 @@
             </form>
 
             <div class="apartments-supervision-shell">
-              <div id="apartmentsSupervisionSummary" class="apartments-supervision-summary"></div>
               <div id="apartmentsBody" class="apartment-pipeline-list"></div>
             </div>
           </section>
@@ -297,7 +342,6 @@
           <!-- ============ CANDIDATES ============ -->
           <section class="hidden" id="candidatesTab">
             <div class="module-header">
-              <span class="module-kicker">Dossiers</span>
               <h3>Espace de revue des candidatures</h3>
               <p>Les dossiers à revoir ou à suivre.</p>
             </div>
@@ -319,38 +363,71 @@
           <section class="hidden" id="criteriaTab">
             <div class="form-card">
               <div class="module-header">
-                <span class="module-kicker">Critères</span>
-                <h3>Préférences de qualification</h3>
+                  <h3>Préférences de qualification</h3>
                 <p>Règles de tri en vigueur.</p>
               </div>
 
-              <h3>Critères</h3>
               <form id="criteriaForm" class="admin-form" style="margin-top:14px;">
+                <!-- Chaque champ porte une etiquette visible et une phrase qui
+                     dit ce que la regle fait au tri. Avant, seuls des
+                     placeholders tenaient lieu d'etiquette: ils disparaissent
+                     des la saisie, et un champ rempli ne disait plus ce qu'il
+                     contenait. -->
                 <div class="form-grid">
-                  <input id="criteriaIncome" type="number" min="0" placeholder="Revenu minimum" />
+                  <div class="field">
+                    <label for="criteriaIncome">Revenu minimum</label>
+                    <input id="criteriaIncome" type="number" min="0" placeholder="ex. 3000" />
+                    <span class="field-help">En dollars par mois. Un dossier en dessous perd des points.</span>
+                  </div>
 
-                  <select id="criteriaCredit">
-                    <option value="">Crédit minimum</option>
-                    <option value="bas">Bas (0–599)</option>
-                    <option value="moyen">Moyen (600–699)</option>
-                    <option value="haut">Haut (700+)</option>
-                  </select>
+                  <div class="field">
+                    <label for="criteriaCredit">Crédit minimum</label>
+                    <select id="criteriaCredit">
+                      <option value="">Aucune exigence</option>
+                      <option value="bas">Bas (0–599)</option>
+                      <option value="moyen">Moyen (600–699)</option>
+                      <option value="haut">Haut (700+)</option>
+                    </select>
+                    <span class="field-help">Palier de crédit attendu du candidat.</span>
+                  </div>
 
-                  <select id="criteriaTal">
-                    <option value="">TAL accepté</option>
-                    <option value="oui">Oui</option>
-                    <option value="non">Non</option>
-                  </select>
+                  <div class="field">
+                    <label for="criteriaTal">Dossier au TAL</label>
+                    <select id="criteriaTal">
+                      <option value="">Non précisé</option>
+                      <option value="oui">Accepté</option>
+                      <option value="non">Refusé</option>
+                    </select>
+                    <span class="field-help">Un antécédent au Tribunal administratif du logement.</span>
+                  </div>
 
-                  <select id="criteriaAnimals">
-                    <option value="">Animaux acceptés</option>
-                    <option value="oui">Oui</option>
-                    <option value="non">Non</option>
-                  </select>
+                  <div class="field">
+                    <label for="criteriaAnimals">Animaux</label>
+                    <select id="criteriaAnimals">
+                      <option value="">Non précisé</option>
+                      <option value="oui">Acceptés</option>
+                      <option value="non">Refusés</option>
+                    </select>
+                    <span class="field-help">Un logement peut avoir sa propre règle, qui l'emporte.</span>
+                  </div>
 
-                  <input id="criteriaOccupants" type="number" min="0" placeholder="Nombre maximal d’occupants" />
-                  <input id="criteriaJobs" type="text" placeholder="Types d’emploi acceptés (ex. temps plein, autonome)" />
-                  <input id="criteriaSeniority" type="number" min="0" placeholder="Ancienneté minimum (mois)" />
+                  <div class="field">
+                    <label for="criteriaOccupants">Nombre maximal d’occupants</label>
+                    <input id="criteriaOccupants" type="number" min="0" placeholder="ex. 3" />
+                    <span class="field-help">Au-delà, le dossier est signalé.</span>
+                  </div>
+
+                  <div class="field">
+                    <label for="criteriaJobs">Types d’emploi acceptés</label>
+                    <input id="criteriaJobs" type="text" placeholder="ex. temps plein, autonome" />
+                    <span class="field-help">Séparés par des virgules. Laissez vide pour tout accepter.</span>
+                  </div>
+
+                  <div class="field">
+                    <label for="criteriaSeniority">Ancienneté minimum</label>
+                    <input id="criteriaSeniority" type="number" min="0" placeholder="ex. 12" />
+                    <span class="field-help">En mois chez l’employeur actuel.</span>
+                  </div>
                 </div>
 
                 <div class="form-actions">
