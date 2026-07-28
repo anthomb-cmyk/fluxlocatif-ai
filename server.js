@@ -1127,6 +1127,38 @@ function createClientId(clientsMap, companyName, invitations = []) {
   return candidateId;
 }
 
+// Un client peut avoir plusieurs personnes qui se connectent: le proprietaire et
+// son gestionnaire. Le premier compte remplit la fiche du client; les suivants se
+// rattachent au meme client_id sans reecrire le contact principal ni la ville.
+function buildClientAfterOnboarding(existingClient, clientId, invitation, userId, details) {
+  const ficheDejaRemplie = Boolean(existingClient?.onboarding_user_id);
+
+  if (ficheDejaRemplie) {
+    return normalizeClientRecord(clientId, {
+      ...existingClient,
+      id: clientId,
+      criteres: existingClient.criteres || {}
+    });
+  }
+
+  return normalizeClientRecord(clientId, {
+    ...existingClient,
+    id: clientId,
+    nom: details.companyName,
+    company_name: details.companyName,
+    contact_name: details.fullName,
+    email: invitation.email,
+    phone: details.phone,
+    main_city: details.mainCity,
+    onboarding_user_id: userId,
+    notification_preferences: {
+      email_notifications: details.emailNotifications,
+      marketing_communications: details.marketingCommunications
+    },
+    criteres: existingClient.criteres || {}
+  });
+}
+
 function buildOnboardingLink(req, token) {
   const baseUrl = PUBLIC_APP_URL || `${req.protocol}://${req.get("host")}`;
   return `${baseUrl}/client-onboarding.html?token=${encodeURIComponent(token)}`;
@@ -4966,7 +4998,14 @@ app.get("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, asy
       .map((user) => buildResolvedUserSummary(user, legacyAdminUserIds))
       .filter((user) => user.role === "client" && user.client_id);
 
-    const clientUserByClientId = new Map(clientUsers.map((user) => [String(user.client_id), user]));
+    // Un client peut avoir plusieurs personnes qui se connectent. On garde la
+    // liste complete: une Map seule n'en montrerait qu'une, la derniere lue.
+    const clientUsersByClientId = new Map();
+    clientUsers.forEach((user) => {
+      const key = String(user.client_id);
+      if (!clientUsersByClientId.has(key)) clientUsersByClientId.set(key, []);
+      clientUsersByClientId.get(key).push(user);
+    });
     const latestInvitationByClientId = new Map();
 
     invitations.forEach((invitation) => {
@@ -4984,7 +5023,10 @@ app.get("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, asy
 
     const clients = Object.entries(clientsMap).map(([id, client]) => {
       const normalizedClient = normalizeClientRecord(id, client);
-      const portalUser = clientUserByClientId.get(String(id)) || null;
+      const portalUsers = clientUsersByClientId.get(String(id)) || [];
+      const portalUser = portalUsers.find((user) => user.user_id === normalizedClient.onboarding_user_id)
+        || portalUsers[0]
+        || null;
       const invitation = latestInvitationByClientId.get(String(id)) || null;
       const invitationStatus = invitation ? getInvitationStatus(invitation) : null;
       const onboardingLink = invitation && invitationStatus === "pending"
@@ -4994,6 +5036,11 @@ app.get("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, asy
       return {
         ...normalizedClient,
         portal_user_id: portalUser?.user_id || normalizedClient.onboarding_user_id || null,
+        portal_users: portalUsers.map((user) => ({
+          user_id: user.user_id,
+          email: user.email,
+          is_deactivated: Boolean(user.is_deactivated)
+        })),
         portal_email: portalUser?.email || normalizedClient.email || invitation?.email || "",
         portal_access_status: portalUser
           ? (portalUser.is_deactivated ? "deactivated" : "active")
@@ -5046,7 +5093,23 @@ app.post("/api/admin/client-invitations", async (req, res) => handleAdminRoute(r
 
     const clientsMap = await loadClientsMap();
     const invitations = await loadClientInvitations();
-    const clientId = createClientId(clientsMap, name, invitations);
+
+    // Inviter quelqu'un sur un client qui existe deja: son portefeuille et ses
+    // criteres sont conserves. Sans ce rattachement, l'invitation fabrique un
+    // nouvel identifiant et la personne arrive sur un portail vide.
+    const requestedClientId = String(req.body?.client_id || "").trim();
+    if (requestedClientId && !clientsMap[requestedClientId]) {
+      return res.status(404).json({
+        ok: false,
+        error: `Le client ${requestedClientId} n'existe pas.`
+      });
+    }
+
+    const clientId = requestedClientId || createClientId(clientsMap, name, invitations);
+    const companyName = String(
+      req.body?.company_name || clientsMap[clientId]?.company_name || clientsMap[clientId]?.nom || ""
+    ).trim();
+    const sendEmail = req.body?.send_email !== false;
     const token = createSecureToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -5058,10 +5121,10 @@ app.post("/api/admin/client-invitations", async (req, res) => handleAdminRoute(r
       client_id: clientId,
       name,
       contact_name: name,
-      company_name: "",
+      company_name: companyName,
       email,
       phone,
-      main_city: mainCity,
+      main_city: mainCity || String(clientsMap[clientId]?.main_city || "").trim(),
       account_exists: Boolean(existingUser),
       existing_supabase_user_id: existingUser?.id || null,
       status: "pending",
@@ -5072,7 +5135,9 @@ app.post("/api/admin/client-invitations", async (req, res) => handleAdminRoute(r
     invitations.push(invitation);
     await saveClientInvitations(invitations);
     const onboardingLink = buildOnboardingLink(req, token);
-    const emailDelivery = await sendClientInvitationEmail(invitation, onboardingLink);
+    const emailDelivery = sendEmail
+      ? await sendClientInvitationEmail(invitation, onboardingLink)
+      : { sent: false, error: null };
 
     return res.status(201).json({
       ok: true,
@@ -5251,21 +5316,13 @@ app.post("/api/client-onboarding/account", async (req, res) => {
 
     const clientsMap = await loadClientsMap();
     const existingClient = clientsMap[invitation.client_id] || {};
-    const client = normalizeClientRecord(invitation.client_id, {
-      ...existingClient,
-      id: invitation.client_id,
-      nom: companyName,
-      company_name: companyName,
-      contact_name: fullName,
-      email: invitation.email,
+    const client = buildClientAfterOnboarding(existingClient, invitation.client_id, invitation, data.user.id, {
+      companyName,
+      fullName,
       phone,
-      main_city: mainCity,
-      onboarding_user_id: data.user.id,
-      notification_preferences: {
-        email_notifications: emailNotifications,
-        marketing_communications: marketingCommunications
-      },
-      criteres: existingClient.criteres || {}
+      mainCity,
+      emailNotifications,
+      marketingCommunications
     });
 
     clientsMap[invitation.client_id] = client;
@@ -5367,21 +5424,13 @@ app.post("/api/client-onboarding/link-existing-account", async (req, res) => {
 
     const clientsMap = await loadClientsMap();
     const existingClient = clientsMap[invitation.client_id] || {};
-    const client = normalizeClientRecord(invitation.client_id, {
-      ...existingClient,
-      id: invitation.client_id,
-      nom: companyName,
-      company_name: companyName,
-      contact_name: fullName,
-      email: invitation.email,
+    const client = buildClientAfterOnboarding(existingClient, invitation.client_id, invitation, sessionUser.id, {
+      companyName,
+      fullName,
       phone,
-      main_city: mainCity,
-      onboarding_user_id: sessionUser.id,
-      notification_preferences: {
-        email_notifications: emailNotifications,
-        marketing_communications: marketingCommunications
-      },
-      criteres: existingClient.criteres || {}
+      mainCity,
+      emailNotifications,
+      marketingCommunications
     });
 
     clientsMap[invitation.client_id] = client;
