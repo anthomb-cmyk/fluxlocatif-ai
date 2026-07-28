@@ -1757,7 +1757,14 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
     ],
     boutonTexte: "Activer mon espace",
     boutonLien: onboardingLink,
-    note: "Ce lien est valide pendant 7 jours."
+    // L'installation sur l'ecran d'accueil ne se devine pas: iOS n'affiche aucune
+    // proposition, et l'option n'existe que dans Safari. Sans cette phrase, le
+    // client ne la trouvera pas.
+    note: "Ce lien est valide pendant 7 jours.<br><br>"
+      + "<strong>Sur iPhone, gardez votre portail à portée de main.</strong> Une fois votre compte activé, "
+      + "ouvrez <strong>client.fluxlocatif.com</strong> dans Safari, touchez le bouton Partager en bas de l’écran, "
+      + "puis « Sur l’écran d’accueil ». Le portail s’ouvre ensuite comme une application, sans barre d’adresse. "
+      + "L’option n’existe que dans Safari."
   });
   const text = [
     `Bonjour ${clientName},`,
@@ -1770,6 +1777,11 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
     onboardingLink,
     "",
     "Ce lien est valide pendant 7 jours.",
+    "",
+    "Sur iPhone, gardez votre portail à portée de main. Une fois votre compte activé,",
+    "ouvrez client.fluxlocatif.com dans Safari, touchez le bouton Partager en bas de",
+    "l'écran, puis « Sur l'écran d'accueil ». Le portail s'ouvre ensuite comme une",
+    "application. L'option n'existe que dans Safari.",
     "",
     "L'équipe FluxLocatif"
   ].join("\n");
