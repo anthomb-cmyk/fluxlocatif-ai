@@ -2270,9 +2270,6 @@ function renderReglePropre(apartment) {
 
 function renderEditeurLogement(apartment) {
   const ref = escapeHtml(apartment.ref);
-  const opt = (valeur, courant, libelle) =>
-    `<option value="${escapeHtml(valeur)}"${String(courant).trim() === valeur ? " selected" : ""}>${escapeHtml(libelle)}</option>`;
-
   const globaux = state.client?.criteres || {};
   const libelleGlobal = globaux.animaux_acceptes === true ? "acceptés"
     : globaux.animaux_acceptes === false ? "refusés"
@@ -2286,9 +2283,20 @@ function renderEditeurLogement(apartment) {
   // Un champ vide veut dire "suivre les criteres generaux". La valeur heritee
   // est affichee dans l'option elle-meme, pour que le client sache ce qu'il
   // herite avant de choisir d'y deroger.
+  // Une valeur enregistree qui ne correspond a aucune option proposee doit
+  // quand meme etre offerte, et selectionnee. Sinon le <select> retombe
+  // silencieusement sur la premiere option, et le simple fait d'enregistrer le
+  // logement efface la valeur. C'est arrive aux politiques d'animaux saisies en
+  // texte libre lors de la reprise d'un portefeuille: "Chien non permis / Chat
+  // permis" ne figure dans aucune liste, le champ s'affichait vide, et un
+  // Enregistrer sans rien toucher la supprimait.
   const heriteOuValeur = (valeurLogement, options) => {
-    const courant = valeurLogement === null || valeurLogement === undefined ? "" : String(valeurLogement);
-    return options.map(([v, libelle]) =>
+    const courant = valeurLogement === null || valeurLogement === undefined ? "" : String(valeurLogement).trim();
+    const connue = options.some(([v]) => v === courant);
+    const liste = connue || !courant
+      ? options
+      : [...options, [courant, `${courant} (valeur actuelle)`]];
+    return liste.map(([v, libelle]) =>
       `<option value="${escapeHtml(v)}"${courant === v ? " selected" : ""}>${escapeHtml(libelle)}</option>`
     ).join("");
   };
@@ -2301,17 +2309,21 @@ function renderEditeurLogement(apartment) {
         <input name="type_logement" type="text" placeholder="Type (ex. 4½)" value="${escapeHtml(apartment.type_logement || apartment.chambres || "")}" />
         <input name="loyer" type="text" placeholder="Loyer" value="${escapeHtml(apartment.loyer || "")}" />
         <select name="disponibilite">
-          ${opt("", apartment.disponibilite, "Disponibilité")}
-          ${opt("Disponible maintenant", apartment.disponibilite, "Disponible maintenant")}
-          ${opt("Disponible dans 30 jours", apartment.disponibilite, "Dans 30 jours")}
-          ${opt("Disponible dans 60 jours", apartment.disponibilite, "Dans 60 jours")}
-          ${opt("Loué", apartment.disponibilite, "Loué")}
+          ${heriteOuValeur(apartment.disponibilite, [
+            ["", "Disponibilité"],
+            ["Disponible maintenant", "Disponible maintenant"],
+            ["Disponible dans 30 jours", "Dans 30 jours"],
+            ["Disponible dans 60 jours", "Dans 60 jours"],
+            ["Loué", "Loué"]
+          ])}
         </select>
         <select name="animaux_acceptes">
-          <option value=""${!String(apartment.animaux_acceptes || "").trim() ? " selected" : ""}>Suivre mes critères généraux (${escapeHtml(libelleGlobal)})</option>
-          ${opt("Oui, animaux acceptes", apartment.animaux_acceptes, "Animaux acceptés pour ce logement")}
-          ${opt("Oui, petits animaux seulement", apartment.animaux_acceptes, "Petits animaux seulement")}
-          ${opt("Non, animaux refuses", apartment.animaux_acceptes, "Animaux refusés pour ce logement")}
+          ${heriteOuValeur(apartment.animaux_acceptes, [
+            ["", `Animaux : suivre mes critères généraux (${libelleGlobal})`],
+            ["Oui, animaux acceptes", "Animaux acceptés pour ce logement"],
+            ["Oui, petits animaux seulement", "Petits animaux seulement"],
+            ["Non, animaux refuses", "Animaux refusés pour ce logement"]
+          ])}
         </select>
         <select name="accepte_tal">
           ${heriteOuValeur(apartment.accepte_tal, [
