@@ -1723,6 +1723,66 @@ async function sendPasswordResetEmail(email, lienRecuperation) {
   }
 }
 
+// Courriel autonome qui montre comment poser le portail sur l'ecran d'accueil.
+// Sert aux clients deja invites, dont le courriel d'invitation est parti avant
+// que l'instruction y soit ajoutee.
+async function sendAppInstallEmail({ email, name }) {
+  if (!resendClient) return { sent: false, error: "RESEND_API_KEY manquant." };
+  if (!INVITATION_FROM_EMAIL) return { sent: false, error: "INVITATION_FROM_EMAIL manquant." };
+
+  const prenom = String(name || "").trim().split(/\s+/)[0] || "";
+  const salutation = prenom ? `Bonjour ${escapeHtmlServeur(prenom)},` : "Bonjour,";
+  const image = "https://client.fluxlocatif.com/courriel/installer-app.png";
+
+  const html = renderEmailLayout({
+    titre: "Votre portail, sur votre écran d’accueil",
+    preheader: "Trois gestes pour ouvrir votre portail comme une application.",
+    paragraphes: [
+      salutation,
+      "Votre portail FluxLocatif peut vivre sur l’écran d’accueil de votre iPhone, comme n’importe quelle application. Vous l’ouvrez d’un geste, sans barre d’adresse et sans mot de passe à retaper.",
+      `<img src="${image}" alt="Trois etapes: toucher Partager en bas de Safari, choisir Sur l'ecran d'accueil, puis l'icone apparait sur votre ecran" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;outline:none;text-decoration:none;margin:6px 0 4px;">`,
+      "<strong>1.</strong> Ouvrez <strong>client.fluxlocatif.com</strong> dans Safari, puis touchez le bouton Partager en bas de l’écran.",
+      "<strong>2.</strong> Faites défiler la liste et choisissez « Sur l’écran d’accueil », puis Ajouter.",
+      "<strong>3.</strong> L’icône apparaît sur votre écran. Touchez-la et votre portail s’ouvre en plein écran."
+    ],
+    boutonTexte: "Ouvrir mon portail",
+    boutonLien: "https://client.fluxlocatif.com/client.html",
+    note: "L’option n’existe que dans Safari, elle n’apparaît pas dans Chrome. "
+      + "À la première ouverture dans l’application, vous devrez entrer votre mot de passe une fois: "
+      + "iPhone garde ces sessions séparées de Safari."
+  });
+
+  const text = [
+    prenom ? `Bonjour ${prenom},` : "Bonjour,",
+    "",
+    "Votre portail FluxLocatif peut vivre sur l'ecran d'accueil de votre iPhone,",
+    "comme n'importe quelle application.",
+    "",
+    "1. Ouvrez client.fluxlocatif.com dans Safari, touchez le bouton Partager en bas.",
+    "2. Faites defiler et choisissez « Sur l'ecran d'accueil », puis Ajouter.",
+    "3. L'icone apparait sur votre ecran, votre portail s'ouvre en plein ecran.",
+    "",
+    "L'option n'existe que dans Safari. A la premiere ouverture dans l'application,",
+    "vous devrez entrer votre mot de passe une fois.",
+    "",
+    "L'équipe FluxLocatif"
+  ].join("\n");
+
+  try {
+    const reponse = await resendClient.emails.send({
+      from: sanitizeFromField(INVITATION_FROM_EMAIL),
+      to: email,
+      subject: "Votre portail FluxLocatif sur votre écran d’accueil",
+      html,
+      text
+    });
+    if (reponse?.error) return { sent: false, error: reponse.error.message || "Envoi refusé." };
+    return { sent: true, error: null };
+  } catch (erreur) {
+    return { sent: false, error: erreur?.message || "Envoi impossible." };
+  }
+}
+
 async function sendClientInvitationEmail(invitation, onboardingLink) {
   if (!resendClient) {
     return {
@@ -5133,6 +5193,24 @@ app.post("/api/admin/clients", async (req, res) => handleAdminRoute(req, res, as
       error: "Impossible de créer le client."
     });
   }
+}));
+
+// Envoi cible du courriel d'installation. Une adresse a la fois, jamais de
+// diffusion en masse: l'appelant nomme explicitement qui recoit.
+app.post("/api/admin/app-install-email", async (req, res) => handleAdminRoute(req, res, async () => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const name = String(req.body?.name || "").trim();
+
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ ok: false, error: "email est obligatoire." });
+  }
+
+  const envoi = await sendAppInstallEmail({ email, name });
+  return res.status(envoi.sent ? 200 : 502).json({
+    ok: envoi.sent,
+    email,
+    error: envoi.error
+  });
 }));
 
 app.post("/api/admin/client-invitations", async (req, res) => handleAdminRoute(req, res, async () => {
