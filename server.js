@@ -1520,7 +1520,7 @@ function extractEmailAddress(value) {
 function sanitizeFromField(value) {
   const raw = String(value || "").trim();
   const withBrackets = raw.match(/^"?([^"<]*)"?\s*<([^>]+)>$/);
-  if (!withBrackets) return raw; // plain email — return as-is
+  if (!withBrackets) return raw; // plain email, return as-is
 
   const accentMap = {
     À:"A",Á:"A",Â:"A",Ã:"A",Ä:"A",Å:"A",
@@ -1587,14 +1587,14 @@ async function sendIntakeConfirmationEmail(email, nomClient, nombreLogements) {
     "Votre portail :",
     portail,
     "",
-    "— FluxLocatif"
+    "L'équipe FluxLocatif"
   ].join("\n");
 
   try {
     const reponse = await resendClient.emails.send({
       from: sanitizeFromField(INVITATION_FROM_EMAIL),
       to: email,
-      subject: "FluxLocatif — Votre profil est bien reçu",
+      subject: "FluxLocatif, votre profil est bien reçu",
       html,
       text
     });
@@ -1622,7 +1622,7 @@ async function sendAdminIntakeNotification(invitation, refsLogements) {
     await resendClient.emails.send({
       from: sanitizeFromField(INVITATION_FROM_EMAIL),
       to: ADMIN_NOTIFICATION_EMAIL,
-      subject: `FluxLocatif — Profil soumis : ${nom}`,
+      subject: `FluxLocatif, profil soumis : ${nom}`,
       text: lignes.join("\n"),
       html: `<div style="font-family:Arial,sans-serif;">${lignes.map((l) => escapeHtmlServeur(l) || "<br>").join("<br>")}</div>`
     });
@@ -1649,7 +1649,7 @@ async function sendPasswordResetEmail(email, lienRecuperation) {
     return { sent: false, error: "Expediteur non valide." };
   }
 
-  const subject = "FluxLocatif — Réinitialiser votre mot de passe";
+  const subject = "FluxLocatif, réinitialiser votre mot de passe";
   const html = renderEmailLayout({
     titre: "Réinitialiser votre mot de passe",
     preheader: "Choisissez un nouveau mot de passe pour votre espace FluxLocatif.",
@@ -1671,7 +1671,7 @@ async function sendPasswordResetEmail(email, lienRecuperation) {
     "",
     "Ce lien est valide une heure. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
     "",
-    "— FluxLocatif"
+    "L'équipe FluxLocatif"
   ].join("\n");
 
   try {
@@ -1716,7 +1716,7 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
   }
 
   const clientName = String(invitation.name || invitation.contact_name || "Client").trim();
-  const subject = "Bienvenue sur FluxLocatif — Accédez à votre espace";
+  const subject = "Bienvenue sur FluxLocatif, accédez à votre espace";
   const html = renderEmailLayout({
     titre: "Bienvenue sur FluxLocatif",
     preheader: "Votre accès est prêt, activez votre espace en quelques minutes.",
@@ -1741,7 +1741,7 @@ async function sendClientInvitationEmail(invitation, onboardingLink) {
     "",
     "Ce lien est valide pendant 7 jours.",
     "",
-    "— FluxLocatif"
+    "L'équipe FluxLocatif"
   ].join("\n");
 
   console.log("[client-invitation-email] send:start", {
@@ -1799,7 +1799,7 @@ async function sendAdminClientActivatedEmail(payload) {
     };
   }
 
-  const subject = `Nouveau client activé — ${payload.company_name || payload.contact_name || payload.client_id}`;
+  const subject = `Nouveau client activé : ${payload.company_name || payload.contact_name || payload.client_id}`;
   const html = `
     <p>Un nouveau client a activé son espace FluxLocatif.</p>
     <ul>
@@ -5195,7 +5195,7 @@ app.post("/api/admin/client-invitations/resend", async (req, res) => handleAdmin
       return res.status(409).json({ ok: false, error: "Ce client a déjà complété son onboarding." });
     }
 
-    // If expired or pending — refresh the token and expiry
+    // If expired or pending, refresh the token and expiry
     const now      = new Date();
     const newToken  = createSecureToken();
     const newExpiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -6448,7 +6448,7 @@ app.put("/api/admin/candidates/:id", async (req, res) => handleAdminRoute(req, r
   }
 }));
 
-// CRM — proxy to Next.js service
+// CRM, proxy to Next.js service
 app.get("/crm", (req, res) => res.redirect(302, "https://fluxlocatifwebsite-production.up.railway.app/crm"));
 app.get("/crm/*", (req, res) => res.redirect(302, "https://fluxlocatifwebsite-production.up.railway.app" + req.path));
 
