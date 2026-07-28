@@ -1131,12 +1131,28 @@ function createClientId(clientsMap, companyName, invitations = []) {
 // son gestionnaire. Le premier compte remplit la fiche du client; les suivants se
 // rattachent au meme client_id sans reecrire le contact principal ni la ville.
 function buildClientAfterOnboarding(existingClient, clientId, invitation, userId, details) {
-  const ficheDejaRemplie = Boolean(existingClient?.onboarding_user_id);
+  // On ne peut pas se fier au seul onboarding_user_id: une fiche peut avoir ete
+  // preremplie par l'equipe avant toute activation, auquel cas ce champ est
+  // nul. C'est le cas d'ELEVATE, saisi depuis son catalogue. Sans cette
+  // seconde condition, la premiere personne a activer son invitation
+  // ecraserait le nom de la societe, le contact principal, le courriel, le
+  // telephone et la ville avec ce qu'elle tape dans le formulaire. Si
+  // Frederique activait avant Edouard, le contact du dossier deviendrait
+  // Frederique.
+  const identiteDejaConnue = Boolean(
+    String(existingClient?.nom || existingClient?.company_name || "").trim() &&
+    String(existingClient?.contact_name || "").trim()
+  );
+  const ficheDejaRemplie = Boolean(existingClient?.onboarding_user_id) || identiteDejaConnue;
 
   if (ficheDejaRemplie) {
+    // La personne se rattache au client existant sans rien reecrire. On note
+    // seulement qui a active en premier, si personne ne l'avait fait, pour que
+    // la console sache a qui rattacher la fiche.
     return normalizeClientRecord(clientId, {
       ...existingClient,
       id: clientId,
+      onboarding_user_id: existingClient.onboarding_user_id || userId,
       criteres: existingClient.criteres || {}
     });
   }
