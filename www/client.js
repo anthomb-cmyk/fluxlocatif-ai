@@ -846,7 +846,7 @@ function renderCandidateTable(container, candidates = [], options = {}) {
                     `;
                   }).join("")
                 : `
-                  <tr>
+                  <tr class="candidate-table-empty-row">
                     <td colspan="6" class="candidate-table-empty">
                       <div class="empty-state">
                         <svg class="empty-state-art" width="64" height="64" viewBox="0 0 64 64" fill="none" aria-hidden="true">

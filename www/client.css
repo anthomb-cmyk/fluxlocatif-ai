@@ -2091,6 +2091,51 @@
 @media (max-width: 720px) {
   .candidate-table-wrap { overflow-x: visible; }
 
+  /* Sur telephone, la liste des dossiers est deja dans une carte bordee. Son
+     propre cadre faisait un encadrement dans un encadrement, visible surtout
+     quand la liste est vide et qu'il ne reste que les deux traits. */
+  .dashboard-panel .candidate-table-wrap {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    /* L'ombre dessinait encore le contour une fois la bordure retiree. */
+    box-shadow: none;
+  }
+
+  /* La ligne vide n'est pas un dossier: elle ne prend pas l'allure de carte
+     bordee des lignes de candidat, sinon elle dessine un deuxieme cadre a
+     l'interieur de la carte qui la contient deja. */
+  .candidate-table tr.candidate-table-empty-row {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+  }
+
+  /* Un ecran vide occupait 265px sur un telephone de 812px, soit le tiers de la
+     page pour dire qu'il n'y a rien. L'illustration part, le texte reste: c'est
+     lui qui rassure un client dont le portail vient d'ouvrir. */
+  .dashboard-panel .empty-state,
+  .candidate-table-empty .empty-state {
+    padding: 14px 12px;
+    gap: 4px;
+  }
+
+  .dashboard-panel .empty-state .empty-state-art,
+  .candidate-table-empty .empty-state .empty-state-art { display: none; }
+
+  .candidate-table-empty { padding: 4px; }
+
+  .dashboard-panel .empty-state .empty-state-title,
+  .candidate-table-empty .empty-state .empty-state-title { font-size: 14px; }
+
+  .dashboard-panel .empty-state .empty-state-copy,
+  .candidate-table-empty .empty-state .empty-state-copy {
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
   .candidate-table { min-width: 0; width: 100%; }
 
   /* L'en-tête ne sert plus à rien: chaque valeur porte son étiquette. */
