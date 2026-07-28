@@ -153,6 +153,36 @@ const ORIGINES_AUTORISEES = [
   PUBLIC_APP_URL
 ].filter(Boolean);
 
+// En-tetes de securite, poses avant toute route pour couvrir aussi les fichiers
+// statiques et les reponses d'erreur.
+//
+// Le portail demande un mot de passe: sans X-Frame-Options, n'importe quel site
+// pouvait l'afficher dans un cadre invisible et recolter ce que le client tape
+// par-dessus. Aucune page du produit n'est encadree ailleurs, donc DENY.
+//
+// Pas de Content-Security-Policy ici: elle casserait les polices Google et les
+// appels Supabase si elle etait posee sans etre reglee page par page. A faire
+// separement, avec un vrai test, pas dans le meme changement.
+app.use((req, res, next) => {
+  // Ne devine pas le type d'un fichier a partir de son contenu.
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Interdit l'affichage du portail dans un cadre sur un autre site.
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+  // Ne fuite pas le chemin complet vers les sites tiers, seulement l'origine.
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Le portail n'a besoin ni de la camera, ni du micro, ni de la position.
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+
+  // HSTS seulement sur une connexion chiffree: pose en local, il forcerait
+  // https sur localhost et rendrait le developpement impossible.
+  if (req.secure || String(req.headers["x-forwarded-proto"] || "") === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+
+  return next();
+});
+
 app.use(cors({
   origin(origin, callback) {
     // Pas d'origine: appel serveur a serveur ou meme origine, on laisse passer.
