@@ -529,6 +529,20 @@ function showSuccess() {
   successState.classList.add("show");
 }
 
+// Ecran de fin pour quelqu'un qui rejoint une organisation deja configuree: il
+// n'a rien soumis, donc le message "profil soumis, notre equipe le verifie" ne
+// veut rien dire pour lui. Son acces est simplement pret.
+function afficherAccesPret() {
+  const titre = successState.querySelector("h2");
+  const texte = successState.querySelector("p");
+  if (titre) titre.textContent = "Votre accès est prêt";
+  if (texte) {
+    texte.textContent = "Votre organisation est déjà configurée. Vous n’avez aucun formulaire à remplir: "
+      + "vous retrouvez directement les logements, les dossiers de candidats et les critères de votre équipe.";
+  }
+  showSuccess();
+}
+
 function escapeHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -781,6 +795,7 @@ async function submitAccount(event) {
           marketing_communications: document.getElementById("marketingCommunications")?.checked || false
         })
       });
+      if (state.rejointOrganisation) { afficherAccesPret(); return; }
       prefillStep2();
       goToStep(2);
     } catch (err) {
@@ -816,6 +831,7 @@ async function submitAccount(event) {
       email:    document.getElementById("accountEmail")?.value.trim() || "",
       password
     });
+    if (state.rejointOrganisation) { afficherAccesPret(); return; }
     prefillStep2();
     goToStep(2);
   } catch (err) {
@@ -1285,8 +1301,25 @@ async function validateInvitation() {
 
     afficherLogementsExistants();
 
+    // Une deuxieme personne de la meme organisation rejoint un dossier deja
+    // configure. Elle cree son compte et entre dans le portail: lui refaire
+    // remplir le questionnaire de l'organisation n'apporte rien, et ses reponses
+    // remplaceraient celles de la premiere.
+    state.rejointOrganisation = Boolean(result.organisation_deja_active);
+    if (state.rejointOrganisation) {
+      const total = document.querySelector(".step-nav-total");
+      if (total) total.textContent = "";
+      const etapes = document.getElementById("stepNav");
+      if (etapes) etapes.style.display = "none";
+    }
+
     const etapeDepart = result.current_step === 2 ? 2 : 1;
     const brouillonRestaure = etapeDepart === 2 && restaurerBrouillon();
+
+    if (state.rejointOrganisation && etapeDepart === 2) {
+      afficherAccesPret();
+      return;
+    }
 
     goToStep(etapeDepart);
 

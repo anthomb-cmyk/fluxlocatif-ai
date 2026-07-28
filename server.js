@@ -5361,8 +5361,18 @@ app.get("/api/client-onboarding/invitation", async (req, res) => {
       });
     }
 
-    const { invitation, status } = await resolveInvitationByToken(token);
+    const { invitations, invitation, status } = await resolveInvitationByToken(token);
     ensureInvitationUsable(status, invitation);
+
+    // Une organisation peut avoir plusieurs personnes. La premiere repond au
+    // questionnaire, les suivantes rejoignent un dossier deja configure: leur
+    // faire remplir le meme formulaire ne sert a rien et, pire, leurs reponses
+    // remplaceraient celles de la premiere.
+    const organisationDejaActive = invitations.some(
+      (autre) => String(autre.client_id) === String(invitation.client_id)
+        && autre.id !== invitation.id
+        && Boolean(autre.account_created_at)
+    );
 
     // Un client peut avoir ete pre-rempli par l'equipe avant l'envoi du lien,
     // a partir d'un catalogue par exemple. Dans ce cas l'etape Logements ne doit
@@ -5376,6 +5386,7 @@ app.get("/api/client-onboarding/invitation", async (req, res) => {
       ok: true,
       invitation: sanitizeInvitation(invitation),
       current_step: invitation.account_created_at ? 2 : 1,
+      organisation_deja_active: organisationDejaActive,
       existing_listings_count: logementsExistants.length,
       existing_listings: logementsExistants.map((l) => ({
         ref: l.ref,
@@ -5836,6 +5847,26 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
     const clientsMap = await loadClientsMap();
     const existing   = clientsMap[invitation.client_id] || {};
 
+    // Le formulaire ecrasait le dossier en bloc. Si une deuxieme personne de la
+    // meme organisation le soumettait, ou si le client sautait une question, les
+    // reponses deja au dossier disparaissaient, y compris celles saisies par
+    // l'equipe pendant l'accueil. On ne remplace donc jamais une valeur existante
+    // par du vide.
+    const garder = (nouvelle, ancienne) => {
+      const videNouvelle = nouvelle === null || nouvelle === undefined || nouvelle === ""
+        || (Array.isArray(nouvelle) && nouvelle.length === 0);
+      return videNouvelle ? (ancienne ?? null) : nouvelle;
+    };
+    const fusionner = (nouvel, ancien) => {
+      const sortie = { ...(ancien || {}) };
+      Object.entries(nouvel || {}).forEach(([cle, valeur]) => {
+        sortie[cle] = garder(valeur, (ancien || {})[cle]);
+      });
+      return sortie;
+    };
+    const criteresExistants = { ...(existing.qualification_criteria || {}), ...(existing.criteres || {}) };
+    const criteresFusionnes = fusionner(criteres, criteresExistants);
+
     const portfolioPayload = payload.portfolio || {};
     const workflowPayload  = payload.workflow_preferences || {};
     const brandPayload     = payload.brand_preferences || {};
@@ -5855,36 +5886,36 @@ app.post("/api/client-onboarding/intake", async (req, res) => {
       intake_submitted_at:       new Date().toISOString(),
       intake_status:             "pending_review",
       notification_preferences:  existing.notification_preferences || {},
-      primary_contact:           String(payload.primary_contact || "").trim() || null,
-      primary_email:             String(payload.primary_email || "").trim() || null,
-      primary_phone:             String(payload.primary_phone || "").trim() || null,
-      preferred_communication:   String(payload.preferred_communication || "").trim() || null,
-      billing_contact: {
-        name:  String(billingPayload.name  || "").trim() || null,
-        email: String(billingPayload.email || "").trim() || null,
-        phone: String(billingPayload.phone || "").trim() || null
-      },
-      portfolio: {
+      primary_contact:           garder(String(payload.primary_contact || "").trim(), existing.primary_contact),
+      primary_email:             garder(String(payload.primary_email || "").trim(), existing.primary_email),
+      primary_phone:             garder(String(payload.primary_phone || "").trim(), existing.primary_phone),
+      preferred_communication:   garder(String(payload.preferred_communication || "").trim(), existing.preferred_communication),
+      billing_contact: fusionner({
+        name:  String(billingPayload.name  || "").trim(),
+        email: String(billingPayload.email || "").trim(),
+        phone: String(billingPayload.phone || "").trim()
+      }, existing.billing_contact),
+      portfolio: fusionner({
         units_in_plan:        parseNumber(portfolioPayload.units_in_plan),
         total_portfolio_size: parseNumber(portfolioPayload.total_portfolio_size),
         markets:              Array.isArray(portfolioPayload.markets) ? portfolioPayload.markets : [],
         property_types:       Array.isArray(portfolioPayload.property_types) ? portfolioPayload.property_types : []
-      },
-      qualification_criteria: criteres,
-      criteres,
-      workflow_preferences: {
-        escalation_rules:           String(workflowPayload.escalation_rules || "").trim() || null,
-        approval_process:           String(workflowPayload.approval_process || "").trim() || null,
-        showing_process:            String(workflowPayload.showing_process || "").trim() || null,
-        approval_notes:             String(workflowPayload.approval_notes || "").trim() || null,
-        communication_expectations: String(workflowPayload.communication_expectations || "").trim() || null
-      },
-      brand_preferences: {
-        communication_tone: String(brandPayload.communication_tone || "").trim() || null,
-        branding_name:      String(brandPayload.branding_name || "").trim() || null,
-        signature_contact:  String(brandPayload.signature_contact || "").trim() || null,
-        additional_notes:   String(brandPayload.additional_notes || "").trim() || null
-      }
+      }, existing.portfolio),
+      qualification_criteria: criteresFusionnes,
+      criteres: criteresFusionnes,
+      workflow_preferences: fusionner({
+        escalation_rules:           String(workflowPayload.escalation_rules || "").trim(),
+        approval_process:           String(workflowPayload.approval_process || "").trim(),
+        showing_process:            String(workflowPayload.showing_process || "").trim(),
+        approval_notes:             String(workflowPayload.approval_notes || "").trim(),
+        communication_expectations: String(workflowPayload.communication_expectations || "").trim()
+      }, existing.workflow_preferences),
+      brand_preferences: fusionner({
+        communication_tone: String(brandPayload.communication_tone || "").trim(),
+        branding_name:      String(brandPayload.branding_name || "").trim(),
+        signature_contact:  String(brandPayload.signature_contact || "").trim(),
+        additional_notes:   String(brandPayload.additional_notes || "").trim()
+      }, existing.brand_preferences)
     });
 
     await saveClientsMap(clientsMap);
