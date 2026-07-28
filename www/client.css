@@ -1388,7 +1388,102 @@
   font-size: 12.5px;
 }
 
-.apartment-pipeline-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.apartment-pipeline-actions { display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+
+/* Une carte = une surface. Les paires libelle/valeur sont separees par un
+   filet de 1px au lieu de deux sous-panneaux encadres imbriques dans la carte,
+   qui faisaient quatre niveaux de boites. */
+.apartment-facts {
+  display: grid;
+  gap: 0;
+}
+
+.apartment-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.apartment-fact:first-child { border-top: 0; padding-top: 0; }
+
+.apartment-fact-label {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.apartment-fact-value {
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.apartment-fact-note {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Regroupement par statut: vingt cartes a la suite obligeaient a defiler pour
+   trouver celle qui demande une decision. Seul le premier groupe s'ouvre. */
+.apartment-group {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.apartment-group-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  cursor: pointer;
+  list-style: none;
+  min-height: 44px;
+}
+
+.apartment-group-summary::-webkit-details-marker { display: none; }
+
+.apartment-group-summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+  flex-shrink: 0;
+}
+
+.apartment-group[open] > .apartment-group-summary::before { transform: rotate(45deg); }
+
+.apartment-group-title {
+  font-weight: 600;
+  color: var(--heading);
+  font-size: 14px;
+}
+
+.apartment-group-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.apartment-group-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
 
 /* ===================== CANDIDATES REVIEW ===================== */
 
@@ -1691,44 +1786,54 @@
   .client-mobile-brand-title { font-size: 14px; font-weight: 700; color: var(--heading); }
   .client-mobile-brand-subtitle { font-size: 11px; color: var(--muted-soft); }
 
+  /* Barre fixe en bas: les quatre onglets sont toujours visibles, et changer
+     d'onglet ne demande plus de remonter toute la page. */
   .client-mobile-nav {
     display: block;
-    position: sticky;
-    top: 0;
-    z-index: 15;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
     background: var(--surface-translucent);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--line);
-    padding: 8px 16px;
+    backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
   }
 
   .client-mobile-nav-track {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px;
   }
-  .client-mobile-nav-track::-webkit-scrollbar { display: none; }
 
   .client-mobile-nav .menu-btn {
-    flex: 0 0 auto;
-    border-radius: 999px;
-    padding: 8px 14px;
-    background: var(--surface);
-    border: 1px solid var(--line-strong);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 50px;
+    padding: 6px 2px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
     color: var(--muted);
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: 10.5px;
     font-weight: 600;
+    line-height: 1.1;
     cursor: pointer;
-    white-space: nowrap;
+    text-align: center;
   }
 
   .client-mobile-nav .menu-btn.active {
     background: var(--indigo-soft);
-    border-color: var(--line-accent);
     color: var(--indigo);
   }
+
+  /* Le contenu doit pouvoir defiler au-dessus de la barre fixe. */
+  .client-scroll { padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
 
   .client-scroll { padding: 16px; }
   .client-topbar { padding: 12px 16px; }
@@ -1753,36 +1858,70 @@
      moitie de la largeur et comprimaient le titre a une colonne d'environ 120px,
      ou "Tableau de bord" se cassait sur trois lignes et le nom du client sur
      six. Le titre passe au-dessus, les actions en dessous. */
+  /* L'en-tete prenait environ 430px avant le moindre contenu: marque, titre,
+     sous-titre et deux gros boutons empiles. Il tient maintenant sur une
+     ligne: marque a gauche, titre au centre, compte a droite. */
   .client-topbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
   }
 
-  .client-topbar-main { flex: 1 1 auto; }
+  .client-topbar-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-  .client-topbar-main h2 { font-size: 20px; }
+  .client-mobile-brand { margin-bottom: 0; flex: 0 0 auto; }
+  .client-mobile-brand > div:last-child { display: none; }
+
+  .client-topbar-main h2 {
+    font-size: 17px;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Le nom du portefeuille disparait de la barre: il volait la place au titre
+     de la page, qui se retrouvait tronque a "Tablea...". Il reste lisible en
+     entier dans le menu de compte. */
+  .client-meta { display: none; }
 
   .client-topbar-side {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
+    gap: 6px;
   }
+
+  .client-last-updated { display: none; }
+  .account-name { display: none; }
+  .account-chevron { display: none; }
+  .account-btn { padding: 4px; }
 }
 
 /* ── Récupération de mot de passe ─────────────────────────────────────────── */
+/* Le lien etait souligne en bleu par defaut du navigateur, et la carte laissait
+   environ 120px de vide en dessous. */
 .client-auth-link {
   background: none;
   border: 0;
   padding: 10px 4px;
-  margin-top: 6px;
+  margin-top: 2px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--indigo);
+  color: var(--muted);
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
   min-height: 44px;
+  transition: color 160ms ease;
 }
+
+.client-auth-link:hover { color: var(--indigo); text-decoration: underline; }
 
 .client-auth-link:hover { opacity: .8; }
 
@@ -2010,6 +2149,44 @@
      demande pas. Elles occupaient deux rangées avant le premier dossier. */
   .candidate-table-search-row { flex-wrap: wrap; }
   .candidate-table-search { flex: 1 1 100%; }
+  /* Les deux boutons a cote du titre reduisaient l'adresse a une colonne de
+     130px: "3245, rue Sainte-Catherine Est, Montreal" tombait sur sept lignes.
+     Sur telephone le titre prend toute la largeur et les actions passent
+     dessous. */
+  .apartment-pipeline-header {
+    display: grid;
+    gap: 10px;
+  }
+
+  .apartment-pipeline-actions {
+    justify-content: flex-start;
+  }
+
+  .apartment-pipeline-actions .secondary-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .apartment-group-body { padding: 0 10px 12px; }
+
+  /* Meme correction pour les compteurs de l'onglet Appartements, qui avaient
+     garde la disposition empilee. */
+  .apartments-supervision-summary {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .apartments-supervision-metric {
+    padding: 12px 10px;
+    gap: 2px;
+    text-align: center;
+    justify-items: center;
+  }
+
+  .apartments-supervision-metric .apartments-supervision-note { display: none; }
+  .apartments-supervision-metric .apartments-supervision-label { font-size: 10px; letter-spacing: 0.04em; }
+  .apartments-supervision-metric .apartments-supervision-value { font-size: 26px; }
+
   /* Les trois compteurs empilaient trois cartes pleine largeur: il fallait
      defiler sur ~750px pour lire trois chiffres avant d'atteindre le premier
      dossier. Sur telephone ils tiennent sur une rangee, sans les notes. */
@@ -2034,3 +2211,266 @@
   .candidate-status-filters { display: none; }
   .candidate-status-filters.deplie { display: flex; flex-wrap: wrap; }
 }
+
+/* Etiquette visible au-dessus de chaque champ. Les formulaires n'avaient que
+   des placeholders, qui disparaissent des la saisie: un champ rempli ne disait
+   plus ce qu'il contenait, et les lecteurs d'ecran n'avaient rien a annoncer. */
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--heading);
+}
+
+.field-help {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* ── Barre du haut: action utilitaire et menu de compte ───────────────────── */
+
+/* "Actualiser" portait le degrade le plus visible de l'ecran pour une action
+   utilitaire. Il devient une icone, et l'heure de mise a jour dit ce qu'il
+   faisait savoir. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.icon-btn:hover { color: var(--indigo); border-color: var(--line-accent); }
+
+.client-last-updated {
+  font-size: 12px;
+  color: var(--muted-soft);
+  white-space: nowrap;
+}
+
+.account-menu { position: relative; }
+
+.account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--heading);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-btn:hover { border-color: var(--line-accent); }
+
+.account-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 999px;
+  background: var(--indigo-soft);
+  color: var(--indigo);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.account-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chevron { color: var(--muted-soft); flex-shrink: 0; }
+
+.account-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  z-index: 40;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.account-panel.hidden { display: none; }
+
+.account-panel-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-panel-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--heading);
+  overflow-wrap: anywhere;
+}
+
+.account-panel-role { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.account-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-panel-item:hover { background: var(--indigo-soft); color: var(--indigo); }
+
+/* La legende ("dont 4 loues", "sur 20 au portefeuille") arrivait avant le
+   chiffre qu'elle qualifie. Elle est passee sous le libelle. */
+.stat-context { margin-top: 6px; }
+.stat-card-head { min-height: 0; }
+
+/* ── États vides ──────────────────────────────────────────────────────────── */
+
+/* Un portail neuf est toujours vide le premier jour: c'est le premier ecran que
+   le client voit. Il disait seulement "Aucun dossier a afficher pour le
+   moment." dans un tableau nu. */
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.empty-state-art {
+  color: var(--indigo);
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--heading);
+}
+
+.empty-state-copy {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 44ch;
+}
+
+/* Le chiffre porte la couleur de son palier: la legende du haut de page
+   n'etait plus a l'ecran au moment de le lire. */
+.candidate-score-number.high { color: var(--positive); }
+.candidate-score-number.mid { color: var(--blue); }
+.candidate-score-number.low { color: var(--attention); }
+.candidate-score-number[title] { cursor: help; }
+
+/* ── Un seul dégradé par écran ────────────────────────────────────────────── */
+
+/* Le degrade bleu vers violet portait quatre boutons a la fois: Actualiser,
+   Ajouter un logement, Se connecter, Enregistrer. Trois sur quatre sont des
+   actions secondaires, et le violet #9333ea n'appartient pas a la palette de
+   la marque. Il reste sur la seule action qui engage vraiment: se connecter,
+   et enregistrer un formulaire. */
+.client-platform-page .primary-btn {
+  background: linear-gradient(135deg, #1e90ff, #4f46e5);
+}
+
+/* "Ajouter un logement" est une action utile mais pas la tache principale d'un
+   portail proprietaire: c'est decider. */
+#toggleAddApartmentBtn {
+  background: var(--surface);
+  color: var(--indigo);
+  border: 1px solid var(--line-accent);
+  box-shadow: none;
+}
+
+#toggleAddApartmentBtn:hover {
+  background: var(--indigo-soft);
+}
+
+/* La barre laterale portait quatre entrees et beaucoup de vide. L'identite du
+   proprietaire remonte en haut, ce qui donne un point d'ancrage a l'espace. */
+.client-sidebar-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 0 12px 8px;
+  border-radius: 12px;
+  background: var(--indigo-soft);
+}
+
+.client-sidebar-identity-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--indigo);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.client-sidebar-identity-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--heading);
+  overflow-wrap: anywhere;
+}
+
+.client-sidebar-identity-role { font-size: 11.5px; color: var(--muted); }
+
+/* Badge de compte sur l'entree Dossiers. */
+.menu-badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--indigo);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.menu-badge:empty { display: none; }
+
+/* La carte de connexion se terminait sur un grand vide. */
+.client-auth-card { padding-bottom: 22px; }
+.client-auth-status:empty { display: none; }
