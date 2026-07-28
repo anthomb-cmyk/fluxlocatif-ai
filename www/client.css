@@ -2243,17 +2243,27 @@
      perdre la fonction sur telephone, alors qu'elle est offerte sur ordinateur.
      Elles tiennent sur une rangee qui defile horizontalement, sans jamais
      pousser la page. */
+  /* Sans min-width, un element de grille refuse de descendre sous la largeur de
+     son contenu. Les pastilles de filtre et la liste imposaient donc leur
+     largeur a la colonne, qui passait de 301 a 327px et poussait la barre
+     d'outils, le champ de recherche et la liste hors de la carte. */
+  .candidate-table-shell > * { min-width: 0; }
+
   .candidate-status-filters {
     display: flex;
     flex-wrap: nowrap;
     gap: 6px;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
-    margin: 0 -16px;
-    padding-left: 16px;
-    padding-right: 16px;
+    /* Pas de marge negative pour faire deborder la rangee jusqu'aux bords de la
+       carte. Sur une grille, une marge negative elargit la colonne: elle passait
+       de 301 a 325px et poussait la barre d'outils, le champ de recherche et la
+       liste hors de la carte, la rangee elle-meme finissant a 378px sur un ecran
+       de 375. Elle defile maintenant a l'interieur, sans rien pousser. */
+    padding-right: 2px;
   }
 
   .candidate-status-filters::-webkit-scrollbar { display: none; }
