@@ -1832,10 +1832,13 @@
     color: var(--indigo);
   }
 
-  /* Le contenu doit pouvoir defiler au-dessus de la barre fixe. */
-  .client-scroll { padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)); }
 
-  .client-scroll { padding: 16px; }
+
+  /* La barre d'onglets est en position fixe: sans cette reserve elle recouvrait
+     le dernier champ de Criteres et le bouton Enregistrer se retrouvait
+     dessous, inatteignable. Le raccourci "padding" doit porter la valeur, une
+     regle padding-bottom posee avant lui etait ecrasee. */
+  .client-scroll { padding: 16px 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
   .client-topbar { padding: 12px 16px; }
 
   .apartment-pipeline-grid,
@@ -1914,14 +1917,14 @@
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--indigo);
   cursor: pointer;
   text-decoration: none;
   min-height: 44px;
   transition: color 160ms ease;
 }
 
-.client-auth-link:hover { color: var(--indigo); text-decoration: underline; }
+.client-auth-link:hover { text-decoration: underline; }
 
 .client-auth-link:hover { opacity: .8; }
 
@@ -2169,47 +2172,44 @@
 
   .apartment-group-body { padding: 0 10px 12px; }
 
-  /* Meme correction pour les compteurs de l'onglet Appartements, qui avaient
-     garde la disposition empilee. */
-  .apartments-supervision-summary {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .apartments-supervision-metric {
-    padding: 12px 10px;
-    gap: 2px;
-    text-align: center;
-    justify-items: center;
-  }
-
-  .apartments-supervision-metric .apartments-supervision-note { display: none; }
-  .apartments-supervision-metric .apartments-supervision-label { font-size: 10px; letter-spacing: 0.04em; }
-  .apartments-supervision-metric .apartments-supervision-value { font-size: 26px; }
-
-  /* Les trois compteurs empilaient trois cartes pleine largeur: il fallait
-     defiler sur ~750px pour lire trois chiffres avant d'atteindre le premier
-     dossier. Sur telephone ils tiennent sur une rangee, sans les notes. */
+  /* Trois colonnes de 109px ecrasaient les libelles sur deux lignes autour d'un
+     petit chiffre. Une grille 2x2 laisse chaque carte respirer. */
   .candidates-review-summary {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 
   .candidates-review-metric {
-    padding: 12px 10px;
-    gap: 2px;
-    text-align: center;
-    justify-items: center;
+    padding: 14px 12px;
+    gap: 3px;
+    text-align: left;
+    justify-items: start;
   }
 
   .candidates-review-metric .candidates-review-note { display: none; }
-  .candidates-review-metric .candidates-review-label { font-size: 10px; letter-spacing: 0.04em; }
-  .candidates-review-metric .candidates-review-value { font-size: 26px; }
+  .candidates-review-metric .candidates-review-label { font-size: 10.5px; letter-spacing: 0.03em; }
+  .candidates-review-metric .candidates-review-value { font-size: 28px; }
 
-  /* Repliees par defaut sur petit ecran: elles occupaient deux rangees avant
-     le premier dossier. Le bouton Filtrer les deplie. */
-  .candidate-status-filters { display: none; }
-  .candidate-status-filters.deplie { display: flex; flex-wrap: wrap; }
+  /* Les cinq pastilles restent visibles: les replier derriere "Filtrer" faisait
+     perdre la fonction sur telephone, alors qu'elle est offerte sur ordinateur.
+     Elles tiennent sur une rangee qui defile horizontalement, sans jamais
+     pousser la page. */
+  .candidate-status-filters {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .candidate-status-filters::-webkit-scrollbar { display: none; }
+
+  .candidate-status-filters > * { flex: 0 0 auto; }
 }
 
 /* Etiquette visible au-dessus de chaque champ. Les formulaires n'avaient que
@@ -2404,7 +2404,11 @@
    actions secondaires, et le violet #9333ea n'appartient pas a la palette de
    la marque. Il reste sur la seule action qui engage vraiment: se connecter,
    et enregistrer un formulaire. */
-.client-platform-page .primary-btn {
+/* Le :not() evite un piege: un bouton portant a la fois primary-btn et
+   compact-action recuperait ce fond en degrade tout en gardant la couleur de
+   texte indigo de compact-action, declaree plus haut. Texte fonce sur fond
+   fonce, illisible. */
+.client-platform-page .primary-btn:not(.compact-action) {
   background: linear-gradient(135deg, #1e90ff, #4f46e5);
 }
 

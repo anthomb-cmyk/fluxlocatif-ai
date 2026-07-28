@@ -28,7 +28,6 @@ const clientShell = document.getElementById("clientShell");
 const pageTitle = document.getElementById("pageTitle");
 const clientMeta = document.getElementById("clientMeta");
 const refreshBtn = document.getElementById("refreshBtn");
-const apartmentsSupervisionSummary = document.getElementById("apartmentsSupervisionSummary");
 const apartmentsBody = document.getElementById("apartmentsBody");
 const candidatesReviewSummary = document.getElementById("candidatesReviewSummary");
 const candidatesBody = document.getElementById("candidatesBody");
@@ -666,21 +665,9 @@ function bindCandidateTableInteractions(container, stateKey, rerender) {
     });
   }
 
-  // Le bouton "Filtrer" n'avait aucun listener. Il ouvre desormais la rangee de
-  // pastilles de statut, qui est le filtre reel de ce tableau.
-  const filterBtn = container.querySelector(".candidate-table-filter-btn");
-  if (filterBtn) {
-    filterBtn.addEventListener("click", () => {
-      const pills = container.querySelector(".candidate-status-filters");
-      if (pills) {
-        // On bascule une classe "deplie" plutot que "hidden": le repli par
-        // defaut est decide par le CSS selon la largeur, donc passer du
-        // telephone a l'ordinateur reaffiche les pastilles tout seul.
-        pills.classList.toggle("deplie");
-        filterBtn.setAttribute("aria-expanded", String(pills.classList.contains("deplie")));
-      }
-    });
-  }
+  // Le bouton "Filtrer" a ete retire: les pastilles de statut sont le filtre
+  // reel de ce tableau et restent visibles a toutes les largeurs, donc un
+  // bouton qui les deplie n'a plus rien a deplier.
 
   container.querySelectorAll("[data-candidate-status-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -754,10 +741,6 @@ function renderCandidateTable(container, candidates = [], options = {}) {
               data-candidate-table-search="${stateKey}"
             />
           </label>
-          <button type="button" class="candidate-table-filter-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-            <span>Filtrer</span>
-          </button>
         </div>
         <div class="candidate-status-filters">
           ${getCandidateTableStatusOptions().map((status) => `
@@ -1781,9 +1764,6 @@ function renderLoadingSkeletons() {
     `;
   }
 
-  if (apartmentsSupervisionSummary) {
-    apartmentsSupervisionSummary.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(3, 2)}</div>`;
-  }
 
   if (apartmentsBody) {
     apartmentsBody.innerHTML = `<div class="flx-skeleton-stack">${skeletonListBlocks(4)}</div>`;
@@ -1997,7 +1977,7 @@ function renderDashboardCriteriaSummary() {
       <div class="dashboard-empty-state">
         <div class="dashboard-empty-state-title">Vos critères ne sont pas encore définis</div>
         <div>C’est ce qui nous permet d’écarter les dossiers qui ne vous conviennent pas avant qu’ils n’arrivent chez vous. Cinq minutes, une seule fois.</div>
-        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
+        <button type="button" class="secondary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
       </div>
     `;
     return;
@@ -2008,7 +1988,7 @@ function renderDashboardCriteriaSummary() {
       <div class="dashboard-empty-state">
         <div class="dashboard-empty-state-title">Aucun critère défini</div>
         <div>Sans critères, nous ne pouvons pas trier les candidats pour vous. C’est l’étape qui fait le plus de différence.</div>
-        <button type="button" class="primary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
+        <button type="button" class="secondary-btn compact-action dashboard-empty-state-action" data-dashboard-tab="criteria">Définir mes critères</button>
       </div>
     `;
     return;
@@ -2078,31 +2058,9 @@ function renderApartments() {
 
   apartmentsBody.innerHTML = "";
 
-  if (apartmentsSupervisionSummary) {
-    const responsibilityCounts = state.apartments.reduce((accumulator, apartment) => {
-      const label = deriveApartmentResponsibility(apartment, getApartmentCandidates(apartment.ref));
-      accumulator[label] = (accumulator[label] || 0) + 1;
-      return accumulator;
-    }, {});
-
-    apartmentsSupervisionSummary.innerHTML = `
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">En attente du client</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.CLIENT] || 0}</div>
-        <div class="apartments-supervision-note">Unités à revoir.</div>
-      </div>
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">Pris en charge par l’équipe</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.TEAM] || 0}</div>
-        <div class="apartments-supervision-note">Unités en cours de tri.</div>
-      </div>
-      <div class="apartments-supervision-metric">
-        <div class="apartments-supervision-label">À surveiller</div>
-        <div class="apartments-supervision-value">${responsibilityCounts[RESPONSIBILITY_LABELS.WATCH] || 0}</div>
-        <div class="apartments-supervision-note">Unités à suivre de près.</div>
-      </div>
-    `;
-  }
+  // La rangee de compteurs annoncait "0, 0, 16" juste au-dessus des en-tetes de
+  // groupes, qui portent deja "A surveiller 16" et "Complete 4". Les comptes de
+  // groupes suffisent.
 
   if (!state.apartments.length) {
     apartmentsBody.innerHTML = `
@@ -2224,14 +2182,13 @@ function renderApartments() {
     .map((label) => ({ label, items: apartmentItems.filter((i) => i.responsibility.label === label) }))
     .filter((g) => g.items.length);
 
-  // Un groupe s'ouvre seulement s'il attend une decision du client, ou s'il est
-  // le seul. Ouvrir "A surveiller" et ses seize logements par defaut ramenait
-  // la page a sa longueur d'avant.
-  const ouvrir = (groupe) =>
-    groupe.label === RESPONSIBILITY_LABELS.CLIENT || groupes.length === 1;
+  // Le premier groupe est ouvert: tout replier donnait deux lignes et un ecran
+  // blanc, ce qui laissait croire a un portefeuille vide. Les suivants restent
+  // replies, avec leur compte visible dans l'en-tete.
+  const ouvrir = (groupe, index) => index === 0;
 
-  apartmentsBody.innerHTML = groupes.map((groupe) => `
-    <details class="apartment-group"${ouvrir(groupe) ? " open" : ""}>
+  apartmentsBody.innerHTML = groupes.map((groupe, index) => `
+    <details class="apartment-group"${ouvrir(groupe, index) ? " open" : ""}>
       <summary class="apartment-group-summary">
         <span class="apartment-group-title">${escapeHtml(groupe.label)}</span>
         <span class="apartment-group-count">${groupe.items.length}</span>
@@ -2475,7 +2432,7 @@ function renderCandidates() {
       title: "Tous les dossiers",
       emptyMessage: "Aucun dossier à afficher pour le moment.",
       emptyTitle: "Aucune candidature pour le moment.",
-      emptyHint: "Nos annonces tournent. Notre équipe vérifie chaque dossier avant de vous le présenter, vous ne verrez ici que ceux qui tiennent la route."
+      emptyHint: "Nos annonces tournent. Notre équipe vérifie chaque dossier avant de vous le présenter, vous ne verrez ici que les dossiers conformes à vos critères."
     });
     return;
   }
